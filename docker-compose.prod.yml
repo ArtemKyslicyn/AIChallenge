@@ -1,13 +1,59 @@
-# Production overrides: only the web UI is public (port 80).
-# API and Postgres stay on the Docker network.
+# Production stack — only port 80 is published (web/nginx).
+# Usage: docker compose -f docker-compose.prod.yml up --build -d
 
 services:
   db:
-    ports: []
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aichallenge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-aichallenge}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aichallenge} -d ${POSTGRES_DB:-aichallenge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   api:
-    ports: []
+    build:
+      context: ./apps/api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aichallenge}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-aichallenge}
+      SCENARIOS_DIR: /app/configs/scenarios
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./configs/scenarios:/app/configs/scenarios:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status==200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
   web:
+    build:
+      context: ./apps/web
+    depends_on:
+      api:
+        condition: service_healthy
     ports:
       - "80:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
