@@ -34,3 +34,44 @@ class MessageValidationError(DomainError):
 
 class ProbeDisabledError(DomainError):
     """Direct LLM probe is switched off by configuration."""
+
+
+class LLMProviderError(DomainError):
+    """A provider call failed. Carries just enough for the router to decide.
+
+    ``status`` is the upstream HTTP status when there was one; ``kind`` is a
+    coarse label (``quota``, ``rate_limit``, ``timeout``) for failures that
+    have no status, such as a connection timeout.
+    """
+
+    def __init__(
+        self,
+        message: str = "LLM provider call failed.",
+        *,
+        status: int | None = None,
+        kind: str | None = None,
+        model_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.kind = kind
+        self.model_id = model_id
+
+
+class LLMExhaustedError(DomainError):
+    """Every model in the chain is unavailable."""
+
+
+class LLMStreamAbortedError(DomainError):
+    """A provider died after tokens had already been streamed.
+
+    The router never fails over at this point: continuing on another model
+    would splice two different completions into one incoherent answer. The
+    caller persists ``partial_text`` under ``model_id`` and ends the stream
+    with an error event.
+    """
+
+    def __init__(self, *, model_id: str, partial_text: str) -> None:
+        super().__init__("The model stopped responding mid-answer.")
+        self.model_id = model_id
+        self.partial_text = partial_text

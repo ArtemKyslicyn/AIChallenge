@@ -409,7 +409,7 @@ class ModelRouter:
 
 The chain is built from `Settings.model_chain_list()` (env `LLM_MODEL_CHAIN`). There is no YAML chain file in v1.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 # apps/api/tests/unit/test_model_router.py
@@ -470,13 +470,13 @@ async def test_exhausted_model_recovers_after_ttl():
 Implement `FlakyLLMProvider` in `fake.py` for tests (or same module): it must support failing *before*
 the first chunk (`fail_models`) and failing *mid-stream* after `partial_text` (`fail_mid_stream`).
 
-- [ ] **Step 2: Run — FAIL**
+- [x] **Step 2: Run — FAIL**
 
-- [ ] **Step 3: Implement Fake + Router minimally**
+- [x] **Step 3: Implement Fake + Router minimally**
 
-- [ ] **Step 4: Run — PASS**
+- [x] **Step 4: Run — PASS**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(api): add FakeLLM and ModelRouter with failover"
