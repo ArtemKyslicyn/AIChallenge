@@ -93,9 +93,12 @@ async def send_message(
     _reject_before_streaming(container, session, payload.content)
 
     async def frames() -> AsyncIterator[str]:
-        # The DB session is owned by this generator, not by Depends: FastAPI
-        # tears request-scoped dependencies down before a streaming body ends,
-        # and the final update_content runs after the last token.
+        # The DB session is owned by this generator rather than injected.
+        # A mutation test showed the Depends form also working on this FastAPI
+        # version, so this is not a bug fix — it makes the lifetime explicit
+        # and independent of when yield-dependency teardown runs, which has
+        # changed between FastAPI versions. The final update_content happens
+        # after the last token, well past the endpoint's own frame.
         async with container.sessionmaker() as db:
             events = send_user_message_and_stream(
                 session_id=session.id,

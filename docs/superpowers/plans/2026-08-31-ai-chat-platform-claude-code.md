@@ -774,11 +774,15 @@ the token comparison per route. It uses `secrets.compare_digest`, and returns th
 together with credentials. Without this, running Vite on `:5173` against the API on `:8000` fails
 in the browser even though curl works.
 
-**DB session lifetime for SSE (critical):** the `POST .../messages` route must **not** take an
-`AsyncSession` via `Depends`. It passes the `async_sessionmaker` into the generator, which opens its
-own session with `async with sessionmaker() as db:` and commits/closes inside its own `finally`.
-FastAPI tears down request-scoped dependencies before the `StreamingResponse` body is fully consumed,
-so a `Depends`-provided session would already be closed when the final `update_content` runs.
+**DB session lifetime for SSE:** the `POST .../messages` route passes the `async_sessionmaker` into
+the generator, which opens its own session with `async with sessionmaker() as db:` and commits inside
+its own `finally`, rather than taking an `AsyncSession` via `Depends`.
+
+> Verified during execution: a mutation test that switched this route to a `Depends`-provided session
+> still passed the integration suite, so on the pinned FastAPI version yield-dependency teardown does
+> happen after the streaming body is sent. The generator-owned session is kept anyway — it makes the
+> lifetime explicit and does not depend on teardown ordering, which has changed across FastAPI
+> versions — but it is a robustness choice, not a bug fix. Do not restate the original claim.
 
 - [x] **Step 1: Wire routers + `require_session` dependency + CORS middleware; keep health**
 
@@ -902,13 +906,12 @@ Test:
 1. Create session → `{id, access_token}`
 2. POST message with Fake LLM forced via `USE_FAKE_LLM=true`
 3. Parse SSE: expect `model` then `token`+ then `message_end` with the same `model_id`
-4. GET messages → assistant row has non-empty content **and** `model_id` (this is the regression test for
-   the closed-DB-session trap in Task 9)
+4. GET messages → assistant row has non-empty content **and** `model_id` after the stream closes
 5. Wrong / missing `X-Session-Token` → 404, and no message is persisted
 
-- [ ] **Step 1: Implement + run with `RUN_INTEGRATION=1 USE_FAKE_LLM=true`**
+- [x] **Step 1: Implement + run with `RUN_INTEGRATION=1 USE_FAKE_LLM=true`**
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git commit -m "test(api): add SSE integration test against Postgres"

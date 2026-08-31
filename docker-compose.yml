@@ -9,6 +9,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-aichallenge}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-aichallenge}
+    ports:
+      # Exposed so the integration suite can run from the host.
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
