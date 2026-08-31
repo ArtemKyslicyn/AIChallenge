@@ -1000,16 +1000,16 @@ pass it as a Docker `ARG VITE_API_URL` in the build stage — and say so in `.en
   }
   ```
 
-- [ ] **Step 1: Multi-stage web image**
+- [x] **Step 1: Multi-stage web image**
 
-- [ ] **Step 2: `docker compose up --build -d`**
+- [x] **Step 2: `docker compose up --build -d`**
 
-- [ ] **Step 3: Manual smoke — open web, send message (Fake or real), confirm model label**
+- [x] **Step 3: Manual smoke — open web, send message (Fake or real), confirm model label**
 
 Also confirm tokens arrive **incrementally** (not all at once at the end) — a single late burst means nginx
 or the proxy is still buffering.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat(web): Docker/nginx proxy and wire full Compose stack"
