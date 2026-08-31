@@ -1,0 +1,12 @@
+---
+description: No deploy/SSH/scp to production server without explicit user approval
+alwaysApply: true
+---
+
+# No server push without approval
+
+- **Do not** SSH, SCP, rsync, or otherwise change the production/VPS host unless the user **explicitly** asks in that message (e.g. «задеплой», «залей на сервер», «scp .env»).
+- **Do not** trigger GitHub Actions **Deploy**, `workflow_dispatch` deploy, or `scripts/deploy.sh` on the server without that explicit ask.
+- **Allowed by default:** local edits, local commits, local tests, `git push` to GitHub **only if the user asked to push/commit to remote**. Prefer **local commits only** when the user did not ask to push.
+- If deploy seems useful, **ask first** — do not “just do it”.
+- Never print or commit server IPs, SSH host aliases, deploy paths, or private keys.
