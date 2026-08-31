@@ -582,11 +582,11 @@ preferred_model: auto
 
 (No medical role nouns.)
 
-- [ ] **Step 1: Test loads default scenario**
+- [x] **Step 1: Test loads default scenario**
 
-- [ ] **Step 2: Implement — PASS**
+- [x] **Step 2: Implement — PASS**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(api): add YAML scenario repository and default scenario"
