@@ -1,0 +1,13 @@
+# Production overrides: only the web UI is public (port 80).
+# API and Postgres stay on the Docker network.
+
+services:
+  db:
+    ports: []
+
+  api:
+    ports: []
+
+  web:
+    ports:
+      - "80:80"
