@@ -21,9 +21,9 @@ echo "==> docker compose build + up (prod)"
 docker compose -f docker-compose.prod.yml down --remove-orphans || true
 docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
 
-echo "==> wait for api health via web proxy"
+echo "==> wait for api health via local web proxy"
 for i in $(seq 1 30); do
-  if curl -sf "http://127.0.0.1/api/v1/health" >/dev/null; then
+  if curl -sf "http://127.0.0.1:8080/api/v1/health" >/dev/null; then
     echo "healthy"
     docker compose -f docker-compose.prod.yml ps
     exit 0
