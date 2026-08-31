@@ -19,12 +19,8 @@ USE_FAKE_LLM=false
 
 (Блок OpenRouter выше в файле закомментируй или перезапиши теми же переменными — активен один провайдер.)
 
-## Безопасно на сервер
+## На хост деплоя
 
-```bash
-# с Mac, из корня репо
-scp -i ~/.ssh/SSH_KEY .env DEPLOY_HOST:APP_DIR/.env
-ssh DEPLOY_HOST 'chmod 600 APP_DIR/.env && cd APP_DIR && docker compose -f docker-compose.prod.yml up -d --force-recreate api'
-```
+Скопируй `.env` на сервер **вне git** (scp/sftp/панель — как удобно), выставь права `600`, пересоздай контейнер `api` через `docker compose -f docker-compose.prod.yml`. Конкретные host/path/SSH-ключи в публичных доках не храним.
 
 Не вставляй ключи в чат Cursor/Claude и не коммить `.env`.

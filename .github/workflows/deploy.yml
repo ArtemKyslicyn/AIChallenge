@@ -3,10 +3,7 @@ name: Deploy
 # Production deploy to VPS after CI is green on main (or manual run).
 #
 # Required GitHub Actions secrets (names only — values in GitHub UI):
-#   DEPLOY_HOST   — e.g. example.invalid
-#   DEPLOY_USER   — e.g. root
-#   DEPLOY_SSH_KEY — private ed25519 key authorized on the server
-#   DEPLOY_PATH   — e.g. APP_DIR
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
 #
 # Server must already have: Docker, cloned repo, and a local .env (never in git).
 
