@@ -362,11 +362,11 @@ class LLMProvider(Protocol):
     async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult: ...
 ```
 
-- [ ] **Step 1: Write a small entity construction test** asserting `Message.model_id` can be set for assistant roles.
+- [x] **Step 1: Write a small entity construction test** asserting `Message.model_id` can be set for assistant roles.
 
-- [ ] **Step 2: Run — fail / then implement entities+ports — pass**
+- [x] **Step 2: Run — fail / then implement entities+ports — pass**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(api): add domain entities and ports"
