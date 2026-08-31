@@ -25,9 +25,13 @@ Both results must expose the **resolved** `model_id` that actually answered.
 
 ## ModelRouter
 
-- Ordered chain: env `LLM_MODEL_CHAIN` and/or `configs/llm_models.yaml`
+- Ordered chain: env `LLM_MODEL_CHAIN` only (no YAML chain file — one source of truth)
 - Failover on 429 / quota / payment-required / timeout → next model
-- Mark exhausted models with TTL (in-process v1; Redis later behind same API)
+- **Failover only before the first token.** After a token has been streamed, a provider failure raises
+  `LLMStreamAbortedError`; the caller persists the partial text + `model_id` and ends with `event: error`.
+  Never switch models mid-answer — it splices two different completions.
+- Mark exhausted models with TTL (in-process v1; Redis later behind same API); the clock is injectable so
+  TTL behaviour is testable without sleeping
 - Scenario `preferred_model: auto` uses router; explicit id pins when possible
 
 ## Client visibility (required)
@@ -35,7 +39,7 @@ Both results must expose the **resolved** `model_id` that actually answered.
 Assistant replies must show which model answered:
 
 - Persist `Message.model_id` for assistant messages
-- SSE: early `event: model`, update on failover, include `model_id` in `message_end`
+- SSE: early `event: model` (at most one per reply, since failover is pre-first-token), include `model_id` in `message_end`
 - History API returns `model_id`
 - `POST /api/v1/llm/complete` returns `model_id`
 - Web UI shows model label on assistant bubbles (and probe)

@@ -23,7 +23,7 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 | Auth (v1) | Anonymous sessions; auth later (`user_id` nullable) |
 | Streaming | SSE tokens |
 | LLM | OpenAI-compatible port + adapter; DeepSeek/OpenRouter via config |
-| Model selection | Ordered free-model chain with failover on quota/rate-limit |
+| Model selection | Ordered free-model chain with failover on quota/rate-limit, **only before the first token** |
 | DB | PostgreSQL |
 | Frontend | Vite + React + TypeScript SPA |
 | Secrets | `.env` local + `.env.example`; Cloud/CI secrets injection |
@@ -86,7 +86,7 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 - `domain` must not import FastAPI, SQLAlchemy, httpx, or framework code.
 - `application` depends only on domain ports and entities.
 - `adapters` implement ports and wire frameworks.
-- Naming: `Session`, `Message`, `Scenario`, `Participant` — no domain leakage.
+- Naming: `Session`, `Message`, `Scenario` — no domain leakage. (`Participant` is deferred; it is not modeled in v1.)
 
 ## 4. Domain model (v1)
 
@@ -125,7 +125,7 @@ Base prefix: `/api/v1`. Session-scoped routes require header `X-Session-Token: <
 | `GET` | `/sessions/{id}` | Session metadata |
 | `GET` | `/sessions/{id}/messages` | Message history |
 | `POST` | `/sessions/{id}/messages` | User message; response is **SSE** stream of assistant tokens |
-| `GET` | `/sessions/{id}/stream` | SSE reconnect / resume for an in-flight assistant message |
+| `GET` | `/sessions/{id}/stream` | SSE **replay** of an already-persisted assistant message (same event shape, so the client reuses one parser). Not a live resume — see below. |
 | `POST` | `/llm/complete` | Direct LLM probe (no session persistence by default) |
 
 ### Chat message flow
@@ -137,8 +137,14 @@ Base prefix: `/api/v1`. Session-scoped routes require header `X-Session-Token: <
    - `event: token` chunks;
    - `event: message_end` with `{ message_id, content, model_id }` (canonical final attribution);
    - or `event: error`.
-4. On failover mid-attempt, emit a new `model` event with the next `model_id` before continuing tokens (UI updates the label).
-5. Client may use `GET .../stream?message_id=...` to reconnect.
+4. **Failover happens only before the first token.** If the router has to move down the chain before any
+   token is produced, the client simply sees the `model` event for the model that ultimately answered.
+   If a provider dies *after* tokens have been sent, the server persists the partial text with its
+   `model_id` and ends the stream with `event: error` — it never switches models mid-answer, because
+   splicing two different completions produces incoherent text.
+5. If the client disconnects mid-stream, the server still persists the accumulated text and `model_id`;
+   the message is then retrievable via `GET .../messages` or replayed via `GET .../stream?message_id=...`.
+   v1 has **no live resume** of an in-flight stream — that needs a shared buffer and is out of scope.
 6. `GET .../messages` returns `model_id` on each assistant message for history reload.
 
 ### LLM probe
@@ -170,11 +176,12 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 
 ### ModelRouter
 
-- Ordered model chain from env and/or `configs/llm_models.yaml`.
-- On `429` / quota / payment-required / timeout → next model.
+- Ordered model chain from env `LLM_MODEL_CHAIN` only (no YAML chain file in v1 — one source of truth).
+- On `429` / quota / payment-required / timeout → next model, **only if no token has been emitted yet**.
 - Per-process “exhausted until TTL” map; Redis later without changing the port.
 - Scenario `preferred_model: auto` uses router; explicit id pins model when available.
 - Every successful completion/stream exposes the **resolved** `model_id` to application layer for persistence and client events (never guess; use the model that actually served the response).
+- The TTL clock is injectable so exhaustion/recovery is unit-testable without sleeping.
 
 ### Env names (values never in repo)
 
@@ -182,8 +189,13 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 - `LLM_API_KEY`
 - `LLM_MODEL_CHAIN` (comma-separated model ids)
 - `LLM_PROBE_ENABLED`
+- `USE_FAKE_LLM`
 - `DATABASE_URL`
-- plus web `VITE_API_URL` for non-proxied local dev
+- `CORS_ALLOW_ORIGINS` (comma-separated; required for local Vite dev against the API port)
+- `MAX_MESSAGE_CHARS`, `MAX_HISTORY_MESSAGES` (input and context caps)
+- `SCENARIOS_DIR` (optional override)
+- plus web `VITE_API_URL` for non-proxied local dev — **build-time only**, inlined by Vite at
+  `npm run build`; setting it as a runtime env var on the nginx image has no effect
 
 ## 7. Persistence
 
@@ -199,7 +211,12 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 - Chat UI: history + input + SSE token rendering.
 - Each assistant bubble shows `model_id` (subtle meta under/ beside the message); updates live on SSE `model` / `message_end`.
 - Simple “Probe LLM” action calling `POST /llm/complete`; probe result also shows `model_id`.
-- In Docker/prod-like: nginx serves static assets and proxies `/api` → `api:8000`.
+- In Docker/prod-like: nginx serves static assets and proxies `/api` → `api:8000` with buffering disabled
+  (SSE must arrive incrementally) and a long read timeout.
+- In local dev (Vite `:5173` → API `:8000`) the request is cross-origin: either use the Vite dev proxy or
+  set `CORS_ALLOW_ORIGINS`. The API adds `CORSMiddleware` only when that list is non-empty.
+- SSE is consumed via `fetch` + `ReadableStream` (POST bodies rule out `EventSource`); the client buffers
+  across network chunks so an `event:`/`data:` pair split across two reads is not lost.
 - No heavy design system in v1; functional UI only.
 
 ## 9. Docker & local run
@@ -227,8 +244,13 @@ Compose references `env_file: .env` which is gitignored.
 ## 11. Testing (v1)
 
 - Unit tests for application use cases with `FakeLLMProvider`.
-- API tests with real Postgres (Testcontainers or Compose `test` profile).
-- At least one SSE contract test (event sequence).
+- Router tests cover: pre-first-token failover, no-failover-after-first-token, whole-chain exhaustion, and
+  TTL recovery via an injected clock.
+- API tests with real Postgres; schema comes from `alembic upgrade head`, never `create_all`.
+- At least one SSE contract test (event sequence) plus a regression test that the assistant row ends up
+  with non-empty content and a `model_id` after the stream closes.
+- CI (GitHub Actions) runs ruff, mypy, unit and integration tests with `USE_FAKE_LLM=true` and
+  `RUN_INTEGRATION=1`. **No provider key is required for a green build.**
 
 ## 12. Out of scope (v1)
 
@@ -237,6 +259,9 @@ Explicitly deferred (extension points only):
 - Authentication / roles / multi-tenant orgs
 - Admin UI for scenarios
 - Redis-backed router state
+- Live resume of an in-flight SSE stream (shared token buffer)
+- Mid-answer model switching
+- Rate limiting on anonymous session creation
 - Voice, billing, analytics product features
 - Microservices split
 - Domain-specific (e.g. clinical) prompts in repo defaults
@@ -247,8 +272,10 @@ Explicitly deferred (extension points only):
 2. Anonymous user can open web, chat with SSE tokens, history persists in Postgres; each assistant reply shows which `model_id` answered (live and after reload).
 3. `POST /api/v1/llm/complete` returns a model response via ModelRouter and includes `model_id`.
 4. Switching provider (OpenRouter ↔ DeepSeek) is config/env only.
-5. No real secrets in git history; `.env` absent from agent-readable defaults.
+5. No real secrets in git history; `.env` absent from agent-readable defaults **and from built image layers**
+   (every build context has a `.dockerignore`).
 6. Domain packages contain no product-specific medical naming.
+7. `ruff`, `mypy`, unit tests and integration tests pass in CI without any provider key.
 
 ## 14. Next step
 
