@@ -31,6 +31,7 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 | Scenarios | YAML files now; `ScenarioRepository` port → DB later |
 | Session access | Create on visit + `access_token` in model (UI simple) |
 | Architecture style | Clean/hexagonal layers |
+| Model visibility | Every assistant reply shows which model produced it |
 
 ## 3. Repository layout
 
@@ -91,6 +92,7 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 - `session_id`
 - `role` (`user` | `assistant` | `system`)
 - `content`
+- `model_id` (nullable string; **required for persisted assistant replies** — actual model that produced the answer after routing/failover)
 - `created_at`
 
 ### Scenario (config)
@@ -117,13 +119,20 @@ Base prefix: `/api/v1`. Session-scoped routes require header `X-Session-Token: <
 
 1. Client `POST /sessions/{id}/messages` with user content.
 2. Server persists user message, creates pending assistant message id.
-3. Response body is SSE: `token` events, then `message_end` (final content + ids), or `error`.
-4. Client may use `GET .../stream?message_id=...` to reconnect.
+3. Response body is SSE:
+   - early `event: model` with `{ "model_id": "..." }` as soon as the router selects a working model (UI can show label before first token);
+   - `event: token` chunks;
+   - `event: message_end` with `{ message_id, content, model_id }` (canonical final attribution);
+   - or `event: error`.
+4. On failover mid-attempt, emit a new `model` event with the next `model_id` before continuing tokens (UI updates the label).
+5. Client may use `GET .../stream?message_id=...` to reconnect.
+6. `GET .../messages` returns `model_id` on each assistant message for history reload.
 
 ### LLM probe
 
 - Body: `{ "prompt": "..." }` or `{ "messages": [...] }`, optional `stream: true|false`.
 - Uses same `LLMProvider` / `ModelRouter` as chat.
+- Response always includes `model_id` of the model that answered (JSON field and/or SSE `model` + `message_end`).
 - Does not write to Postgres by default.
 - Gated by `LLM_PROBE_ENABLED` (on in dev; configurable in prod).
 
@@ -152,6 +161,7 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 - On `429` / quota / payment-required / timeout → next model.
 - Per-process “exhausted until TTL” map; Redis later without changing the port.
 - Scenario `preferred_model: auto` uses router; explicit id pins model when available.
+- Every successful completion/stream exposes the **resolved** `model_id` to application layer for persistence and client events (never guess; use the model that actually served the response).
 
 ### Env names (values never in repo)
 
@@ -174,7 +184,8 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 - Vite + React + TypeScript SPA.
 - On load: create session, store `session_id` + `access_token`.
 - Chat UI: history + input + SSE token rendering.
-- Simple “Probe LLM” action calling `POST /llm/complete`.
+- Each assistant bubble shows `model_id` (subtle meta under/ beside the message); updates live on SSE `model` / `message_end`.
+- Simple “Probe LLM” action calling `POST /llm/complete`; probe result also shows `model_id`.
 - In Docker/prod-like: nginx serves static assets and proxies `/api` → `api:8000`.
 - No heavy design system in v1; functional UI only.
 
@@ -220,8 +231,8 @@ Explicitly deferred (extension points only):
 ## 13. Success criteria
 
 1. `docker compose up` brings up db + api + web; health check passes.
-2. Anonymous user can open web, chat with SSE tokens, history persists in Postgres.
-3. `POST /api/v1/llm/complete` returns a model response via ModelRouter.
+2. Anonymous user can open web, chat with SSE tokens, history persists in Postgres; each assistant reply shows which `model_id` answered (live and after reload).
+3. `POST /api/v1/llm/complete` returns a model response via ModelRouter and includes `model_id`.
 4. Switching provider (OpenRouter ↔ DeepSeek) is config/env only.
 5. No real secrets in git history; `.env` absent from agent-readable defaults.
 6. Domain packages contain no product-specific medical naming.
