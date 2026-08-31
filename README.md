@@ -172,11 +172,13 @@ Auth/роли, админка сценариев, Redis для роутера, �
 
 ## Production / CI/CD
 
-- **Live:** http://example.invalid/ (web на `:80`, API через `/api/`)
+- **Live:** https://aichallenge.arcilite.ru/ (также IP http://example.invalid/ через редирект/прокси)
 - **CI:** `.github/workflows/ci.yml` — lint, mypy, unit + integration (FakeLLM), web build
 - **CD:** `.github/workflows/deploy.yml` — после зелёного CI на `main` (или вручную) SSH → `APP_DIR` → `scripts/deploy.sh`
-- **Compose prod:** `docker-compose.yml` + `docker-compose.prod.yml` (снаружи только порт 80)
+- **Compose prod:** `docker-compose.prod.yml` (web на `127.0.0.1:8080`, TLS на host nginx)
 - На сервере `.env` создаётся один раз и **не** в git. Сейчас для демо `USE_FAKE_LLM=true`; ключ LLM добавь на сервере сам.
+
+DNS (DNS): `A aichallenge.arcilite.ru → example.invalid`
 
 GitHub Actions secrets (имена): `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
 
