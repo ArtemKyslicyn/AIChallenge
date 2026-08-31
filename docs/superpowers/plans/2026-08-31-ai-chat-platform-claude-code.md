@@ -1,8 +1,10 @@
-# AI Chat Platform — Implementation Plan (Cursor Cloud)
+# AI Chat Platform — Implementation Plan (Claude Code)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Target runner:** [Claude Code](https://claude.ai/code) (separate Anthropic account — not Cursor Cloud). Follow `CLAUDE.md` + `AGENTS.md`.
 
-**Goal:** Ship a runnable monorepo (FastAPI hexagonal API + Vite React chat + Postgres + Docker) with SSE chat, LLM probe, ModelRouter failover, and visible `model_id` on every assistant reply — safe for Cursor Cloud (no secrets in git/chat).
+**Goal:** Ship a runnable monorepo (FastAPI hexagonal API + Vite React chat + Postgres + Docker) with SSE chat, LLM probe, ModelRouter failover, and visible `model_id` on every assistant reply — safe for Claude Code (no secrets in git/chat).
 
 **Architecture:** Clean/hexagonal modular monolith under `apps/api` (`domain` → `application` → `adapters`). Vite SPA under `apps/web`. Compose runs `db` + `api` + `web`. LLM via OpenAI-compatible port + `ModelRouter` (ordered free-model chain). Domain language stays product-agnostic.
 
@@ -14,7 +16,7 @@
 
 ## Global Constraints
 
-- Never read, quote, commit, or invent real secret values; use env **names** only; Cloud injects secrets.
+- Never read, quote, commit, or invent real secret values; use env **names** only; values live in local `.env` (gitignored) or the shell env of the Claude Code session.
 - No medical/role naming in code, paths, or default YAML (`patient`, `doctor`, …).
 - `domain` must not import FastAPI, SQLAlchemy, or httpx.
 - Assistant messages always persist and expose resolved `model_id`.
@@ -25,28 +27,44 @@
 
 ---
 
-## Cursor Cloud — how to run this plan
+## Claude Code — how to run this plan
 
-### Before the Cloud Agent starts (human)
+### Before starting (human, on the Claude Code machine)
 
-1. In Cursor Cloud / project **Secrets**, set (names only — paste values in the UI, never in chat):
-   - `DATABASE_URL` (or rely on Compose internal URL)
+1. Copy env template locally (do this yourself; do **not** paste values into the Claude Code chat):
+   ```bash
+   cp .env.example .env
+   # edit .env in your editor — fill LLM_API_KEY, POSTGRES_*, etc.
+   ```
+2. Required names in `.env` (values never in chat/commits):
+   - `DATABASE_URL` (or Compose-internal URL for `db` service)
    - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-   - `LLM_BASE_URL` (e.g. OpenRouter base)
+   - `LLM_BASE_URL` (e.g. OpenRouter)
    - `LLM_API_KEY`
    - `LLM_MODEL_CHAIN` (comma-separated model ids)
    - `LLM_PROBE_ENABLED=true`
-2. Do **not** put secrets in the prompt or in committed files.
-3. Agent may copy `.env.example` → `.env` **only if** the Cloud runner injects values into the environment and the agent writes placeholders / uses Compose env from the host — prefer Compose `environment:` from already-injected Cloud env vars over writing secrets into `.env` files in the workspace.
+3. Optional keyless path: set `USE_FAKE_LLM=true` and leave `LLM_API_KEY` empty — agent must still implement real provider + router.
+4. Open Claude Code in this repo (Anthropic account). Point it at this plan file.
 
-### Agent rules in Cloud
+### Agent rules (Claude Code)
 
-- Follow `AGENTS.md` and `.cursor/rules/secrets-safety.mdc`.
-- If `LLM_API_KEY` is missing: implement + test with `FakeLLMProvider`; mark live LLM smoke as optional.
+- Follow `CLAUDE.md`, `AGENTS.md`, and project skills under `.cursor/skills/` (same conventions).
+- **Never** `cat`/open/quote `.env` or print secret values in the transcript.
+- If `LLM_API_KEY` is missing: implement + unit-test with `FakeLLMProvider`; live LLM smoke optional.
 - Prefer `docker compose up --build` for end-to-end verification.
-- Do not open or `cat` `.env` if it exists with real values.
+- Commit after each task; do not force-push; do not amend unless the human asks.
 
-### Definition of done (Cloud)
+### Starter prompt (paste into Claude Code)
+
+```text
+Execute docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md task-by-task.
+Follow CLAUDE.md and AGENTS.md.
+Never read, print, or commit .env or secret values.
+Use FakeLLM when LLM_API_KEY is unset.
+Mark checkboxes as you complete steps; commit after each task.
+```
+
+### Definition of done (Claude Code)
 
 - [ ] `docker compose up --build -d` healthy
 - [ ] `GET /api/v1/health` → 200
@@ -121,7 +139,7 @@ README.md
 - Create: `apps/api/src/app/main.py`
 - Create: `apps/api/src/app/adapters/api/health.py`
 - Create: `apps/api/tests/unit/test_health.py`
-- Create: `README.md` (Cloud-oriented run notes; no secrets)
+- Create: `README.md` (Claude Code–oriented run notes; no secrets)
 
 **Interfaces:**
 - Produces: FastAPI app factory `create_app()` exposing `GET /api/v1/health` → `{"status":"ok"}`
@@ -663,14 +681,14 @@ git commit -m "feat(api): expose sessions, SSE chat, and LLM probe HTTP API"
 
 **Compose:**
 - `db`: `postgres:16`, healthcheck `pg_isready`, volume
-- `api`: build `apps/api`, `depends_on: db: condition: service_healthy`, `env_file: .env` optional, map env from Cloud
-- ports: `8000:8000` for Cloud smoke
+- `api`: build `apps/api`, `depends_on: db: condition: service_healthy`, `env_file: .env` optional
+- ports: `8000:8000` for local / Claude Code smoke
 
 - [ ] **Step 1: `uv lock` in `apps/api`**
 
 - [ ] **Step 2: Write Dockerfile + compose**
 
-- [ ] **Step 3: Build & health (Cloud)**
+- [ ] **Step 3: Build & health (local / Claude Code)**
 
 ```bash
 docker compose up --build -d db api
@@ -693,7 +711,7 @@ git commit -m "chore: add API Dockerfile and Compose for db+api"
 - Create: `apps/api/tests/integration/conftest.py`
 - Create: `apps/api/tests/integration/test_api_sse.py`
 
-**Approach:** Use Compose Postgres URL from env `DATABASE_URL` (Cloud) or skip if unavailable:
+**Approach:** Use Compose Postgres URL from env `DATABASE_URL` (local Claude Code machine) or skip if unavailable:
 
 ```python
 pytestmark = pytest.mark.skipif(not os.getenv("RUN_INTEGRATION"), reason="set RUN_INTEGRATION=1")
@@ -773,7 +791,7 @@ git commit -m "feat(web): Docker/nginx proxy and wire full Compose stack"
 
 ---
 
-### Task 14: README + Cloud checklist + status polish
+### Task 14: README + Claude Code checklist + status polish
 
 **Files:**
 - Modify: `README.md`
@@ -783,13 +801,13 @@ git commit -m "feat(web): Docker/nginx proxy and wire full Compose stack"
 **README must include:**
 - Architecture one-liner + link to spec + this plan
 - `docker compose up --build`
-- Cloud Secrets table (names only)
+- Env var table (names only) + Claude Code starter prompt pointer
 - `USE_FAKE_LLM=true` for keyless demo
-- Explicit: never commit `.env`
+- Explicit: never commit `.env`; never paste keys into Claude Code chat
 
 - [ ] **Step 1: Write README**
 
-- [ ] **Step 2: Final verification checklist (Cloud)**
+- [ ] **Step 2: Final verification checklist (Claude Code)**
 
 ```bash
 docker compose ps
@@ -803,7 +821,7 @@ cd apps/api && uv run pytest tests/unit -v
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -m "docs: add Cloud-oriented README and run checklist"
+git commit -m "docs: add Claude Code–oriented README and run checklist"
 ```
 
 ---
@@ -821,7 +839,7 @@ git commit -m "docs: add Cloud-oriented README and run checklist"
 | YAML scenarios + port | 6 |
 | Postgres + Alembic | 5, 10 |
 | Docker Compose api/web/db | 10, 13 |
-| Secrets / Cloud / no .env in git | Global + 4, 14 |
+| Secrets / Claude Code / no .env in git | Global + 4, 14 |
 | Domain-agnostic naming | Global + 6 |
 | Unit + SSE integration tests | 3, 7, 8, 11 |
 
@@ -833,11 +851,13 @@ Auth, admin scenario UI, Redis router state, voice, billing, microservices, clin
 
 ## Execution handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-08-31-ai-chat-platform-cloud.md`.
+Plan saved to `docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md`.
 
-**Two execution options:**
+**Primary:** run in **Claude Code** (Anthropic account) with the starter prompt above after you create local `.env` yourself.
+
+**Also possible in Cursor (this IDE):**
 
 1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks  
 2. **Inline Execution** — execute tasks in this session with checkpoints  
 
-**Which approach?** For Cursor Cloud: open a Cloud Agent with this file as the brief, inject Secrets first, and instruct: *“Execute `docs/superpowers/plans/2026-08-31-ai-chat-platform-cloud.md` task-by-task; follow AGENTS.md; never read or print `.env`.”*
+Do not confuse with Cursor Cloud Agents — this plan targets Claude Code on your machine / Claude account.

@@ -222,7 +222,7 @@ Compose references `env_file: .env` which is gitignored.
 - Commit only `.env.example` with empty or obviously fake placeholders.
 - `.gitignore` and `.cursorignore` include `.env`, `*.pem`, credential globs.
 - `AGENTS.md` / Cursor rules: agents must not read, quote, or commit `.env` or secret values; discuss variable **names** only.
-- Cursor Cloud / CI: inject secrets via platform secrets store as environment variables — never embed in prompts, Dockerfiles, or source.
+- Claude Code / CI: secrets via local `.env` (gitignored; never printed in chat) or CI secrets store as environment variables — never embed in prompts, Dockerfiles, or source.
 
 ## 11. Testing (v1)
 
@@ -252,4 +252,4 @@ Explicitly deferred (extension points only):
 
 ## 14. Next step
 
-After user approval of this spec → write implementation plan via writing-plans skill, then scaffold and implement.
+Execute `docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md` in **Claude Code** (see `CLAUDE.md`).

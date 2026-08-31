@@ -12,7 +12,7 @@
 | Skill | When |
 |-------|------|
 | `aichallenge-architecture` | API modules, layers, SOLID boundaries |
-| `aichallenge-secrets` | Env, keys, Cloud secrets |
+| `aichallenge-secrets` | Env, keys; never read `.env` |
 | `aichallenge-llm` | Providers, ModelRouter, SSE model events, probe |
 | `aichallenge-docker` | Compose, Dockerfiles, run workflow |
 | `aichallenge-frontend` | Chat SPA, session, SSE client |
