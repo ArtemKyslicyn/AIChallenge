@@ -780,11 +780,11 @@ own session with `async with sessionmaker() as db:` and commits/closes inside it
 FastAPI tears down request-scoped dependencies before the `StreamingResponse` body is fully consumed,
 so a `Depends`-provided session would already be closed when the final `update_content` runs.
 
-- [ ] **Step 1: Wire routers + `require_session` dependency + CORS middleware; keep health**
+- [x] **Step 1: Wire routers + `require_session` dependency + CORS middleware; keep health**
 
-- [ ] **Step 2: Verify the SSE route persists the final message** (integration coverage lands in Task 11; here just make sure the session is generator-owned, not `Depends`-owned)
+- [x] **Step 2: Verify the SSE route persists the final message** (integration coverage lands in Task 11; here just make sure the session is generator-owned, not `Depends`-owned)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(api): expose sessions, SSE chat, and LLM probe HTTP API"

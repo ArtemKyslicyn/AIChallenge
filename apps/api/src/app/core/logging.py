@@ -10,13 +10,7 @@ import logging
 
 _LOG_FORMAT = "ts=%(asctime)s level=%(levelname)s logger=%(name)s msg=%(message)s"
 
-_configured = False
-
 
 def configure_logging(level: str = "INFO") -> None:
-    """Configure root logging once. Safe to call from every ``create_app()``."""
-    global _configured
-    if _configured:
-        return
+    """Configure root logging. Safe to call from every ``create_app()``."""
     logging.basicConfig(level=level.upper(), format=_LOG_FORMAT, force=True)
-    _configured = True
