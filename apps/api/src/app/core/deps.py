@@ -58,7 +58,7 @@ def build_container(settings: Settings) -> Container:
     else:
         provider = OpenAICompatibleProvider(
             settings.llm_base_url,
-            settings.llm_api_key,
+            settings.resolved_llm_api_key(),
             extra_headers={
                 "HTTP-Referer": settings.llm_http_referer,
                 "X-Title": settings.llm_app_title,

@@ -45,8 +45,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://aichallenge:changeme@localhost:5432/aichallenge"
 
-    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_base_url: str = "https://routerai.ru/api/v1"
     llm_api_key: str = ""
+    # Alias used by RouterAI docs/SDK; if LLM_API_KEY is empty, this is used.
+    routerai_key: str = ""
     llm_model_chain: str = ""  # csv
     llm_probe_enabled: bool = True
     llm_exhausted_ttl_seconds: int = 300
@@ -54,6 +56,9 @@ class Settings(BaseSettings):
     llm_http_referer: str = "https://aichallenge.arcilite.ru"
     llm_app_title: str = "AIChallenge"
     use_fake_llm: bool = False
+
+    def resolved_llm_api_key(self) -> str:
+        return self.llm_api_key or self.routerai_key
 
     cors_allow_origins: str = ""  # csv
     max_message_chars: int = 8000
@@ -73,7 +78,7 @@ class Settings(BaseSettings):
 
     def fake_llm_enabled(self) -> bool:
         """A missing key is treated as "keyless mode", not as a crash."""
-        return self.use_fake_llm or not self.llm_api_key
+        return self.use_fake_llm or not self.resolved_llm_api_key()
 
 
 @lru_cache

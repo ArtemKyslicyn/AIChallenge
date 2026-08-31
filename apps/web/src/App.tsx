@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ensureSession, forgetSession, type SessionCredentials } from "./api/client";
 import { Chat } from "./components/Chat";
@@ -6,12 +6,23 @@ import { Chat } from "./components/Chat";
 export default function App() {
   const [session, setSession] = useState<SessionCredentials | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [booting, setBooting] = useState(true);
 
-  useEffect(() => {
+  const boot = useCallback(() => {
+    setBooting(true);
+    setError(null);
     ensureSession()
       .then(setSession)
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => {
+        setSession(null);
+        setError(e.message);
+      })
+      .finally(() => setBooting(false));
   }, []);
+
+  useEffect(() => {
+    boot();
+  }, [boot]);
 
   return (
     <div className="app">
@@ -28,7 +39,8 @@ export default function App() {
             className="ghost-button"
             onClick={() => {
               forgetSession();
-              window.location.reload();
+              setSession(null);
+              boot();
             }}
           >
             Новый чат
@@ -42,13 +54,22 @@ export default function App() {
         </p>
       )}
 
-      {!session && !error && (
+      {(booting || (!session && !error)) && (
         <p className="center-state">
           <span className="spinner" aria-hidden="true" /> Создаём сессию…
         </p>
       )}
 
-      {session && <Chat session={session} />}
+      {session && !booting && (
+        <Chat
+          session={session}
+          onStaleSession={() => {
+            forgetSession();
+            setSession(null);
+            boot();
+          }}
+        />
+      )}
     </div>
   );
 }
