@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     llm_model_chain: str = ""  # csv
     llm_probe_enabled: bool = True
     llm_exhausted_ttl_seconds: int = 300
+    # OpenRouter asks for these; harmless for other OpenAI-compatible hosts.
+    llm_http_referer: str = "https://aichallenge.arcilite.ru"
+    llm_app_title: str = "AIChallenge"
     use_fake_llm: bool = False
 
     cors_allow_origins: str = ""  # csv
