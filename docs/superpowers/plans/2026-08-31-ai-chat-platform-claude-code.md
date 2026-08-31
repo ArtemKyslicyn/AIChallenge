@@ -517,13 +517,13 @@ class Settings(BaseSettings):
 
 `OpenAICompatibleProvider` uses httpx AsyncClient; `Authorization: Bearer {key}`; POST `{base}/chat/completions` with `stream: true|false`. Map chunks to `TokenChunk(text=delta, model_id=model)`.
 
-- [ ] **Step 1: Test settings parse `LLM_MODEL_CHAIN` and `CORS_ALLOW_ORIGINS` csv** (empty string → empty list; whitespace trimmed; no crash when unset)
+- [x] **Step 1: Test settings parse `LLM_MODEL_CHAIN` and `CORS_ALLOW_ORIGINS` csv** (empty string → empty list; whitespace trimmed; no crash when unset)
 
-- [ ] **Step 2: Implement settings + provider**
+- [x] **Step 2: Implement settings + provider**
 
-- [ ] **Step 3: Do not write real keys into any file**
+- [x] **Step 3: Do not write real keys into any file**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat(api): add settings and OpenAI-compatible LLM client"
