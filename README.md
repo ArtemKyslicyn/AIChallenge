@@ -170,6 +170,18 @@ SSE-события: `model` → `token`* → `message_end` (или `error`). В 
 
 Auth/роли, админка сценариев, Redis для роутера, голос, биллинг, микросервисы.
 
+## Production / CI/CD
+
+- **Live:** http://example.invalid/ (web на `:80`, API через `/api/`)
+- **CI:** `.github/workflows/ci.yml` — lint, mypy, unit + integration (FakeLLM), web build
+- **CD:** `.github/workflows/deploy.yml` — после зелёного CI на `main` (или вручную) SSH → `APP_DIR` → `scripts/deploy.sh`
+- **Compose prod:** `docker-compose.yml` + `docker-compose.prod.yml` (снаружи только порт 80)
+- На сервере `.env` создаётся один раз и **не** в git. Сейчас для демо `USE_FAKE_LLM=true`; ключ LLM добавь на сервере сам.
+
+GitHub Actions secrets (имена): `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
+
+SSH с машины разработчика: `ssh DEPLOY_HOST` (см. `~/.ssh/config`).
+
 ## Лицензия / использование
 
 Учебный / челлендж-репозиторий. Форк и PR приветствуются после стабилизации v1.
