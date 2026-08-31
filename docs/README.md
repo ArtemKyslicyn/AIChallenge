@@ -7,7 +7,7 @@
 | Файл | Описание |
 |------|----------|
 | [specs/2026-08-31-ai-chat-platform-design.md](superpowers/specs/2026-08-31-ai-chat-platform-design.md) | **Design spec** — целевая архитектура v1: hexagonal monorepo, API/SSE, LLM ModelRouter, Postgres, секреты, критерии успеха. Источник правды по дизайну. |
-| [plans/2026-08-31-ai-chat-platform-claude-code.md](superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md) | **Implementation plan** для Claude Code: 14 задач с TDD-шагами, file map, DoD, правила секретов. Им исполняют агенты. |
+| [plans/2026-08-31-ai-chat-platform-claude-code.md](superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md) | **Implementation plan** для Claude Code: 15 задач с TDD-шагами, file map, DoD, правила секретов. Им исполняют агенты. |
 
 ## Агенты и соглашения
 
@@ -24,6 +24,8 @@
 |------|----------|
 | [../configs/scenarios/](../configs/scenarios/) | YAML-сценарии диалога (нейтральный язык). |
 | [../.env.example](../.env.example) | Шаблон env (только имена / плейсхолдеры). |
+| [../docker-compose.yml](../docker-compose.yml) | Стек `db + api + web`; работает без `.env` (keyless). |
+| [../.github/workflows/ci.yml](../.github/workflows/ci.yml) | CI: ruff, mypy, unit + integration, сборка фронта. |
 
 ## Как обновлять доки
 
