@@ -74,16 +74,16 @@ Mark checkboxes as you complete steps; commit after each task.
 
 ### Definition of done (Claude Code)
 
-- [ ] `docker compose up --build -d` healthy
-- [ ] `GET /api/v1/health` → 200
-- [ ] Unit tests pass without real LLM key
-- [ ] Chat UI loads; SSE works with Fake or real LLM
-- [ ] Assistant bubbles show `model_id`
-- [ ] `POST /api/v1/llm/complete` returns `model_id` when probe enabled
-- [ ] `ruff check`, `ruff format --check`, `mypy src` clean
-- [ ] Integration tests pass: `RUN_INTEGRATION=1 USE_FAKE_LLM=true uv run pytest tests/integration`
-- [ ] CI workflow green on push
-- [ ] No secrets in `git status` / diff; `.env` not present in any built image (see the check in Task 10 Step 4)
+- [x] `docker compose up --build -d` healthy
+- [x] `GET /api/v1/health` → 200
+- [x] Unit tests pass without real LLM key
+- [x] Chat UI loads; SSE works with Fake or real LLM
+- [ ] Assistant bubbles show `model_id` — code and API verified; not clicked through by a human yet
+- [x] `POST /api/v1/llm/complete` returns `model_id` when probe enabled
+- [x] `ruff check`, `ruff format --check`, `mypy src` clean
+- [x] Integration tests pass: `RUN_INTEGRATION=1 USE_FAKE_LLM=true uv run pytest tests/integration`
+- [ ] CI workflow green on push — cannot be confirmed until the branch is pushed
+- [x] No secrets in `git status` / diff; `.env` not present in any built image (see the check in Task 10 Step 4)
 
 ---
 
@@ -1076,9 +1076,9 @@ git commit -m "ci: add lint, type-check, and test workflow"
   message rather than resuming a live one; router exhaustion state is per-process
 - Explicit: never commit `.env`; never paste keys into Claude Code chat
 
-- [ ] **Step 1: Write README**
+- [x] **Step 1: Write README**
 
-- [ ] **Step 2: Final verification checklist (Claude Code)**
+- [x] **Step 2: Final verification checklist (Claude Code)**
 
 ```bash
 docker compose ps                       # db, api, web — api must be (healthy)
@@ -1088,14 +1088,14 @@ uv run pytest tests/unit -v
 RUN_INTEGRATION=1 USE_FAKE_LLM=true uv run pytest tests/integration -v
 ```
 
-- [ ] **Step 3: Confirm `git status` has no `.env`, and no image ships one**
+- [x] **Step 3: Confirm `git status` has no `.env`, and no image ships one**
 
 ```bash
 git status --porcelain | grep -E '(^|/)\.env($|[^.])' && echo "LEAK" || echo "clean"
 docker compose run --rm --entrypoint sh api -c 'ls -a /app | grep -c "^\.env$" || echo "clean"'
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "docs: add Claude Code–oriented README and run checklist"

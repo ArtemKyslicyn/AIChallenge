@@ -1,113 +1,141 @@
-# AIChallenge
+# AIChallenge — AI Chat Platform
 
-Публичный челлендж: собрать **масштабируемую AI/чат-платформу** (backend + frontend в одной репе, Docker), с чистой архитектурой Python, безопасными секретами и стримингом ответов модели.
+A domain-agnostic AI chat platform: a FastAPI hexagonal modular monolith, a Vite/React SPA, and
+Postgres, wired together with Docker Compose. Answers stream over SSE, and **every assistant reply
+states which model produced it** — live in the stream, in the stored row, and in the UI.
 
-Репозиторий: [github.com/ArtemKyslicyn/AIChallenge](https://github.com/ArtemKyslicyn/AIChallenge)
+- **Design spec:** [`docs/superpowers/specs/2026-08-31-ai-chat-platform-design.md`](docs/superpowers/specs/2026-08-31-ai-chat-platform-design.md)
+- **Implementation plan:** [`docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md`](docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md)
+- **Agent conventions:** [`CLAUDE.md`](CLAUDE.md), [`AGENTS.md`](AGENTS.md)
 
-## О чём челлендж
-
-Сделать monorepo, в котором:
-
-| Часть | Требование |
-|--------|------------|
-| Backend | Python, FastAPI, **Clean / Hexagonal** (SOLID), модульный монолит |
-| Frontend | React + TypeScript (Vite SPA) |
-| Infra | Docker Compose: `api` + `web` + Postgres |
-| Chat UX | Анонимная сессия по ссылке, **SSE**-стриминг токенов |
-| LLM | OpenAI-compatible абстракция + роутер моделей (failover при 429/quota), в т.ч. OpenRouter / DeepSeek |
-| Прозрачность | У каждого ответа ассистента видно **`model_id`** (API, SSE, UI, БД) |
-| Секреты | `.env` только локально; в git и в чат агентам — **никогда** |
-| Домен | Код **domain-agnostic** (без patient/doctor и т.п. в именах); сценарии — конфиг |
-
-Продуктовый смысл (например, диалог перед визитом) задаётся позже через сценарии/конфиг, не через названия модулей.
-
-## Статус
-
-v1 **в разработке** (ветка `feat/v1-chat-platform`). Уже есть каркас API, domain/ports, ModelRouter, Postgres/Alembic, use cases сессий/чата/probe. Compose + web — по плану.
-
-## Документация (с чего читать)
-
-| Документ | Зачем |
-|----------|--------|
-| **[Design spec](docs/superpowers/specs/2026-08-31-ai-chat-platform-design.md)** | Утверждённая архитектура: слои, API, SSE, LLM-router, модели данных, критерии успеха |
-| **[План для Claude Code](docs/superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md)** | Пошаговая реализация (14 задач, TDD, чеклисты, DoD) |
-| **[CLAUDE.md](CLAUDE.md)** | Entrypoint для Claude Code: секреты, стек, ссылка на план |
-| **[AGENTS.md](AGENTS.md)** | Правила для любых агентов + индекс project skills |
-| **[Индекс docs](docs/README.md)** | Карта всей документации |
-| **`.env.example`** | Имена переменных окружения (без реальных значений) |
-
-Кратко по слоям в коде (`apps/api`):
-
-```text
-domain/        → сущности и порты (без FastAPI/SQLAlchemy)
-application/   → use cases
-adapters/      → HTTP, Postgres, LLM, YAML-сценарии
-core/          → settings, DI, logging
-```
-
-## Быстрый старт (локально, без ключа LLM)
+## Run it
 
 ```bash
-git clone https://github.com/ArtemKyslicyn/AIChallenge.git
-cd AIChallenge
-cp .env.example .env
-# в .env: USE_FAKE_LLM=true  (редактор, не чат агента)
+docker compose up --build -d
+open http://localhost:8080
+```
+
+That works with **no configuration at all**: with no provider key the API falls back to
+`FakeLLMProvider`, so the chat, the streaming, and the model label are all exercisable offline.
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| `web` | http://localhost:8080 | nginx serves the SPA and proxies `/api` |
+| `api` | http://localhost:8000 | FastAPI; `/api/v1/health`, `/docs` |
+| `db` | `localhost:5432` | Postgres 16, exposed for the test suite |
+
+To use a real provider, create `.env` **in your editor** and restart:
+
+```bash
+cp .env.example .env   # then fill LLM_API_KEY and LLM_MODEL_CHAIN
+docker compose up -d --build api
+```
+
+## Configuration
+
+Names only — values live in `.env`, which is gitignored and must never be committed, printed, or
+pasted into an agent chat.
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://…`) |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Credentials for the `db` service |
+| `LLM_BASE_URL` | OpenAI-compatible endpoint (OpenRouter, DeepSeek, …) |
+| `LLM_API_KEY` | Provider key. Empty ⇒ keyless mode |
+| `LLM_MODEL_CHAIN` | Comma-separated model ids, tried in order |
+| `LLM_EXHAUSTED_TTL_SECONDS` | How long a rate-limited model is skipped |
+| `USE_FAKE_LLM` | Force the deterministic provider |
+| `LLM_PROBE_ENABLED` | Gate for `POST /api/v1/llm/complete` |
+| `CORS_ALLOW_ORIGINS` | Comma-separated origins; needed only for non-proxied dev |
+| `MAX_MESSAGE_CHARS` / `MAX_HISTORY_MESSAGES` | Input cap and context window cap |
+| `SCENARIOS_DIR` | Override for `configs/scenarios/` |
+| `VITE_API_URL` | **Build-time only.** Empty ⇒ relative `/api/v1` behind nginx |
+
+Switching providers is configuration, not code: point `LLM_BASE_URL` and `LLM_MODEL_CHAIN` somewhere
+else and restart.
+
+## Develop without Docker
+
+```bash
+docker compose up -d db                 # Postgres only
 
 cd apps/api
 uv sync
-uv run pytest tests/unit -v
-uv run uvicorn app.main:app --reload --port 8000
+uv run alembic upgrade head
+USE_FAKE_LLM=true uv run uvicorn app.main:app --reload --port 8000
+
+cd ../web && npm install && npm run dev  # http://localhost:5173
 ```
 
-Проверка:
+The Vite dev server proxies `/api` to `:8000`, so this needs no CORS. If you point the browser at the
+API directly instead, set `CORS_ALLOW_ORIGINS=http://localhost:5173` — the API only installs CORS
+middleware when that list is non-empty.
+
+## Tests
 
 ```bash
-curl -s http://localhost:8000/api/v1/health
-# {"status":"ok"}
+cd apps/api
+uv run ruff check . && uv run ruff format --check . && uv run mypy src
+uv run pytest tests/unit -q
+
+docker compose up -d db
+RUN_INTEGRATION=1 USE_FAKE_LLM=true \
+  DATABASE_URL=postgresql+asyncpg://aichallenge:changeme@localhost:5432/aichallenge \
+  uv run pytest tests/integration -q
 ```
 
-Полный стек (когда появятся Dockerfile/Compose по плану):
+No provider key is required for any of it. The integration suite migrates with Alembic and truncates
+between tests. CI (`.github/workflows/ci.yml`) runs exactly this chain plus the web build.
 
-```bash
-docker compose up --build
-```
+## API
 
-## API (v1, контракт)
+Base prefix `/api/v1`. Session-scoped routes take `X-Session-Token`.
 
-Префикс: `/api/v1`. Для сессии: заголовок `X-Session-Token`.
-
-| Method | Path | Назначение |
-|--------|------|------------|
+| Method | Path | Purpose |
+|--------|------|---------|
 | `GET` | `/health` | Liveness |
-| `POST` | `/sessions` | Создать анонимную сессию |
-| `GET` | `/sessions/{id}/messages` | История (с `model_id`) |
-| `POST` | `/sessions/{id}/messages` | Сообщение пользователя → **SSE** |
-| `POST` | `/llm/complete` | Прямой probe к модели (без сессии) |
+| `POST` | `/sessions` | Create an anonymous session → `{id, access_token}` |
+| `GET` | `/sessions/{id}` | Metadata (never echoes the token) |
+| `GET` | `/sessions/{id}/messages` | History, `model_id` per assistant row |
+| `POST` | `/sessions/{id}/messages` | Send a turn; the response body is the SSE answer |
+| `GET` | `/sessions/{id}/stream?message_id=` | Replay a stored answer in the same event shape |
+| `POST` | `/llm/complete` | Direct probe; returns `model_id`, writes nothing |
 
-SSE-события: `model` → `token`* → `message_end` (или `error`). В `model` / `message_end` всегда есть фактический `model_id`.
+SSE frames: `model` (as soon as a model is chosen), `token` (repeated), `message_end` (canonical
+attribution), or `error`.
 
-## Секреты
+## Architecture
 
-1. Скопируй `.env.example` → `.env` **сам в редакторе**.
-2. Не коммить `.env`, не вставляй ключи в чат Cursor/Claude Code.
-3. Для демо без провайдера: `USE_FAKE_LLM=true`.
-4. Имена переменных: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_CHAIN`, `DATABASE_URL`, …
+```
+apps/api/src/app/
+├── domain/        entities, ports, errors     — no framework imports
+├── application/   use cases                   — depends on ports only
+├── adapters/      api · persistence · llm · scenarios
+└── core/          settings, logging, composition root
+```
 
-Подробнее: skill `aichallenge-secrets`, правило `.cursor/rules/secrets-safety.mdc`.
+The layer rule is enforced by a test (`tests/unit/test_layering.py`) that parses the import graph, not
+by review. Scenarios are YAML under `configs/scenarios/` behind a `ScenarioRepository` port, so moving
+them into the database later does not touch the use cases.
 
-## Критерии приёмки челленджа (v1)
+## Known limits in v1
 
-- [ ] `docker compose up` поднимает db + api + web, health ок  
-- [ ] Анонимный чат по SSE, история в Postgres  
-- [ ] В UI и API виден `model_id` ответа  
-- [ ] `POST /llm/complete` возвращает ответ и `model_id`  
-- [ ] Смена провайдера (OpenRouter ↔ DeepSeek) — только конфиг/env  
-- [ ] Нет секретов в git; в коде нет медицинских ролей в нейминге  
+Deliberate, and worth knowing before you file a bug:
 
-## Вне скоупа v1
+- **Failover only before the first token.** Once text has been streamed, a provider failure ends the
+  answer with an `error` event and the partial text is saved with an `[interrupted]` marker. Switching
+  models mid-answer would splice two different completions together.
+- **`GET /sessions/{id}/stream` replays, it does not resume.** An answer still being generated returns
+  404; live resume needs a shared buffer and is out of scope.
+- **Router exhaustion state is per-process.** Fine for one container; a Redis-backed store slots in
+  behind the same port.
+- **No authentication.** Sessions are anonymous and hold a bearer `access_token`; `user_id` is reserved
+  and unused.
+- **No rate limiting** on session creation.
 
-Auth/роли, админка сценариев, Redis для роутера, голос, биллинг, микросервисы.
+## Secrets
 
-## Лицензия / использование
-
-Учебный / челлендж-репозиторий. Форк и PR приветствуются после стабилизации v1.
+- `.env` is gitignored, excluded from both build contexts by `.dockerignore`, and never enters an image
+  layer.
+- Only `.env.example` — names and obviously fake placeholders — is committed.
+- Agents must discuss variable **names** only, and never read, print, or commit values.
