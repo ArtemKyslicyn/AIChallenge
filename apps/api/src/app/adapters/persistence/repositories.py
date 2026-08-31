@@ -90,7 +90,7 @@ class SqlAlchemyMessageRepository:
     async def update_content(self, message_id: UUID, content: str, model_id: str | None) -> Message:
         row = await self._db.get(MessageRow, message_id)
         if row is None:
-            raise MessageNotFoundError(f"Message {message_id} does not exist.")
+            raise MessageNotFoundError(f"Сообщение {message_id} не найдено.")
         row.content = content
         row.model_id = model_id
         await self._db.flush()

@@ -18,7 +18,19 @@ async def test_loads_repo_default_scenario() -> None:
 async def test_default_scenario_stays_domain_agnostic() -> None:
     repo = YamlScenarioRepository(DEFAULT_SCENARIOS_DIR)
     prompt = (await repo.get_default()).system_prompt.lower()
-    for leaked in ("patient", "doctor", "clinic", "medical", "diagnos"):
+    leaks = (
+        "patient",
+        "doctor",
+        "clinic",
+        "medical",
+        "diagnos",
+        "пациент",
+        "врач",
+        "клиник",
+        "медицин",
+        "диагноз",
+    )
+    for leaked in leaks:
         assert leaked not in prompt
 
 

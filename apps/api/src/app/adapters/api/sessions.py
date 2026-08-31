@@ -125,16 +125,16 @@ def _reject_before_streaming(container: Container, session: Session, content: st
     Once StreamingResponse starts, the status line is already on the wire.
     """
     if session.status is not SessionStatus.ACTIVE:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Session is closed.")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Сессия закрыта.")
     if not content.strip():
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Message must not be empty."
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Сообщение не может быть пустым."
         )
     limit = container.settings.max_message_chars
     if len(content) > limit:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Message exceeds the {limit} character limit.",
+            detail=f"Сообщение длиннее лимита в {limit} символов.",
         )
 
 
@@ -155,7 +155,7 @@ async def replay_message(
         or message.role is not MessageRole.ASSISTANT
         or message.model_id is None
     ):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No replayable message.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Нечего воспроизвести.")
 
     frames = [
         format_frame("model", {"model_id": message.model_id}),

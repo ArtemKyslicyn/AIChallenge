@@ -13,9 +13,9 @@ import { Composer } from "./Composer";
 import { TurnView } from "./Turn";
 
 const SUGGESTIONS = [
-  "What can you help me with?",
-  "Summarise this in three bullets",
-  "Ask me one question at a time",
+  "С чем ты можешь помочь?",
+  "Сформулируй это тремя пунктами",
+  "Задавай мне по одному вопросу за раз",
 ];
 
 /** Distance from the bottom, in px, within which the view keeps auto-scrolling. */
@@ -72,7 +72,7 @@ export function Chat({ session }: { session: SessionCredentials }) {
 
       setSeed(null);
       setError(null);
-      setStatus("Waiting for a reply.");
+      setStatus("Ждём ответ.");
       setBusy(true);
       stick.current = true;
       setTurns((prev) => [
@@ -93,7 +93,7 @@ export function Chat({ session }: { session: SessionCredentials }) {
               case "model":
                 // Arrives before the first token, so the label never lags.
                 patch({ modelId: event.model_id });
-                setStatus(`Replying with ${event.model_id}.`);
+                setStatus(`Отвечает ${event.model_id}.`);
                 break;
               case "token":
                 setTurns((prev) =>
@@ -104,12 +104,12 @@ export function Chat({ session }: { session: SessionCredentials }) {
                 break;
               case "message_end":
                 patch({ content: event.content, modelId: event.model_id });
-                setStatus(`Reply complete, from ${event.model_id}.`);
+                setStatus(`Ответ готов, модель ${event.model_id}.`);
                 break;
               case "error":
                 patch({ failed: true });
                 setError(event.message);
-                setStatus("The reply was interrupted.");
+                setStatus("Ответ прерван.");
                 break;
             }
           },
@@ -140,16 +140,16 @@ export function Chat({ session }: { session: SessionCredentials }) {
         <div className="thread-inner">
           {loading && (
             <p className="center-state">
-              <span className="spinner" aria-hidden="true" /> Loading conversation…
+              <span className="spinner" aria-hidden="true" /> Загружаем переписку…
             </p>
           )}
 
           {empty && (
             <div className="empty">
-              <h2>What would you like to talk about?</h2>
+              <h2>О чём поговорим?</h2>
               <p>
-                Every reply shows the model that produced it, streamed token by token as it is
-                generated.
+                У каждого ответа видно, какая модель его дала. Текст приходит потоком, токен
+                за токеном.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (

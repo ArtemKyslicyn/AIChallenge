@@ -22,7 +22,7 @@ def _turns(payload: ProbeRequest) -> list[ChatMessage]:
         return [ChatMessage(role=MessageRole(m.role), content=m.content) for m in payload.messages]
     if payload.prompt and payload.prompt.strip():
         return [ChatMessage(role=MessageRole.USER, content=payload.prompt)]
-    raise MessageValidationError("Provide either 'prompt' or 'messages'.")
+    raise MessageValidationError("Передайте либо «prompt», либо «messages».")
 
 
 @router.post("/complete", response_model=None)
@@ -38,7 +38,7 @@ async def complete(payload: ProbeRequest, request: Request) -> ProbeResponse | S
         return ProbeResponse(content=result.content, model_id=result.model_id)
 
     if not enabled:
-        raise ProbeDisabledError("The LLM probe is disabled by configuration.")
+        raise ProbeDisabledError("Probe к модели отключён конфигурацией.")
 
     async def frames() -> AsyncIterator[str]:
         model_id: str | None = None

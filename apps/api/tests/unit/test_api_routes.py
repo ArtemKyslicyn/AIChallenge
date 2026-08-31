@@ -54,7 +54,7 @@ def test_probe_disabled_returns_404_in_the_shared_error_shape() -> None:
     assert response.json() == {
         "error": {
             "code": "probe_disabled",
-            "message": "The LLM probe is disabled by configuration.",
+            "message": "Probe к модели отключён конфигурацией.",
         }
     }
 

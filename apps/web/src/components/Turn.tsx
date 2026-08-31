@@ -11,7 +11,7 @@ export function TurnView({ turn, streaming }: Props) {
   return (
     <article
       className={`turn ${turn.role}${turn.failed ? " failed" : ""}`}
-      aria-label={isAssistant ? "Assistant reply" : "Your message"}
+      aria-label={isAssistant ? "Ответ ассистента" : "Ваше сообщение"}
     >
       <p className="body">
         {turn.content}
@@ -22,15 +22,15 @@ export function TurnView({ turn, streaming }: Props) {
         <div className="meta">
           {turn.failed ? (
             <span className="badge" data-tone="error">
-              interrupted{turn.modelId ? ` · ${turn.modelId}` : ""}
+              прервано{turn.modelId ? ` · ${turn.modelId}` : ""}
             </span>
           ) : turn.modelId ? (
-            <span className="badge" title="The model that produced this reply">
+            <span className="badge" title="Модель, которая дала этот ответ">
               {turn.modelId}
             </span>
           ) : (
             <span className="badge" data-tone="pending">
-              choosing model…
+              выбираем модель…
             </span>
           )}
         </div>

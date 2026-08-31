@@ -116,14 +116,14 @@ async def require_session(
     try:
         parsed = UUID(session_id)
     except ValueError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Session not found.") from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сессия не найдена.") from None
 
     try:
         return await authorize_session(
             sessions=SqlAlchemySessionRepository(db), session_id=parsed, access_token=token
         )
     except SessionNotFoundError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Session not found.") from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сессия не найдена.") from None
 
 
 AuthorizedSession = Annotated[Session, Depends(require_session)]
