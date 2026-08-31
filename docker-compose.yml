@@ -1,0 +1,54 @@
+# Local stack. `docker compose up --build` works with no .env at all: with no
+# provider key the API falls back to FakeLLMProvider. A real .env overrides the
+# defaults below — Compose reads it for interpolation automatically.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aichallenge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-aichallenge}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aichallenge} -d ${POSTGRES_DB:-aichallenge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      # Secrets stay in the file rather than in the interpolated Compose config.
+      - path: .env
+        required: false
+    environment:
+      # Always point at the db service, whatever a local .env says.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aichallenge}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-aichallenge}
+      SCENARIOS_DIR: /app/configs/scenarios
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Scenarios are configuration, not code: editable without a rebuild.
+      - ./configs/scenarios:/app/configs/scenarios:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      # No curl in a slim image — use the interpreter that is already there.
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status==200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:

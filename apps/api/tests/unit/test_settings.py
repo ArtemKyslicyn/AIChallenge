@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.core.settings import Settings
+from app.core.settings import Settings, _repo_root
 
 
 def _settings(**overrides: object) -> Settings:
@@ -36,3 +36,14 @@ def test_scenarios_path_defaults_into_repo_configs() -> None:
     default = _settings().scenarios_path()
     assert default.parts[-2:] == ("configs", "scenarios")
     assert _settings(scenarios_dir="/tmp/scenarios").scenarios_path() == Path("/tmp/scenarios")
+
+
+def test_repo_root_is_found_by_marker_directory(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    (root / "configs" / "scenarios").mkdir(parents=True)
+    assert _repo_root(root / "apps" / "api" / "src" / "app" / "core" / "settings.py") == root
+
+
+def test_repo_root_never_raises_without_a_marker(tmp_path: Path) -> None:
+    # The container layout: /app/src/app/core/settings.py, no repo above it.
+    assert _repo_root(tmp_path / "app" / "core" / "settings.py").is_absolute()

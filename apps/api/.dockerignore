@@ -1,0 +1,13 @@
+# A secret must never enter a build context — it would survive in an image layer.
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+tests/

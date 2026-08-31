@@ -842,11 +842,11 @@ is deleted in a later layer.
   (no `curl` in a slim image — use the interpreter that is already there)
 - ports: `8000:8000` for local / Claude Code smoke
 
-- [ ] **Step 1: `uv lock` in `apps/api`**
+- [x] **Step 1: `uv lock` in `apps/api`**
 
-- [ ] **Step 2: Write `.dockerignore` + Dockerfile + compose**
+- [x] **Step 2: Write `.dockerignore` + Dockerfile + compose**
 
-- [ ] **Step 3: Build & health (local / Claude Code)**
+- [x] **Step 3: Build & health (local / Claude Code)**
 
 ```bash
 docker compose up --build -d db api
@@ -856,7 +856,7 @@ docker compose ps            # api must report (healthy), not just Up
 
 Expected: `{"status":"ok"}`
 
-- [ ] **Step 4: Verify no `.env` in the image**
+- [x] **Step 4: Verify no `.env` in the image**
 
 ```bash
 docker compose run --rm --entrypoint sh api -c 'ls -a /app | grep -c "^\.env$" || echo "clean"'
@@ -864,7 +864,7 @@ docker compose run --rm --entrypoint sh api -c 'ls -a /app | grep -c "^\.env$" |
 
 Expected: `clean`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "chore: add API Dockerfile and Compose for db+api"

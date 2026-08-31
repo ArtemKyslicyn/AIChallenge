@@ -11,8 +11,22 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-#: apps/api/src/app/core/settings.py -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[5]
+
+def _repo_root(start: Path) -> Path:
+    """Walk up to the directory that holds ``configs/scenarios``.
+
+    Indexing ``parents`` by a fixed depth breaks in the container, where the
+    package sits at /app/src/app and there is no repo above it. There the
+    marker is absent and SCENARIOS_DIR is set explicitly, so the fallback only
+    has to be harmless — never an IndexError at import time.
+    """
+    for parent in start.parents:
+        if (parent / "configs" / "scenarios").is_dir():
+            return parent
+    return start.parents[-1]
+
+
+REPO_ROOT = _repo_root(Path(__file__).resolve())
 DEFAULT_SCENARIOS_DIR = REPO_ROOT / "configs" / "scenarios"
 
 
