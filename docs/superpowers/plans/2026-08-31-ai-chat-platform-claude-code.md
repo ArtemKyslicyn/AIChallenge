@@ -160,7 +160,7 @@ README.md
 **Interfaces:**
 - Produces: FastAPI app factory `create_app()` exposing `GET /api/v1/health` → `{"status":"ok"}`
 
-- [ ] **Step 1: Write failing health test**
+- [x] **Step 1: Write failing health test**
 
 ```python
 # apps/api/tests/unit/test_health.py
@@ -174,7 +174,7 @@ def test_health_ok():
     assert r.json()["status"] == "ok"
 ```
 
-- [ ] **Step 2: Run test — expect fail (module missing)**
+- [x] **Step 2: Run test — expect fail (module missing)**
 
 ```bash
 cd apps/api && uv sync && uv run pytest tests/unit/test_health.py -v
@@ -182,7 +182,7 @@ cd apps/api && uv sync && uv run pytest tests/unit/test_health.py -v
 
 Expected: FAIL import or 404
 
-- [ ] **Step 3: Minimal `pyproject.toml` + app**
+- [x] **Step 3: Minimal `pyproject.toml` + app**
 
 `pyproject.toml` essentials:
 
@@ -263,14 +263,14 @@ app = create_app()
 
 CORS middleware is added in Task 9 (needs `Settings`, which does not exist yet).
 
-- [ ] **Step 4: Re-run test — PASS**
+- [x] **Step 4: Re-run test — PASS**
 
 ```bash
 cd apps/api && uv run pytest tests/unit/test_health.py -v
 uv run ruff check . && uv run ruff format --check .
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api README.md
