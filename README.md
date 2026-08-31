@@ -34,7 +34,9 @@ v1 **собран** на ветке `feat/v1-chat-platform`: API (domain/ports, 
 | **[CLAUDE.md](CLAUDE.md)** | Entrypoint для Claude Code: секреты, стек, ссылка на план |
 | **[AGENTS.md](AGENTS.md)** | Правила для любых агентов + индекс project skills |
 | **[Индекс docs](docs/README.md)** | Карта всей документации |
-| **`.env.example`** | Имена переменных окружения (без реальных значений) |
+| **`.env.example`** | Имена переменных (без секретов) |
+| **[Локальный `.env`](docs/env-local.md)** | Куда вставлять ключи и как `scp` на VPS (файл в gitignore) |
+
 
 Кратко по слоям в коде (`apps/api`):
 
