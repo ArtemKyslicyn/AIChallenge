@@ -44,12 +44,12 @@ logger = logging.getLogger(__name__)
 
 #: Appended to a persisted answer that was cut short, so a truncated reply is
 #: never mistaken for a complete one on reload.
-INTERRUPTED_MARKER = "\n\n[interrupted]"
+INTERRUPTED_MARKER = "\n\n[прервано]"
 
-ERROR_INTERRUPTED = "The model stopped responding. The partial answer was saved."
-ERROR_NO_MODEL = "No model is available right now. Please try again shortly."
-ERROR_EMPTY = "The model returned an empty answer."
-ERROR_GENERIC = "The assistant could not complete the answer."
+ERROR_INTERRUPTED = "Модель перестала отвечать. Часть ответа сохранена."
+ERROR_NO_MODEL = "Сейчас нет доступной модели. Попробуйте чуть позже."
+ERROR_EMPTY = "Модель вернула пустой ответ."
+ERROR_GENERIC = "Не удалось получить ответ ассистента."
 
 
 @dataclass(slots=True)
@@ -114,13 +114,13 @@ async def send_user_message_and_stream(
         sessions=sessions, session_id=session_id, access_token=access_token
     )
     if session.status is not SessionStatus.ACTIVE:
-        raise SessionClosedError("This session no longer accepts messages.")
+        raise SessionClosedError("Эта сессия больше не принимает сообщения.")
 
     text = content.strip()
     if not text:
-        raise MessageValidationError("Message must not be empty.")
+        raise MessageValidationError("Сообщение не может быть пустым.")
     if len(content) > max_message_chars:
-        raise MessageValidationError(f"Message exceeds the {max_message_chars} character limit.")
+        raise MessageValidationError(f"Сообщение длиннее лимита в {max_message_chars} символов.")
 
     # Read config and history before writing anything, so a broken scenario
     # cannot leave orphan rows behind.

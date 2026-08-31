@@ -41,8 +41,8 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
     <div className="composer-wrap">
       {tooLong && (
         <p className="alert" role="alert">
-          <strong>Too long.</strong> {value.length.toLocaleString()} of{" "}
-          {maxChars.toLocaleString()} characters.
+          <strong>Слишком длинно.</strong> {value.length.toLocaleString()} из{" "}
+          {maxChars.toLocaleString()} символов.
         </p>
       )}
 
@@ -66,8 +66,8 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
               submit();
             }
           }}
-          placeholder="Send a message…"
-          aria-label="Message"
+          placeholder="Напишите сообщение…"
+          aria-label="Сообщение"
         />
 
         {busy ? (
@@ -76,8 +76,8 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
             className="icon-button"
             data-variant="stop"
             onClick={onStop}
-            aria-label="Stop generating"
-            title="Stop generating"
+            aria-label="Остановить генерацию"
+            title="Остановить генерацию"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
               <rect width="12" height="12" rx="2.5" fill="currentColor" />
@@ -88,8 +88,8 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
             type="submit"
             className="icon-button"
             disabled={!canSend}
-            aria-label="Send message"
-            title="Send"
+            aria-label="Отправить сообщение"
+            title="Отправить"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -106,7 +106,7 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
       </form>
 
       <p className="hint">
-        <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+        <kbd>Enter</kbd> — отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка
       </p>
     </div>
   );

@@ -15,5 +15,5 @@ async def complete_probe(
     enabled: bool,
 ) -> CompletionResult:
     if not enabled:
-        raise ProbeDisabledError("The LLM probe is disabled by configuration.")
+        raise ProbeDisabledError("Probe к модели отключён конфигурацией.")
     return await router.complete_chat(messages, preferred_model=preferred_model)

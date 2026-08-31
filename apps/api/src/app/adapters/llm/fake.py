@@ -27,7 +27,7 @@ class FakeLLMProvider:
     """
 
     def __init__(
-        self, text: str = "This is a deterministic fake answer.", model_id: str | None = None
+        self, text: str = "Это детерминированный тестовый ответ.", model_id: str | None = None
     ) -> None:
         self.text = text
         self.model_id = model_id

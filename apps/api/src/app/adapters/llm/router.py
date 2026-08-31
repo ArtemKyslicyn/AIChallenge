@@ -80,7 +80,7 @@ class ModelRouter:
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
-            raise LLMExhaustedError("No model is currently available.")
+            raise LLMExhaustedError("Сейчас нет доступной модели.")
 
         last_error: LLMProviderError | None = None
         for model in candidates:
@@ -91,14 +91,14 @@ class ModelRouter:
                     raise
                 self._mark_exhausted(model)
                 last_error = exc
-        raise LLMExhaustedError("No model in the chain could serve the request.") from last_error
+        raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
         self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
     ) -> AsyncIterator[TokenChunk]:
         candidates = self._candidates(preferred_model)
         if not candidates:
-            raise LLMExhaustedError("No model is currently available.")
+            raise LLMExhaustedError("Сейчас нет доступной модели.")
 
         last_error: LLMProviderError | None = None
         for model in candidates:
@@ -120,4 +120,4 @@ class ModelRouter:
                 last_error = exc
                 continue
             return
-        raise LLMExhaustedError("No model in the chain could serve the request.") from last_error
+        raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error

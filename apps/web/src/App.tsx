@@ -18,7 +18,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="dot" data-state={session ? "online" : "offline"} aria-hidden="true" />
-          <h1>AI Chat Platform</h1>
+          <h1>AI Чат-платформа</h1>
           {session && <span className="session-id">{session.id.slice(0, 8)}</span>}
         </div>
 
@@ -31,7 +31,7 @@ export default function App() {
               window.location.reload();
             }}
           >
-            New chat
+            Новый чат
           </button>
         )}
       </header>
@@ -44,7 +44,7 @@ export default function App() {
 
       {!session && !error && (
         <p className="center-state">
-          <span className="spinner" aria-hidden="true" /> Starting a session…
+          <span className="spinner" aria-hidden="true" /> Создаём сессию…
         </p>
       )}
 

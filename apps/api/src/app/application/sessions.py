@@ -31,7 +31,7 @@ async def create_session(
     if scenario_id:
         scenario = await scenarios.get(scenario_id)
         if scenario is None:
-            raise ScenarioNotFoundError(f"Unknown scenario '{scenario_id}'.")
+            raise ScenarioNotFoundError(f"Неизвестный сценарий «{scenario_id}».")
     else:
         scenario = await scenarios.get_default()
 
@@ -61,7 +61,7 @@ async def authorize_session(
     if session is None:
         # Still burn a comparison so a missing session is not measurably faster.
         secrets.compare_digest("x" * 43, access_token or "")
-        raise SessionNotFoundError("Session not found.")
+        raise SessionNotFoundError("Сессия не найдена.")
     if not secrets.compare_digest(session.access_token, access_token or ""):
-        raise SessionNotFoundError("Session not found.")
+        raise SessionNotFoundError("Сессия не найдена.")
     return session
