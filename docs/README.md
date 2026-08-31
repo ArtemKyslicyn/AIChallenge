@@ -24,6 +24,7 @@
 |------|----------|
 | [../configs/scenarios/](../configs/scenarios/) | YAML-сценарии диалога (нейтральный язык). |
 | [../.env.example](../.env.example) | Шаблон env (только имена / плейсхолдеры). |
+| [env-local.md](env-local.md) | Локальный `.env` (gitignore): куда класть ключи и как безопасно залить на VPS. |
 | [../docker-compose.yml](../docker-compose.yml) | Стек `db + api + web`; работает без `.env` (keyless). |
 | [../.github/workflows/ci.yml](../.github/workflows/ci.yml) | CI: ruff, mypy, unit + integration, сборка фронта. |
 
