@@ -20,11 +20,6 @@ export interface SessionCredentials {
   access_token: string;
 }
 
-export interface ProbeResult {
-  content: string;
-  model_id: string;
-}
-
 export type ChatEvent =
   | { type: "model"; model_id: string }
   | { type: "token"; text: string }
@@ -33,6 +28,10 @@ export type ChatEvent =
 
 const BASE = import.meta.env.VITE_API_URL || "/api/v1";
 const SESSION_KEY = "aichallenge.session";
+
+/** Mirrors the server default for MAX_MESSAGE_CHARS, for client-side feedback
+ *  only — the server is still the authority and answers 422 past the limit. */
+export const MAX_MESSAGE_CHARS = 8000;
 
 class ApiError extends Error {}
 
@@ -106,13 +105,6 @@ export function forgetSession(): void {
 export function listMessages(session: SessionCredentials): Promise<MessageDto[]> {
   return request<MessageDto[]>(`/sessions/${session.id}/messages`, {
     headers: { "X-Session-Token": session.access_token },
-  });
-}
-
-export function probeComplete(prompt: string): Promise<ProbeResult> {
-  return request<ProbeResult>("/llm/complete", {
-    method: "POST",
-    body: JSON.stringify({ prompt }),
   });
 }
 

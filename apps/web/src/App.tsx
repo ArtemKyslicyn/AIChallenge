@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import { ensureSession, forgetSession, type SessionCredentials } from "./api/client";
 import { Chat } from "./components/Chat";
-import { Probe } from "./components/Probe";
 
 export default function App() {
   const [session, setSession] = useState<SessionCredentials | null>(null);
@@ -15,32 +14,41 @@ export default function App() {
   }, []);
 
   return (
-    <main className="app">
-      <header>
-        <h1>AI Chat Platform</h1>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="dot" data-state={session ? "online" : "offline"} aria-hidden="true" />
+          <h1>AI Chat Platform</h1>
+          {session && <span className="session-id">{session.id.slice(0, 8)}</span>}
+        </div>
+
         {session && (
           <button
             type="button"
-            className="link"
+            className="ghost-button"
             onClick={() => {
               forgetSession();
               window.location.reload();
             }}
           >
-            New session
+            New chat
           </button>
         )}
       </header>
 
-      {error && <p className="error">{error}</p>}
-      {!session && !error && <p className="hint">Starting a session…</p>}
-
-      {session && (
-        <div className="layout">
-          <Chat session={session} />
-          <Probe />
-        </div>
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
       )}
-    </main>
+
+      {!session && !error && (
+        <p className="center-state">
+          <span className="spinner" aria-hidden="true" /> Starting a session…
+        </p>
+      )}
+
+      {session && <Chat session={session} />}
+    </div>
   );
 }
