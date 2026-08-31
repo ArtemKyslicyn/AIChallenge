@@ -30,6 +30,9 @@ def test_fake_llm_enabled_when_key_missing() -> None:
     assert _settings(llm_api_key="").fake_llm_enabled() is True
     assert _settings(llm_api_key="present").fake_llm_enabled() is False
     assert _settings(llm_api_key="present", use_fake_llm=True).fake_llm_enabled() is True
+    assert _settings(llm_api_key="", routerai_key="from-routerai").fake_llm_enabled() is False
+    assert _settings(llm_api_key="", routerai_key="from-routerai").resolved_llm_api_key() == "from-routerai"
+    assert _settings(llm_api_key="primary", routerai_key="alias").resolved_llm_api_key() == "primary"
 
 
 def test_scenarios_path_defaults_into_repo_configs() -> None:

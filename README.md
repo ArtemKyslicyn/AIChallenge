@@ -14,7 +14,7 @@
 | Frontend | React + TypeScript (Vite SPA) |
 | Infra | Docker Compose: `api` + `web` + Postgres |
 | Chat UX | Анонимная сессия по ссылке, **SSE**-стриминг токенов |
-| LLM | OpenAI-compatible абстракция + роутер моделей (failover при 429/quota), в т.ч. OpenRouter / DeepSeek |
+| LLM | OpenAI-compatible абстракция + роутер моделей (failover при 429/quota), в т.ч. RouterAI / OpenRouter / DeepSeek |
 | Прозрачность | У каждого ответа ассистента видно **`model_id`** (API, SSE, UI, БД) |
 | Секреты | `.env` только локально; в git и в чат агентам — **никогда** |
 | Домен | Код **domain-agnostic** (без patient/doctor и т.п. в именах); сценарии — конфиг |
@@ -81,8 +81,9 @@ docker compose up -d --build api
 |------------|------------|
 | `DATABASE_URL` | DSN Postgres (`postgresql+asyncpg://…`) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Доступы сервиса `db` |
-| `LLM_BASE_URL` | OpenAI-совместимый endpoint (OpenRouter, DeepSeek, …) |
-| `LLM_API_KEY` | Ключ провайдера. Пусто ⇒ keyless-режим |
+| `LLM_BASE_URL` | OpenAI-совместимый endpoint (RouterAI, OpenRouter, DeepSeek, …) |
+| `LLM_API_KEY` | Ключ провайдера. Пусто ⇒ keyless-режим (или возьмётся `ROUTERAI_KEY`) |
+| `ROUTERAI_KEY` | Алиас ключа RouterAI, если `LLM_API_KEY` пуст |
 | `LLM_MODEL_CHAIN` | Список model id через запятую, по порядку |
 | `LLM_EXHAUSTED_TTL_SECONDS` | Сколько пропускать модель после 429/quota |
 | `USE_FAKE_LLM` | Принудительно детерминированный провайдер |

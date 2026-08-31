@@ -33,7 +33,19 @@ const SESSION_KEY = "aichallenge.session";
  *  only — the server is still the authority and answers 422 past the limit. */
 export const MAX_MESSAGE_CHARS = 8000;
 
-class ApiError extends Error {}
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
 
 async function readError(response: Response): Promise<string> {
   try {
@@ -49,7 +61,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
-  if (!response.ok) throw new ApiError(await readError(response));
+  if (!response.ok) throw new ApiError(await readError(response), response.status);
   return (await response.json()) as T;
 }
 
@@ -74,10 +86,7 @@ function storeSession(session: SessionCredentials): void {
 
 let pending: Promise<SessionCredentials> | null = null;
 
-/** Reuses the stored session; a single in-flight request under StrictMode. */
-export function ensureSession(): Promise<SessionCredentials> {
-  const stored = loadStoredSession();
-  if (stored) return Promise.resolve(stored);
+function createSession(): Promise<SessionCredentials> {
   if (!pending) {
     pending = request<SessionCredentials>("/sessions", {
       method: "POST",
@@ -92,6 +101,26 @@ export function ensureSession(): Promise<SessionCredentials> {
       });
   }
   return pending;
+}
+
+/**
+ * Reuses the stored session when it still exists on the server.
+ * After a DB reset the localStorage id is a ghost → 404; drop it and mint a new one.
+ */
+export async function ensureSession(): Promise<SessionCredentials> {
+  const stored = loadStoredSession();
+  if (stored) {
+    try {
+      await request(`/sessions/${stored.id}`, {
+        headers: { "X-Session-Token": stored.access_token },
+      });
+      return stored;
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      forgetSession();
+    }
+  }
+  return createSession();
 }
 
 export function forgetSession(): void {
@@ -140,7 +169,7 @@ export async function sendMessageSSE(
   });
 
   if (!response.ok || !response.body) {
-    throw new ApiError(await readError(response));
+    throw new ApiError(await readError(response), response.status);
   }
 
   const reader = response.body.getReader();

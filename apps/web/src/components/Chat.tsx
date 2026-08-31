@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   MAX_MESSAGE_CHARS,
+  isNotFound,
   listMessages,
   sendMessageSSE,
   type ChatEvent,
@@ -30,7 +31,13 @@ function toTurn(message: MessageDto): Turn {
   };
 }
 
-export function Chat({ session }: { session: SessionCredentials }) {
+export function Chat({
+  session,
+  onStaleSession,
+}: {
+  session: SessionCredentials;
+  onStaleSession: () => void;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,9 +53,15 @@ export function Chat({ session }: { session: SessionCredentials }) {
   useEffect(() => {
     listMessages(session)
       .then((history) => setTurns(history.filter((m) => m.role !== "system").map(toTurn)))
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        if (isNotFound(e)) {
+          onStaleSession();
+          return;
+        }
+        setError(e.message);
+      })
       .finally(() => setLoading(false));
-  }, [session]);
+  }, [session, onStaleSession]);
 
   useEffect(() => {
     // Only follow the stream while the reader is already at the bottom, so
@@ -120,6 +133,8 @@ export function Chat({ session }: { session: SessionCredentials }) {
           // Stopping is a choice, not a failure. The server persists whatever
           // arrived, so the reply stays readable and is marked interrupted.
           patch({ failed: true });
+        } else if (isNotFound(e)) {
+          onStaleSession();
         } else {
           patch({ failed: true });
           setError(e instanceof Error ? e.message : String(e));
@@ -129,7 +144,7 @@ export function Chat({ session }: { session: SessionCredentials }) {
         setBusy(false);
       }
     },
-    [session],
+    [session, onStaleSession],
   );
 
   const empty = !loading && turns.length === 0;
