@@ -174,7 +174,7 @@ Auth/роли, админка сценариев, Redis для роутера, �
 
 ## Production / CI/CD
 
-- **Live:** http://aichallenge.arcilite.ru/ · http://aichallenge.arcilite.ru/
+- **Live:** http://aichallenge.arcilite.ru/
 - **CI:** `.github/workflows/ci.yml` — lint, mypy, unit + integration (FakeLLM), web build
 - **CD:** `.github/workflows/deploy.yml` — после зелёного CI на `main` (или вручную) деплой через GitHub Secrets
 - **Compose prod:** `docker-compose.prod.yml`
