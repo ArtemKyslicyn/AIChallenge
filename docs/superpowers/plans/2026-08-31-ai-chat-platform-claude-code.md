@@ -932,7 +932,7 @@ git commit -m "test(api): add SSE integration test against Postgres"
 
 SSE client: read stream from `POST .../messages`, parse `event:` / `data:` lines.
 
-- [ ] **Step 1: Scaffold Vite React-TS (non-interactive)**
+- [x] **Step 1: Scaffold Vite React-TS (non-interactive)**
 
 `npm create vite@latest .` **prompts** when the target directory is not empty, and the agent cannot answer
 an interactive prompt. Scaffold into a fresh directory, then move the result:
@@ -953,7 +953,7 @@ If the prompt appears anyway, abort and write `package.json`, `vite.config.ts`, 
 server: { proxy: { "/api": { target: "http://localhost:8000", changeOrigin: true } } }
 ```
 
-- [ ] **Step 2: Implement Chat + Probe**
+- [x] **Step 2: Implement Chat + Probe**
 
 SSE parsing notes (`src/api/client.ts`): `EventSource` cannot issue POST — use
 `fetch(..., {method: "POST"})` and read `res.body.getReader()`. Keep a string buffer across reads and only
@@ -961,7 +961,7 @@ process complete `\n\n`-delimited event blocks; an `event:`/`data:` pair can be 
 chunks. Render `model_id` from the `model` event immediately and overwrite it from `message_end`.
 On `event: error`, keep whatever text arrived and show an inline failure marker on that bubble.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(web): add chat SPA with SSE and model_id labels"

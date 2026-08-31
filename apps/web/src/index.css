@@ -1,0 +1,85 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --line: #dfe3e8;
+  --text: #1b1f24;
+  --muted: #6b7480;
+  --accent: #2f6feb;
+  --danger: #b42318;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a;
+    --panel: #1c2024;
+    --line: #2c3238;
+    --text: #e8eaed;
+    --muted: #98a1ab;
+    --accent: #5b8cf5;
+    --danger: #f27573;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; }
+
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+h2 { font-size: 15px; margin: 0 0 4px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+@media (max-width: 820px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.chat, .probe {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.messages { list-style: none; margin: 0 0 12px; padding: 0; max-height: 60vh; overflow-y: auto; }
+
+.bubble { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.bubble.user { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.bubble .content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble .meta, .probe-result .meta, .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+
+.composer { display: flex; gap: 8px; }
+.composer input { flex: 1; }
+
+input, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+button {
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.link { background: none; color: var(--accent); border: none; padding: 0; }
+
+.probe textarea { margin-bottom: 8px; }
+.probe-result { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.probe-result .content { margin: 0; white-space: pre-wrap; }
+
+.error { color: var(--danger); font-size: 13px; }
