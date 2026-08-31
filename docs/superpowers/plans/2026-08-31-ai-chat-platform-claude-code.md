@@ -728,13 +728,13 @@ event: error
 data: {"message":"..."}
 ```
 
-- [ ] **Step 1: Unit test with FakeLLM asserts event order and final `model_id`** (`model` → `token`+ → `message_end`, all three carrying the same `model_id`)
+- [x] **Step 1: Unit test with FakeLLM asserts event order and final `model_id`** (`model` → `token`+ → `message_end`, all three carrying the same `model_id`)
 
-- [ ] **Step 2: Unit tests for mid-stream abort, exhausted chain, cancellation, oversized message, history truncation**
+- [x] **Step 2: Unit tests for mid-stream abort, exhausted chain, cancellation, oversized message, history truncation**
 
-- [ ] **Step 3: Implement — PASS**
+- [x] **Step 3: Implement — PASS**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat(api): add chat streaming use case with model attribution"

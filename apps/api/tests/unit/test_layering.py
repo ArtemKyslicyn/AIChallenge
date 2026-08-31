@@ -33,9 +33,10 @@ def test_domain_imports_no_framework_and_no_adapter() -> None:
                 assert module.startswith("app.domain"), f"{path.name} imports {module}"
 
 
-def test_application_depends_only_on_domain() -> None:
+def test_application_depends_only_on_domain_and_itself() -> None:
+    allowed = ("app.domain", "app.application")
     for path in _modules("application"):
         for module in _imports(path):
             assert not module.startswith(FRAMEWORKS), f"{path.name} imports {module}"
             if module.startswith("app."):
-                assert module.startswith("app.domain"), f"{path.name} imports {module}"
+                assert module.startswith(allowed), f"{path.name} imports {module}"
