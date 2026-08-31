@@ -1,0 +1,85 @@
+name: CI
+
+# No provider key anywhere: the whole suite must be green with USE_FAKE_LLM.
+# A live LLM smoke, if ever added, belongs in a separate manual workflow.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    services:
+      postgres:
+        image: postgres:16
+        # Throwaway CI credentials, not secrets.
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -q
+
+      - name: Integration tests
+        # RUN_INTEGRATION is what un-skips them; without it this suite would
+        # silently never run anywhere.
+        env:
+          RUN_INTEGRATION: "1"
+          USE_FAKE_LLM: "true"
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+        run: uv run pytest tests/integration -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

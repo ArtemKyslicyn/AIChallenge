@@ -1039,18 +1039,18 @@ those tests never run anywhere. CI is also the only place that proves the keyles
   live smoke job is added later it belongs in a separate, manually-triggered workflow reading a repository
   secret, never in the default push workflow.
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
-- [ ] **Step 2: Verify it passes locally first**
+- [x] **Step 2: Verify it passes locally first**
 
 ```bash
 cd apps/api && uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest tests/unit -v
 cd ../web && npx tsc --noEmit && npm run build
 ```
 
-- [ ] **Step 3: Confirm the workflow file contains no secret values and no `.env` reference**
+- [x] **Step 3: Confirm the workflow file contains no secret values and no `.env` reference**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "ci: add lint, type-check, and test workflow"
