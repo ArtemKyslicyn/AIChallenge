@@ -15,6 +15,11 @@ You are implementing / maintaining this repo in **Claude Code** (Anthropic). Cur
 - Discuss variable **names** only (`LLM_API_KEY`, `DATABASE_URL`, …).
 - If a key is missing: use `USE_FAKE_LLM=true` / `FakeLLMProvider` for tests and demos.
 
+## Deploy
+
+- Do **not** SSH/SCP or run production deploy unless the human **explicitly** asks.
+- Default: local commits only; push to GitHub only when asked.
+
 ## Project skills
 
 Same conventions live in `.cursor/skills/aichallenge-*` (architecture, secrets, llm, docker, frontend, testing). Apply them when touching those areas.
