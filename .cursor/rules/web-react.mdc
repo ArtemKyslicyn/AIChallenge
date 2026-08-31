@@ -1,0 +1,12 @@
+---
+description: React Vite chat SPA conventions for apps/web
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Web React
+
+- Anonymous session: create on load; send `X-Session-Token`.
+- Render SSE `token` stream; show `model_id` on assistant bubbles.
+- Prefer relative `/api` in Docker; `VITE_API_URL` only for direct local API.
+- Keep UI copy domain-agnostic.

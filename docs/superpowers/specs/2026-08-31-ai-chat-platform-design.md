@@ -63,10 +63,23 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 ├── .env.example
 ├── .gitignore
 ├── .cursorignore
-├── AGENTS.md                     # agent rules: never read/paste .env
-├── .cursor/rules/                # same constraint for Cursor
+├── AGENTS.md                     # agent entrypoint + skill index
+├── .cursor/
+│   ├── rules/                    # always-on + glob rules (secrets, conventions)
+│   └── skills/                   # project skills (architecture, llm, docker, …)
 └── README.md
 ```
+
+### Project skills (agents)
+
+| Skill | Purpose |
+|-------|---------|
+| `aichallenge-architecture` | Hexagonal layers, naming, feature workflow |
+| `aichallenge-secrets` | `.env` / Cloud secret safety |
+| `aichallenge-llm` | Provider port, ModelRouter, `model_id`, probe |
+| `aichallenge-docker` | Compose, images, run |
+| `aichallenge-frontend` | SPA session, SSE, UI model label |
+| `aichallenge-testing` | FakeLLM, Postgres, SSE contracts |
 
 ### Layer rules
 

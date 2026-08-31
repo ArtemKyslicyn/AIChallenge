@@ -1,0 +1,14 @@
+---
+description: Domain-agnostic naming; follow hexagonal layout and design spec
+alwaysApply: true
+---
+
+# Project conventions
+
+Design source of truth: `docs/superpowers/specs/2026-08-31-ai-chat-platform-design.md`
+
+- Modular monolith under `apps/api` with `domain` → `application` → `adapters`.
+- No medical/product role names in code, API, or default scenarios.
+- Assistant replies must expose resolved `model_id` (API, SSE, UI, DB).
+- Prefer ports + FakeLLM for tests; no real LLM keys in CI.
+- Before non-trivial architecture changes, update or follow the design spec.

@@ -1,0 +1,14 @@
+# Keep secrets and local env out of agent context
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.p12
+*.key
+credentials.json
+secrets/
+.venv/
+**/node_modules/

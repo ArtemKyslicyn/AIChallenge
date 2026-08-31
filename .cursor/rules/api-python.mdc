@@ -1,0 +1,13 @@
+---
+description: FastAPI hexagonal Python conventions for apps/api
+globs: apps/api/**/*.py
+alwaysApply: false
+---
+
+# API Python
+
+- New behavior: port → use case → adapter; wire in DI.
+- `domain` must not import FastAPI/SQLAlchemy/httpx.
+- Persist `model_id` on assistant messages; SSE emits `model` + `message_end.model_id`.
+- Settings via pydantic-settings from env names in `.env.example` only.
+- Use `uv` / `pyproject.toml`; add deps there, not ad-hoc pip freezes in docs.
