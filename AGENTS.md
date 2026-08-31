@@ -6,6 +6,7 @@
 2. **Never** read, quote, or commit `.env` or secret values. Use `.env.example` names only.
 3. Keep code **domain-agnostic** (no patient/doctor/medical naming in code or default configs).
 4. Every assistant answer must attribute **`model_id`** (DB + SSE + UI).
+5. **No deploy to the server** (SSH/SCP/Actions Deploy) without an **explicit** user request in that turn. Default: local work and local commits only; push to GitHub only when asked.
 
 ## Project skills (`.cursor/skills/`)
 
