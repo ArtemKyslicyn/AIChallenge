@@ -32,9 +32,11 @@ class OpenAICompatibleProvider:
         *,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         client: httpx.AsyncClient | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._extra_headers = {k: v for k, v in (extra_headers or {}).items() if v}
         self._client = client if client is not None else httpx.AsyncClient(timeout=timeout)
         self._owns_client = client is None
 
@@ -47,11 +49,10 @@ class OpenAICompatibleProvider:
         return f"{self._base_url}/chat/completions"
 
     def _headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **self._extra_headers}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
-
     @staticmethod
     def _payload(messages: list[ChatMessage], model: str, *, stream: bool) -> dict[str, Any]:
         return {

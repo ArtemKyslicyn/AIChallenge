@@ -56,7 +56,14 @@ def build_container(settings: Settings) -> Container:
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
         logger.info("using FakeLLMProvider (no provider key configured)")
     else:
-        provider = OpenAICompatibleProvider(settings.llm_base_url, settings.llm_api_key)
+        provider = OpenAICompatibleProvider(
+            settings.llm_base_url,
+            settings.llm_api_key,
+            extra_headers={
+                "HTTP-Referer": settings.llm_http_referer,
+                "X-Title": settings.llm_app_title,
+            },
+        )
         chain = settings.model_chain_list()
         if not chain:
             # Fail at startup rather than on the first user message.
