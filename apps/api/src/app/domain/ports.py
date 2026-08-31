@@ -47,3 +47,16 @@ class LLMProvider(Protocol):
     def stream_chat(self, messages: list[ChatMessage], model: str) -> AsyncIterator[TokenChunk]: ...
 
     async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult: ...
+
+
+class UnitOfWork(Protocol):
+    """Transaction boundary owned by the caller, not by the repositories.
+
+    The chat use case needs explicit checkpoints: the user message must be
+    durable before the stream starts, and the assistant row must be durable
+    after it ends — including when the client disconnects halfway.
+    """
+
+    async def commit(self) -> None: ...
+
+    async def rollback(self) -> None: ...

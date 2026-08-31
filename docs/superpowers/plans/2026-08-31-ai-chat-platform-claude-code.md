@@ -549,11 +549,11 @@ git commit -m "feat(api): add settings and OpenAI-compatible LLM client"
 - `alembic/env.py` must use the async engine (`connectable.connect()` inside `asyncio.run` / `run_sync`) because `DATABASE_URL` uses the `postgresql+asyncpg` driver.
 - `sessions.access_token` gets a unique index; `messages` gets an index on `(session_id, created_at)` for history reads.
 
-- [ ] **Step 1: Write migration for both tables including `messages.model_id`**
+- [x] **Step 1: Write migration for both tables including `messages.model_id`**
 
-- [ ] **Step 2: Implement ORM models + repos mapping to domain entities**
+- [x] **Step 2: Implement ORM models + repos mapping to domain entities**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(api): add Postgres models, repos, and initial Alembic migration"

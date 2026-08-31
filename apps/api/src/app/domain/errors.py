@@ -75,3 +75,7 @@ class LLMStreamAbortedError(DomainError):
         super().__init__("The model stopped responding mid-answer.")
         self.model_id = model_id
         self.partial_text = partial_text
+
+
+class MessageNotFoundError(DomainError):
+    """Referenced message id does not exist."""
