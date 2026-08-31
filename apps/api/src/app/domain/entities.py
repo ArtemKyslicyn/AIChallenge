@@ -11,6 +11,9 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+#: Sentinel for ``Scenario.preferred_model``: let the router pick from the chain.
+AUTO_MODEL = "auto"
+
 
 class SessionStatus(StrEnum):
     ACTIVE = "active"

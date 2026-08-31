@@ -11,13 +11,11 @@ import logging
 import time
 from collections.abc import AsyncIterator, Callable, Sequence
 
-from app.domain.entities import ChatMessage, CompletionResult, TokenChunk
+from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMExhaustedError, LLMProviderError, LLMStreamAbortedError
 from app.domain.ports import LLMProvider
 
 logger = logging.getLogger(__name__)
-
-AUTO = "auto"
 
 #: Upstream statuses that mean "this model is unavailable right now", not
 #: "this request is wrong": rate limit, out of credit, upstream timeout.
@@ -55,14 +53,14 @@ class ModelRouter:
         self._exhausted[model] = self._now() + self._ttl
         logger.warning("model exhausted model_id=%s ttl_seconds=%s", model, self._ttl)
 
-    def _candidates(self, preferred_model: str = AUTO) -> list[str]:
+    def _candidates(self, preferred_model: str = AUTO_MODEL) -> list[str]:
         """Chain order, with an explicit ``preferred_model`` pinned first.
 
         A pinned model that is exhausted or absent from the chain simply loses
         its priority — it does not disable the rest of the chain.
         """
         ordered: list[str] = []
-        if preferred_model and preferred_model != AUTO:
+        if preferred_model and preferred_model != AUTO_MODEL:
             ordered.append(preferred_model)
         ordered.extend(model for model in self._chain if model not in ordered)
 
@@ -78,7 +76,7 @@ class ModelRouter:
         return available
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -96,7 +94,7 @@ class ModelRouter:
         raise LLMExhaustedError("No model in the chain could serve the request.") from last_error
 
     async def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
     ) -> AsyncIterator[TokenChunk]:
         candidates = self._candidates(preferred_model)
         if not candidates:

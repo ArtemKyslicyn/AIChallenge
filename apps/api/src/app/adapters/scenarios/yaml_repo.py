@@ -12,11 +12,10 @@ from typing import Any
 
 import yaml
 
-from app.domain.entities import Scenario
+from app.domain.entities import AUTO_MODEL, Scenario
 from app.domain.errors import ScenarioNotFoundError
 
 DEFAULT_SCENARIO_ID = "default"
-AUTO_MODEL = "auto"
 
 #: ``scenario_id`` comes from the client, so it is never interpolated into a
 #: path before matching this. Anything with a separator or a dot is rejected.

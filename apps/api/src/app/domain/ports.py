@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.entities import (
+    AUTO_MODEL,
     ChatMessage,
     CompletionResult,
     Message,
@@ -47,6 +48,22 @@ class LLMProvider(Protocol):
     def stream_chat(self, messages: list[ChatMessage], model: str) -> AsyncIterator[TokenChunk]: ...
 
     async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult: ...
+
+
+class ChatRouter(Protocol):
+    """A model chain that resolves which model actually answers.
+
+    Implemented by the ModelRouter adapter; declared here so use cases depend
+    on the port rather than on the adapter.
+    """
+
+    def stream_chat(
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+    ) -> AsyncIterator[TokenChunk]: ...
+
+    async def complete_chat(
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+    ) -> CompletionResult: ...
 
 
 class UnitOfWork(Protocol):

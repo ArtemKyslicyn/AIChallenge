@@ -633,11 +633,11 @@ async def complete_probe(
 - `access_token` is returned by `POST /sessions` and never logged, never included in any other response body, and never echoed in error messages.
 - `id_factory` / `now` stay injectable so use-case tests are deterministic.
 
-- [ ] **Step 1: Unit tests with in-memory fakes for repos + FakeLLM**
+- [x] **Step 1: Unit tests with in-memory fakes for repos + FakeLLM**
 
-- [ ] **Step 2: Implement use cases**
+- [x] **Step 2: Implement use cases**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "feat(api): add create_session and llm probe use cases"
