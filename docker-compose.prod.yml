@@ -52,8 +52,9 @@ services:
       api:
         condition: service_healthy
     ports:
-      # Bound to loopback — host nginx terminates TLS for aichallenge.arcilite.ru
-      - "127.0.0.1:8080:80"
+      # Loopback only — host nginx terminates HTTP/TLS for aichallenge.arcilite.ru
+      # (host :80). :8080 is taken by other-service on this host.
+      - "127.0.0.1:18080:80"
     restart: unless-stopped
 
 volumes:
