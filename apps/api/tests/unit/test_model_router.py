@@ -132,7 +132,9 @@ class SlowFirstTokenProvider:
             await asyncio.sleep(self.delay)
         yield TokenChunk(text=self.text, model_id=model)
 
-    async def complete_chat(self, messages: list[ChatMessage], model: str, **_: object) -> CompletionResult:
+    async def complete_chat(
+        self, messages: list[ChatMessage], model: str, **_: object
+    ) -> CompletionResult:
         if model in self.slow_models:
             await asyncio.sleep(self.delay)
         return CompletionResult(content=self.text, model_id=model)

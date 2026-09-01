@@ -105,7 +105,11 @@ class ModelRouter:
         return available[: self._max_attempts]
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -123,7 +127,11 @@ class ModelRouter:
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -187,7 +195,11 @@ class TieredModelRouter:
         self._tiers = list(tiers)
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> CompletionResult:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
@@ -204,13 +216,19 @@ class TieredModelRouter:
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             emitted = False
             try:
-                async for chunk in tier.stream_chat(messages, preferred_model, generation=generation):
+                async for chunk in tier.stream_chat(
+                    messages, preferred_model, generation=generation
+                ):
                     emitted = True
                     yield chunk
                 return

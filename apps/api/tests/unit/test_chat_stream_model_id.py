@@ -43,7 +43,9 @@ class SpyProvider(FakeLLMProvider):
         super().__init__(text=text)
         self.seen: list[ChatMessage] = []
 
-    async def stream_chat(self, messages: list[ChatMessage], model: str, **_: object) -> AsyncIterator:
+    async def stream_chat(
+        self, messages: list[ChatMessage], model: str, **_: object
+    ) -> AsyncIterator:
         self.seen = list(messages)
         async for chunk in super().stream_chat(messages, model):
             yield chunk

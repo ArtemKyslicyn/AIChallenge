@@ -20,7 +20,11 @@ def upgrade() -> None:
     op.add_column("sessions", sa.Column("visitor_hash", sa.String(length=64), nullable=True))
     op.add_column("sessions", sa.Column("ip_hash", sa.String(length=64), nullable=True))
     op.add_column("sessions", sa.Column("title", sa.String(length=120), nullable=True))
-    op.create_index("ix_sessions_visitor_hash_created_at", "sessions", ["visitor_hash", "created_at"])
+    op.create_index(
+        "ix_sessions_visitor_hash_created_at",
+        "sessions",
+        ["visitor_hash", "created_at"],
+    )
 
 
 def downgrade() -> None:

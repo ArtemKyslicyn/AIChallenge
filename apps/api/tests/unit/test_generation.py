@@ -1,3 +1,4 @@
+from app.domain.entities import ChatMessage, MessageRole
 from app.domain.generation import (
     FORMAT_BLOCK,
     LENGTH_BLOCK,
@@ -6,7 +7,6 @@ from app.domain.generation import (
     apply_generation_to_messages,
     apply_prompt_controls_to_text,
 )
-from app.domain.entities import ChatMessage, MessageRole
 
 
 def test_apply_prompt_controls_appends_blocks() -> None:

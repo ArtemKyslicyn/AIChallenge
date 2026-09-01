@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from uuid import UUID
-
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
