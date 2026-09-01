@@ -22,8 +22,8 @@ Product intent (e.g. pre-visit dialogue) is **configuration only**. Code, packag
 | Product shape | AI/chat platform; domain via scenarios later |
 | Auth (v1) | Anonymous sessions; auth later (`user_id` nullable) |
 | Streaming | SSE tokens |
-| LLM | OpenAI-compatible port + adapter; DeepSeek/OpenRouter via config |
-| Model selection | Ordered free-model chain with failover on quota/rate-limit, **only before the first token** |
+| LLM | OpenAI-compatible port + adapter; **RouterAI** default, also OpenRouter/DeepSeek via config |
+| Model selection | Ordered `LLM_MODEL_CHAIN` with failover on quota/rate-limit, **only before the first token** |
 | DB | PostgreSQL |
 | Frontend | Vite + React + TypeScript SPA |
 | Secrets | `.env` local + `.env.example`; Cloud/CI secrets injection |
@@ -171,8 +171,9 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 
 ### Adapters
 
-- `OpenAICompatibleProvider` — `base_url` + `api_key` (OpenRouter, DeepSeek, etc.).
+- `OpenAICompatibleProvider` — `base_url` + `api_key` (RouterAI, OpenRouter, DeepSeek, etc.).
 - `FakeLLMProvider` — deterministic streamed tokens for tests/CI without keys.
+- Provider switch is env-only; `ROUTERAI_KEY` is an optional alias when `LLM_API_KEY` is empty.
 
 ### ModelRouter
 
@@ -185,9 +186,10 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 
 ### Env names (values never in repo)
 
-- `LLM_BASE_URL`
+- `LLM_BASE_URL` (default production: `https://routerai.ru/api/v1`)
 - `LLM_API_KEY`
-- `LLM_MODEL_CHAIN` (comma-separated model ids)
+- `ROUTERAI_KEY` (optional alias if `LLM_API_KEY` empty)
+- `LLM_MODEL_CHAIN` (comma-separated model ids; default: quality/price balance via RouterAI catalog)
 - `LLM_PROBE_ENABLED`
 - `USE_FAKE_LLM`
 - `DATABASE_URL`
@@ -207,7 +209,8 @@ LLMProvider.complete_chat(messages, model, **opts) -> CompletionResult
 ## 8. Frontend (v1)
 
 - Vite + React + TypeScript SPA.
-- On load: create session, store `session_id` + `access_token`.
+- On load: reuse stored session if still valid on the server; otherwise create a new one
+  (`session_id` + `access_token` in `localStorage`). Stale ids after a DB reset must not brick chat.
 - Chat UI: history + input + SSE token rendering.
 - Each assistant bubble shows `model_id` (subtle meta under/ beside the message); updates live on SSE `model` / `message_end`.
 - Simple “Probe LLM” action calling `POST /llm/complete`; probe result also shows `model_id`.
@@ -271,7 +274,7 @@ Explicitly deferred (extension points only):
 1. `docker compose up` brings up db + api + web; health check passes.
 2. Anonymous user can open web, chat with SSE tokens, history persists in Postgres; each assistant reply shows which `model_id` answered (live and after reload).
 3. `POST /api/v1/llm/complete` returns a model response via ModelRouter and includes `model_id`.
-4. Switching provider (OpenRouter ↔ DeepSeek) is config/env only.
+4. Switching provider (RouterAI ↔ OpenRouter ↔ DeepSeek) is config/env only.
 5. No real secrets in git history; `.env` absent from agent-readable defaults **and from built image layers**
    (every build context has a `.dockerignore`).
 6. Domain packages contain no product-specific medical naming.

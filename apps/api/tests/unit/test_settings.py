@@ -38,6 +38,7 @@ def test_fake_llm_enabled_when_key_missing() -> None:
     assert (
         _settings(llm_api_key="primary", routerai_key="alias").resolved_llm_api_key() == "primary"
     )
+    assert _settings(llm_api_key="", openrouter_api_key="or-key").resolved_llm_api_key() == "or-key"
 
 
 def test_scenarios_path_defaults_into_repo_configs() -> None:

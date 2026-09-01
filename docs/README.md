@@ -23,10 +23,12 @@
 | Путь | Описание |
 |------|----------|
 | [../configs/scenarios/](../configs/scenarios/) | YAML-сценарии диалога (нейтральный язык). |
-| [../.env.example](../.env.example) | Шаблон env (только имена / плейсхолдеры). |
-| [env-local.md](env-local.md) | Локальный `.env` (gitignore): куда класть ключи и как безопасно залить на VPS. |
+| [../.env.example](../.env.example) | Шаблон env: RouterAI / OpenRouter / DeepSeek (один провайдер за раз). |
+| [env-local.md](env-local.md) | Локальный `.env` (gitignore): RouterAI по умолчанию, цепочка моделей, заливка на хост. |
 | [../docker-compose.yml](../docker-compose.yml) | Стек `db + api + web`; работает без `.env` (keyless). |
+| [../docker-compose.prod.yml](../docker-compose.prod.yml) | Prod compose (web на loopback). |
 | [../.github/workflows/ci.yml](../.github/workflows/ci.yml) | CI: ruff, mypy, unit + integration, сборка фронта. |
+| [../.github/workflows/deploy.yml](../.github/workflows/deploy.yml) | CD после зелёного CI / вручную (нужен явный запрос на деплой). |
 
 ## Как обновлять доки
 

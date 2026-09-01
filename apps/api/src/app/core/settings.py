@@ -55,10 +55,40 @@ class Settings(BaseSettings):
     # OpenRouter asks for these; harmless for other OpenAI-compatible hosts.
     llm_http_referer: str = "https://aichallenge.arcilite.ru"
     llm_app_title: str = "AIChallenge"
+    # Optional outbound proxy for LLM calls only (e.g. OpenRouter from a restricted IP).
+    llm_http_proxy: str = ""
+    openrouter_api_key: str = ""
     use_fake_llm: bool = False
+    # Optional second provider tier when the primary chain is fully exhausted.
+    llm_fallback_base_url: str = ""
+    llm_fallback_api_key: str = ""
+    llm_fallback_model_chain: str = ""
+    llm_fallback_http_proxy: str = ""
+
+    def primary_llm_api_key(self) -> str:
+        if self.llm_api_key:
+            return self.llm_api_key
+        if "openrouter.ai" in self.llm_base_url and self.openrouter_api_key:
+            return self.openrouter_api_key
+        if self.openrouter_api_key:
+            return self.openrouter_api_key
+        return self.routerai_key
 
     def resolved_llm_api_key(self) -> str:
-        return self.llm_api_key or self.routerai_key
+        return self.primary_llm_api_key()
+
+    def resolved_fallback_api_key(self) -> str:
+        return self.llm_fallback_api_key or self.routerai_key
+
+    def fallback_chain_list(self) -> list[str]:
+        return _csv(self.llm_fallback_model_chain)
+
+    def llm_fallback_enabled(self) -> bool:
+        return bool(
+            self.fallback_chain_list()
+            and self.llm_fallback_base_url.strip()
+            and self.resolved_fallback_api_key()
+        )
 
     cors_allow_origins: str = ""  # csv
     max_message_chars: int = 8000
@@ -78,7 +108,7 @@ class Settings(BaseSettings):
 
     def fake_llm_enabled(self) -> bool:
         """A missing key is treated as "keyless mode", not as a crash."""
-        return self.use_fake_llm or not self.resolved_llm_api_key()
+        return self.use_fake_llm or not (self.primary_llm_api_key() or self.llm_fallback_enabled())
 
 
 @lru_cache

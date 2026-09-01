@@ -14,7 +14,7 @@
 | Frontend | React + TypeScript (Vite SPA) |
 | Infra | Docker Compose: `api` + `web` + Postgres |
 | Chat UX | Анонимная сессия по ссылке, **SSE**-стриминг токенов |
-| LLM | OpenAI-compatible абстракция + роутер моделей (failover при 429/quota), в т.ч. RouterAI / OpenRouter / DeepSeek |
+| LLM | OpenAI-compatible + ModelRouter (failover до 1-го токена); по умолчанию **RouterAI**, также OpenRouter / DeepSeek |
 | Прозрачность | У каждого ответа ассистента видно **`model_id`** (API, SSE, UI, БД) |
 | Секреты | `.env` только локально; в git и в чат агентам — **никогда** |
 | Домен | Код **domain-agnostic** (без patient/doctor и т.п. в именах); сценарии — конфиг |
@@ -23,7 +23,7 @@
 
 ## Статус
 
-v1 **собран** на ветке `feat/v1-chat-platform`: API (domain/ports, use cases, ModelRouter, Postgres/Alembic), SPA с SSE и лейблом модели, Docker Compose `db + api + web`, unit- и интеграционные тесты, CI.
+v1 **в `main` и на live**: API (hexagonal, ModelRouter, Postgres/Alembic), SPA с SSE и лейблом `model_id`, Docker Compose / prod, CI/CD. Провайдер по умолчанию — **RouterAI** (`routerai.ru`), цепочка моделей — env `LLM_MODEL_CHAIN`.
 
 ## Документация (с чего читать)
 
@@ -69,9 +69,11 @@ open http://localhost:8080
 С реальным провайдером — создай `.env` **в редакторе** и перезапусти:
 
 ```bash
-cp .env.example .env   # заполни LLM_API_KEY и LLM_MODEL_CHAIN
+cp .env.example .env   # RouterAI: LLM_API_KEY или ROUTERAI_KEY + LLM_MODEL_CHAIN
 docker compose up -d --build api
 ```
+
+Подробнее: [docs/env-local.md](docs/env-local.md).
 
 ## Конфигурация
 
@@ -81,10 +83,10 @@ docker compose up -d --build api
 |------------|------------|
 | `DATABASE_URL` | DSN Postgres (`postgresql+asyncpg://…`) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Доступы сервиса `db` |
-| `LLM_BASE_URL` | OpenAI-совместимый endpoint (RouterAI, OpenRouter, DeepSeek, …) |
-| `LLM_API_KEY` | Ключ провайдера. Пусто ⇒ keyless-режим (или возьмётся `ROUTERAI_KEY`) |
+| `LLM_BASE_URL` | OpenAI-совместимый endpoint. По умолчанию `https://routerai.ru/api/v1` |
+| `LLM_API_KEY` | Ключ провайдера. Пусто ⇒ keyless / FakeLLM (или возьмётся `ROUTERAI_KEY`) |
 | `ROUTERAI_KEY` | Алиас ключа RouterAI, если `LLM_API_KEY` пуст |
-| `LLM_MODEL_CHAIN` | Список model id через запятую, по порядку |
+| `LLM_MODEL_CHAIN` | Model id через запятую (failover по порядку). Дефолт — баланс ум/цена через RouterAI |
 | `LLM_EXHAUSTED_TTL_SECONDS` | Сколько пропускать модель после 429/quota |
 | `USE_FAKE_LLM` | Принудительно детерминированный провайдер |
 | `LLM_PROBE_ENABLED` | Гейт для `POST /api/v1/llm/complete` |
@@ -93,7 +95,11 @@ docker compose up -d --build api
 | `SCENARIOS_DIR` | Переопределение `configs/scenarios/` |
 | `VITE_API_URL` | **Только build-time.** Пусто ⇒ относительный `/api/v1` за nginx |
 
-Смена провайдера — это конфиг, а не код: переставь `LLM_BASE_URL` и `LLM_MODEL_CHAIN` и перезапусти.
+Смена провайдера или модели — только конфиг: `LLM_BASE_URL` + ключ + `LLM_MODEL_CHAIN`, затем перезапуск `api`.
+
+Дефолтная цепочка RouterAI (см. `.env.example`):
+
+`deepseek/deepseek-v4-flash` → `qwen/qwen3-235b-a22b-2507` → `deepseek/deepseek-v3.2` → `google/gemini-2.5-flash`
 
 ## Разработка без Docker
 
@@ -146,7 +152,7 @@ SSE-события: `model` → `token`* → `message_end` (или `error`). В 
 1. Скопируй `.env.example` → `.env` **сам в редакторе**.
 2. Не коммить `.env`, не вставляй ключи в чат Cursor/Claude Code.
 3. Для демо без провайдера: `USE_FAKE_LLM=true` (или просто не заполняй ключ).
-4. Имена переменных: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_CHAIN`, `DATABASE_URL`, …
+4. Имена переменных: `LLM_BASE_URL`, `LLM_API_KEY`, `ROUTERAI_KEY`, `LLM_MODEL_CHAIN`, `DATABASE_URL`, …
 
 `.env` исключён из обоих build-контекстов через `.dockerignore` и не попадает в слои образа. Подробнее: skill `aichallenge-secrets`, правило `.cursor/rules/secrets-safety.mdc`.
 
@@ -156,18 +162,19 @@ SSE-события: `model` → `token`* → `message_end` (или `error`). В 
 - [x] Анонимный чат по SSE, история в Postgres  
 - [x] В UI и API виден `model_id` ответа  
 - [x] `POST /llm/complete` возвращает ответ и `model_id`  
-- [x] Смена провайдера (OpenRouter ↔ DeepSeek) — только конфиг/env  
+- [x] Смена провайдера (RouterAI ↔ OpenRouter ↔ DeepSeek) — только конфиг/env  
 - [x] Нет секретов в git; в коде нет медицинских ролей в нейминге  
 
 ## Осознанные ограничения v1
 
 Не баги, а решения:
 
-- **Failover только до первого токена.** Если провайдер умер после того, как текст пошёл, ответ завершается событием `error`, а частичный текст сохраняется с меткой `[interrupted]`. Смена модели посреди ответа склеила бы два разных ответа.
+- **Failover только до первого токена.** Если провайдер умер после того, как текст пошёл, ответ завершается событием `error`, а частичный текст сохраняется с меткой `[прервано]`. Смена модели посреди ответа склеила бы два разных ответа.
 - **`GET /sessions/{id}/stream` — повтор, а не resume.** Ответ, который ещё генерируется, отдаёт 404; живой resume требует общего буфера и вне скоупа.
 - **Состояние роутера — на процесс.** Для одного контейнера этого достаточно; Redis подставляется за тот же порт.
 - **Нет аутентификации.** Сессии анонимные с bearer-токеном; `user_id` зарезервирован и не используется.
 - **Нет rate-limit** на создание сессий.
+- **Сессия в `localStorage`.** После сброса БД id становится призраком; SPA проверяет сессию на load и при 404 создаёт новую («Новый чат» делает то же вручную).
 
 ## Вне скоупа v1
 
