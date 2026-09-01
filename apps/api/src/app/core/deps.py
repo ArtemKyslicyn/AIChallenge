@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
@@ -27,6 +29,33 @@ from app.domain.ports import LLMProvider, ScenarioRepository
 logger = logging.getLogger(__name__)
 
 SESSION_TOKEN_HEADER = "X-Session-Token"
+
+#: Strong references to work that must outlive a cancelled request.
+_detached: set[asyncio.Task[None]] = set()
+
+
+async def run_shielded(work: Coroutine[object, object, None]) -> None:
+    """Run ``work`` to completion even if the current task is being cancelled.
+
+    Everything a disconnecting client leaves behind — saving the partial answer,
+    returning the connection to the pool — has to survive the cancellation that
+    the disconnect itself causes.
+    """
+    task = asyncio.create_task(work)
+    _detached.add(task)
+    task.add_done_callback(_detached.discard)
+    with contextlib.suppress(asyncio.CancelledError):
+        await asyncio.shield(task)
+
+
+async def close_quietly(db: AsyncSession) -> None:
+    """Return the connection to the pool even while being cancelled.
+
+    Without this, ``close()`` is cancelled along with the request and the
+    connection is abandoned until the garbage collector terminates it — a leak
+    on every client disconnect.
+    """
+    await run_shielded(db.close())
 
 
 def utcnow() -> datetime:
@@ -96,8 +125,11 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
     finishes. Streaming routes open their own session from the sessionmaker.
     """
     container = get_container(request)
-    async with container.sessionmaker() as db:
+    db = container.sessionmaker()
+    try:
         yield db
+    finally:
+        await close_quietly(db)
 
 
 def session_token(

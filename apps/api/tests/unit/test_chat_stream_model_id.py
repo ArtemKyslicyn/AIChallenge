@@ -24,7 +24,9 @@ from app.application.chat import (
     ErrorEvent,
     MessageEndEvent,
     ModelEvent,
+    ReplyDraft,
     TokenEvent,
+    interrupted_answer,
     send_user_message_and_stream,
 )
 from app.domain.entities import ChatMessage, Message, MessageRole, Session, SessionStatus
@@ -61,6 +63,7 @@ class Ctx:
         access_token: str | None = TOKEN,
         max_message_chars: int = 100,
         max_history_messages: int = 40,
+        draft: ReplyDraft | None = None,
     ) -> AsyncIterator[ChatEvent]:
         return send_user_message_and_stream(
             session_id=SESSION_ID,
@@ -75,6 +78,7 @@ class Ctx:
             max_message_chars=max_message_chars,
             max_history_messages=max_history_messages,
             id_factory=IdFactory(),
+            draft=draft,
         )
 
     def assistant_row(self) -> Message:
@@ -180,20 +184,37 @@ async def test_empty_answer_reports_error() -> None:
     assert events == [ErrorEvent(message=ERROR_EMPTY)]
 
 
-async def test_client_disconnect_still_persists_what_arrived() -> None:
+async def test_disconnect_leaves_the_partial_answer_in_the_draft() -> None:
+    # The generator deliberately does not write on the way out: on a real
+    # disconnect that write runs inside a cancelled task, where it is cancelled
+    # mid-operation. It reports through the draft instead, and the caller saves
+    # it out of band — see tests/integration/test_disconnect.py.
     ctx = await make_ctx()
-    stream = ctx.stream()
+    draft = ReplyDraft()
+    stream = ctx.stream(draft=draft)
 
     seen: list[ChatEvent] = []
     async for event in stream:
         seen.append(event)
         if isinstance(event, TokenEvent):
             break
-    await stream.aclose()  # what Starlette does when the client hangs up
+    await stream.aclose()
 
-    row = ctx.assistant_row()
-    assert row.content == "one " + INTERRUPTED_MARKER
-    assert row.model_id == "model-a"
+    assert draft.finished is False
+    assert draft.text == "one "
+    assert draft.model_id == "model-a"
+    assert draft.message_id == ctx.assistant_row().id
+    assert interrupted_answer(draft) == "one " + INTERRUPTED_MARKER
+
+
+async def test_draft_is_marked_finished_after_a_complete_answer() -> None:
+    ctx = await make_ctx()
+    draft = ReplyDraft()
+    await collect(ctx.stream(draft=draft))
+
+    assert draft.finished is True
+    assert draft.text == "one two"
+    assert draft.model_id == "model-a"
 
 
 async def test_history_sent_to_the_model_is_capped() -> None:

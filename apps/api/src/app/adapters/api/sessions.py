@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from uuid import UUID
 
@@ -20,19 +21,55 @@ from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
     SqlAlchemySessionRepository,
 )
-from app.application.chat import send_user_message_and_stream
+from app.application.chat import ReplyDraft, interrupted_answer, send_user_message_and_stream
 from app.application.sessions import create_session
 from app.core.deps import (
     AuthorizedSession,
     Container,
     DbSession,
     SessionToken,
+    close_quietly,
     get_container,
+    run_shielded,
     utcnow,
 )
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+async def _write_interrupted(container: Container, draft: ReplyDraft) -> None:
+    """Save a cut-off answer using a session of its own.
+
+    A fresh session matters as much as the shielding: the request's session is
+    being torn down at this point, and writing through it would race that.
+    """
+    assert draft.message_id is not None
+    async with container.sessionmaker() as db:
+        await SqlAlchemyMessageRepository(db).update_content(
+            draft.message_id, interrupted_answer(draft), draft.model_id
+        )
+        await db.commit()
+    logger.info(
+        "saved interrupted reply message_id=%s model_id=%s", draft.message_id, draft.model_id
+    )
+
+
+async def _rescue_unsaved(container: Container, draft: ReplyDraft) -> None:
+    """Persist whatever arrived when the reader hangs up mid-answer.
+
+    The use case cannot do this itself: when the client disconnects, uvicorn
+    cancels the request task, and the await inside its ``finally`` is cancelled
+    with it — which used to leave the assistant row empty with a null model_id.
+    The write therefore runs in a task of its own, shielded from that
+    cancellation.
+    """
+    if draft.finished or draft.message_id is None or not draft.chunks:
+        return
+
+    await run_shielded(_write_interrupted(container, draft))
 
 
 def _to_message_response(message: Message) -> MessageResponse:
@@ -92,14 +129,14 @@ async def send_message(
     container = get_container(request)
     _reject_before_streaming(container, session, payload.content)
 
+    draft = ReplyDraft()
+
     async def frames() -> AsyncIterator[str]:
-        # The DB session is owned by this generator rather than injected.
-        # A mutation test showed the Depends form also working on this FastAPI
-        # version, so this is not a bug fix — it makes the lifetime explicit
-        # and independent of when yield-dependency teardown runs, which has
-        # changed between FastAPI versions. The final update_content happens
-        # after the last token, well past the endpoint's own frame.
-        async with container.sessionmaker() as db:
+        # The session is opened and closed by hand rather than with `async
+        # with`: on a client disconnect the context manager's exit is cancelled
+        # too, so the close has to be shielded like the rescue write.
+        db = container.sessionmaker()
+        try:
             events = send_user_message_and_stream(
                 session_id=session.id,
                 access_token=token,
@@ -112,9 +149,13 @@ async def send_message(
                 now=utcnow,
                 max_message_chars=container.settings.max_message_chars,
                 max_history_messages=container.settings.max_history_messages,
+                draft=draft,
             )
             async for frame in to_sse(events):
                 yield frame
+        finally:
+            await _rescue_unsaved(container, draft)
+            await close_quietly(db)
 
     return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
 

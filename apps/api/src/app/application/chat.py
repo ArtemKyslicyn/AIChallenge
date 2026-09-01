@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -50,6 +50,30 @@ ERROR_INTERRUPTED = "Модель перестала отвечать. Част�
 ERROR_NO_MODEL = "Сейчас нет доступной модели. Попробуйте чуть позже."
 ERROR_EMPTY = "Модель вернула пустой ответ."
 ERROR_GENERIC = "Не удалось получить ответ ассистента."
+
+
+@dataclass(slots=True)
+class ReplyDraft:
+    """Live state of the answer, readable by whoever drives the generator.
+
+    A cancelled request task cannot finish its own database write: the await in
+    a ``finally`` block is cancelled along with everything else. So the caller
+    gets the state and is responsible for saving it out of band when the reader
+    hangs up. ``finished`` says the answer was already stored here.
+    """
+
+    message_id: UUID | None = None
+    chunks: list[str] = field(default_factory=list)
+    model_id: str | None = None
+    finished: bool = False
+
+    @property
+    def text(self) -> str:
+        return "".join(self.chunks)
+
+
+def interrupted_answer(draft: ReplyDraft) -> str:
+    return draft.text + INTERRUPTED_MARKER
 
 
 @dataclass(slots=True)
@@ -109,7 +133,9 @@ async def send_user_message_and_stream(
     max_message_chars: int,
     max_history_messages: int,
     id_factory: Callable[[], UUID] = uuid4,
+    draft: ReplyDraft | None = None,
 ) -> AsyncIterator[ChatEvent]:
+    draft = draft if draft is not None else ReplyDraft()
     session = await authorize_session(
         sessions=sessions, session_id=session_id, access_token=access_token
     )
@@ -149,9 +175,11 @@ async def send_user_message_and_stream(
     # what the user typed.
     await uow.commit()
 
+    draft.message_id = assistant.id
+
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
 
-    accumulated: list[str] = []
+    accumulated = draft.chunks
     resolved_model: str | None = None
     persisted = False
 
@@ -162,6 +190,7 @@ async def send_user_message_and_stream(
             persisted = True
             await messages.update_content(assistant.id, answer, model_id)
             await uow.commit()
+            draft.finished = True
         return answer
 
     try:
@@ -169,10 +198,12 @@ async def send_user_message_and_stream(
             async for chunk in router.stream_chat(turns, preferred_model=scenario.preferred_model):
                 if chunk.model_id != resolved_model:
                     resolved_model = chunk.model_id
+                    draft.model_id = resolved_model
                     yield ModelEvent(model_id=resolved_model)
                 accumulated.append(chunk.text)
                 yield TokenEvent(text=chunk.text)
         except LLMStreamAbortedError as exc:
+            draft.model_id = exc.model_id
             # Past the first token: keep what arrived, never splice in another model.
             logger.warning(
                 "stream aborted session_id=%s message_id=%s model_id=%s",
@@ -202,7 +233,10 @@ async def send_user_message_and_stream(
         answer = await finalize(resolved_model)
         yield MessageEndEvent(message_id=assistant.id, content=answer, model_id=resolved_model)
     finally:
-        # Client disconnect or task cancellation lands here: persist whatever
-        # arrived so the row is never left empty with a null model_id forever.
-        if not persisted:
-            await finalize(resolved_model, marker=INTERRUPTED_MARKER)
+        # Deliberately no database write here. On a client disconnect this code
+        # runs inside a task that is already being cancelled, so the await would
+        # be cancelled mid-operation — which not only loses the answer but also
+        # leaves the connection in a state SQLAlchemy cannot return to the pool.
+        # Whatever arrived is in `draft`; saving it is the caller's job, out of
+        # band and shielded from that cancellation.
+        pass
