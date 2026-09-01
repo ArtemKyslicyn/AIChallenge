@@ -19,8 +19,18 @@ logger = logging.getLogger(__name__)
 
 #: Upstream statuses that mean "this model is unavailable right now", not
 #: "this request is wrong": rate limit, out of credit, upstream timeout,
-#: auth rejected for this model, region block, temporary outage.
-RETRYABLE_STATUSES = frozenset({401, 402, 403, 408, 429, 503})
+#: region block, temporary outage.
+#:
+#: 401 is deliberately absent. A rejected credential will not become valid on
+#: the next model, so retrying only burns the whole chain, marks every model
+#: exhausted for the TTL, and turns a plain authentication failure into
+#: "no model is available" — which sends whoever debugs it the wrong way.
+RETRYABLE_STATUSES = frozenset({402, 403, 408, 429, 503})
+
+#: A rejected credential disqualifies a whole *tier*, not one model: every model
+#: in a chain shares one key. So 401 is fatal inside a chain (above) but is a
+#: reason for TieredModelRouter to try the next provider, which has its own key.
+TIER_FATAL_STATUSES = frozenset({401})
 #: "empty" is retryable on purpose: a model that streams only chain-of-thought
 #: and no answer has shown the reader nothing, so moving on is still safe.
 RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout", "empty"})
@@ -142,25 +152,41 @@ class TieredModelRouter:
     async def complete_chat(
         self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
     ) -> CompletionResult:
-        last_error: LLMExhaustedError | None = None
+        last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             try:
                 return await tier.complete_chat(messages, preferred_model)
             except LLMExhaustedError as exc:
                 logger.warning("llm tier exhausted tier_index=%s", index)
                 last_error = exc
+            except LLMProviderError as exc:
+                if exc.status not in TIER_FATAL_STATUSES:
+                    raise
+                logger.warning("llm tier rejected the credential tier_index=%s", index)
+                last_error = exc
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
         self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
     ) -> AsyncIterator[TokenChunk]:
-        last_error: LLMExhaustedError | None = None
+        last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
+            emitted = False
             try:
                 async for chunk in tier.stream_chat(messages, preferred_model):
+                    emitted = True
                     yield chunk
                 return
             except LLMExhaustedError as exc:
+                # Same rule as inside a chain: once the reader has seen text,
+                # no other tier may continue the answer.
+                if emitted:
+                    raise
                 logger.warning("llm tier exhausted tier_index=%s", index)
+                last_error = exc
+            except LLMProviderError as exc:
+                if emitted or exc.status not in TIER_FATAL_STATUSES:
+                    raise
+                logger.warning("llm tier rejected the credential tier_index=%s", index)
                 last_error = exc
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
