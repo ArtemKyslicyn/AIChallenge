@@ -19,7 +19,7 @@ from app.application.llm_probe import complete_probe
 from app.core.deps import get_container
 from app.domain.entities import ChatMessage, MessageRole
 from app.domain.errors import MessageValidationError, ProbeDisabledError
-from app.domain.generation import apply_generation_to_messages
+from app.domain.generation import GenerationParams, apply_generation_to_messages
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
@@ -32,7 +32,7 @@ def _turns(payload: ProbeRequest) -> list[ChatMessage]:
     raise MessageValidationError("Передайте либо «prompt», либо «messages».")
 
 
-def _generation(payload: ProbeRequest):
+def _generation(payload: ProbeRequest) -> GenerationParams | None:
     return generation_from_api(
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,
