@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMExhaustedError, LLMProviderError, LLMStreamAbortedError
+from app.domain.generation import GenerationParams
 from app.domain.ports import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ class ModelRouter:
         return available[: self._max_attempts]
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -113,7 +114,7 @@ class ModelRouter:
         last_error: LLMProviderError | None = None
         for model in candidates:
             try:
-                return await self._provider.complete_chat(messages, model)
+                return await self._provider.complete_chat(messages, model, generation=generation)
             except LLMProviderError as exc:
                 if not _is_retryable(exc):
                     raise
@@ -122,7 +123,7 @@ class ModelRouter:
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
     ) -> AsyncIterator[TokenChunk]:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -131,7 +132,7 @@ class ModelRouter:
         last_error: LLMProviderError | None = None
         for model in candidates:
             emitted: list[str] = []
-            stream = self._provider.stream_chat(messages, model)
+            stream = self._provider.stream_chat(messages, model, generation=generation)
             try:
                 while True:
                     # Only the wait for the first token is bounded. After that
@@ -186,12 +187,12 @@ class TieredModelRouter:
         self._tiers = list(tiers)
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
     ) -> CompletionResult:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             try:
-                return await tier.complete_chat(messages, preferred_model)
+                return await tier.complete_chat(messages, preferred_model, generation=generation)
             except LLMExhaustedError as exc:
                 logger.warning("llm tier exhausted tier_index=%s", index)
                 last_error = exc
@@ -203,13 +204,13 @@ class TieredModelRouter:
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
     async def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL, *, generation: GenerationParams | None = None
     ) -> AsyncIterator[TokenChunk]:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             emitted = False
             try:
-                async for chunk in tier.stream_chat(messages, preferred_model):
+                async for chunk in tier.stream_chat(messages, preferred_model, generation=generation):
                     emitted = True
                     yield chunk
                 return

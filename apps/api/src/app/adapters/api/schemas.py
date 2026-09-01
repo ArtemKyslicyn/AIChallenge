@@ -28,6 +28,14 @@ class SessionResponse(BaseModel):
     scenario_id: str
     status: str
     created_at: datetime
+    title: str | None = None
+
+
+class SessionSummaryResponse(BaseModel):
+    id: UUID
+    title: str | None
+    created_at: datetime
+    message_count: int
 
 
 class MessageResponse(BaseModel):
@@ -40,6 +48,8 @@ class MessageResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_CONTENT_BYTES)
+    #: Pin a model for this reply; ``None`` keeps the scenario default.
+    model: str | None = None
 
 
 class ProbeMessage(BaseModel):
@@ -52,8 +62,28 @@ class ProbeRequest(BaseModel):
     messages: list[ProbeMessage] | None = None
     stream: bool = False
     model: str = AUTO_MODEL
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=8192)
+    stop: list[str] | None = None
+    prompt_format: bool = False
+    prompt_length: bool = False
+    prompt_stop: bool = False
+    reasoning: bool = False
 
 
 class ProbeResponse(BaseModel):
     content: str
     model_id: str
+
+
+class ModelCapabilitiesResponse(BaseModel):
+    temperature: bool
+    max_tokens: bool
+    stop: bool
+    reasoning: bool
+
+
+class ModelCatalogItemResponse(BaseModel):
+    id: str
+    label: str
+    capabilities: ModelCapabilitiesResponse

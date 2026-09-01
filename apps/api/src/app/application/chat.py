@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from app.application.sessions import authorize_session
+from app.application.sessions import authorize_session, session_title_from_message
 from app.domain.entities import (
     ChatMessage,
     Message,
@@ -134,6 +134,7 @@ async def send_user_message_and_stream(
     max_history_messages: int,
     id_factory: Callable[[], UUID] = uuid4,
     draft: ReplyDraft | None = None,
+    preferred_model: str | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     session = await authorize_session(
@@ -162,6 +163,7 @@ async def send_user_message_and_stream(
             created_at=now(),
         )
     )
+    await sessions.set_title_if_empty(session.id, session_title_from_message(text))
     assistant = await messages.add(
         Message(
             id=id_factory(),
@@ -179,6 +181,8 @@ async def send_user_message_and_stream(
 
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
 
+    model = preferred_model if preferred_model is not None else scenario.preferred_model
+
     accumulated = draft.chunks
     resolved_model: str | None = None
     persisted = False
@@ -195,7 +199,7 @@ async def send_user_message_and_stream(
 
     try:
         try:
-            async for chunk in router.stream_chat(turns, preferred_model=scenario.preferred_model):
+            async for chunk in router.stream_chat(turns, preferred_model=model):
                 if chunk.model_id != resolved_model:
                     resolved_model = chunk.model_id
                     draft.model_id = resolved_model

@@ -99,6 +99,7 @@ class Settings(BaseSettings):
 
     scenarios_dir: str = ""
     log_level: str = "INFO"
+    visitor_hash_salt: str = "aichallenge-visitor-v1"
 
     def model_chain_list(self) -> list[str]:
         return _csv(self.llm_model_chain)

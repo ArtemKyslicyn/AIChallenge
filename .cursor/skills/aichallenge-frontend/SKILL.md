@@ -15,9 +15,10 @@ Vite + React + TypeScript SPA under `apps/web`.
 ## Session (v1)
 
 1. On load: reuse `localStorage` session if `GET /sessions/{id}` succeeds; else forget and `POST /sessions`
-2. Store `session_id` + `access_token`
-3. Send `X-Session-Token` on session-scoped calls
+2. Store chats in `aichallenge.session_store` (v2: `visitorId` + `access_token` per chat)
+3. Send `X-Session-Token` on session-scoped calls; send `X-Visitor-Id` on all calls
 4. On 404 (stale after DB reset): drop stored session and mint a new one — do not leave chat broken
+5. **History sidebar = local cache only.** List sessions that have a token in this browser; merge server titles only for those ids. Wipe store if `visitorId` mismatches. Reject `listMessages`/SSE if session not in local store.
 
 ## Chat + SSE
 
