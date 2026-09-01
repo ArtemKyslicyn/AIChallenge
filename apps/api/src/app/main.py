@@ -10,7 +10,7 @@ from app.adapters.api.errors import register_error_handlers
 from app.adapters.api.health import router as health_router
 from app.adapters.api.llm import router as llm_router
 from app.adapters.api.sessions import router as sessions_router
-from app.core.deps import SESSION_TOKEN_HEADER, build_container
+from app.core.deps import SESSION_TOKEN_HEADER, VISITOR_ID_HEADER, build_container
 from app.core.logging import configure_logging
 from app.core.settings import Settings, get_settings
 
@@ -43,7 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_origins=origins,
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", SESSION_TOKEN_HEADER],
+            allow_headers=["Content-Type", SESSION_TOKEN_HEADER, VISITOR_ID_HEADER],
         )
 
     for router in (health_router, sessions_router, llm_router):

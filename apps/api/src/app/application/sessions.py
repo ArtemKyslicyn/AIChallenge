@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from app.domain.entities import Session, SessionStatus
+from app.domain.entities import Session, SessionStatus, SessionSummary
 from app.domain.errors import ScenarioNotFoundError, SessionNotFoundError
 from app.domain.ports import ScenarioRepository, SessionRepository
 
@@ -24,6 +24,8 @@ async def create_session(
     sessions: SessionRepository,
     scenarios: ScenarioRepository,
     scenario_id: str | None,
+    visitor_hash: str | None = None,
+    ip_hash: str | None = None,
     token_factory: Callable[[], str] = new_access_token,
     id_factory: Callable[[], UUID] = uuid4,
     now: Callable[[], datetime],
@@ -41,8 +43,27 @@ async def create_session(
         scenario_id=scenario.id,
         status=SessionStatus.ACTIVE,
         created_at=now(),
+        visitor_hash=visitor_hash,
+        ip_hash=ip_hash,
     )
     return await sessions.create(session)
+
+
+def session_title_from_message(content: str, *, max_len: int = 80) -> str:
+    """First line of the user's message, trimmed for the history sidebar."""
+    line = content.strip().splitlines()[0].strip()
+    if len(line) <= max_len:
+        return line
+    return line[: max_len - 1].rstrip() + "…"
+
+
+async def list_visitor_sessions(
+    *,
+    sessions: SessionRepository,
+    visitor_hash: str,
+    limit: int = 50,
+) -> list[SessionSummary]:
+    return await sessions.list_for_visitor(visitor_hash, limit=limit)
 
 
 async def authorize_session(

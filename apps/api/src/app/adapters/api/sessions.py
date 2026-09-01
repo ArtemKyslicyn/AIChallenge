@@ -6,7 +6,9 @@ import logging
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.adapters.api.schemas import (
@@ -15,6 +17,7 @@ from app.adapters.api.schemas import (
     SendMessageRequest,
     SessionCreatedResponse,
     SessionResponse,
+    SessionSummaryResponse,
 )
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse
 from app.adapters.persistence.repositories import (
@@ -22,16 +25,19 @@ from app.adapters.persistence.repositories import (
     SqlAlchemySessionRepository,
 )
 from app.application.chat import ReplyDraft, interrupted_answer, send_user_message_and_stream
-from app.application.sessions import create_session
+from app.application.sessions import create_session, list_visitor_sessions
 from app.core.deps import (
     AuthorizedSession,
     Container,
     DbSession,
     SessionToken,
+    VisitorHash,
     close_quietly,
     get_container,
+    resolve_visitor_identity,
     run_shielded,
     utcnow,
+    visitor_id_header,
 )
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
 
@@ -87,17 +93,42 @@ async def create(
     payload: CreateSessionRequest,
     request: Request,
     db: DbSession,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)],
 ) -> SessionCreatedResponse:
     container = get_container(request)
+    identity = resolve_visitor_identity(request, client_visitor_id)
+    visitor_key, ip_digest = identity if identity else (None, None)
     session = await create_session(
         sessions=SqlAlchemySessionRepository(db),
         scenarios=container.scenarios,
         scenario_id=payload.scenario_id,
+        visitor_hash=visitor_key,
+        ip_hash=ip_digest,
         now=utcnow,
     )
     await db.commit()
     # The only response that ever carries the token.
     return SessionCreatedResponse(id=session.id, access_token=session.access_token)
+
+
+@router.get("/history", response_model=list[SessionSummaryResponse])
+async def list_chat_history(
+    visitor_hash: VisitorHash,
+    db: DbSession,
+) -> list[SessionSummaryResponse]:
+    rows = await list_visitor_sessions(
+        sessions=SqlAlchemySessionRepository(db),
+        visitor_hash=visitor_hash,
+    )
+    return [
+        SessionSummaryResponse(
+            id=row.id,
+            title=row.title,
+            created_at=row.created_at,
+            message_count=row.message_count,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
@@ -107,6 +138,7 @@ async def get_session(session: AuthorizedSession) -> SessionResponse:
         scenario_id=session.scenario_id,
         status=str(session.status),
         created_at=session.created_at,
+        title=session.title,
     )
 
 
@@ -141,6 +173,7 @@ async def send_message(
                 session_id=session.id,
                 access_token=token,
                 content=payload.content,
+                preferred_model=payload.model,
                 sessions=SqlAlchemySessionRepository(db),
                 messages=SqlAlchemyMessageRepository(db),
                 scenarios=container.scenarios,

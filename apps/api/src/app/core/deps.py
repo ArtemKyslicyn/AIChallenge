@@ -22,6 +22,7 @@ from app.adapters.persistence.repositories import SqlAlchemySessionRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
+from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_id, visitor_hash
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
 from app.domain.ports import LLMProvider, ScenarioRepository
@@ -29,6 +30,7 @@ from app.domain.ports import LLMProvider, ScenarioRepository
 logger = logging.getLogger(__name__)
 
 SESSION_TOKEN_HEADER = "X-Session-Token"
+VISITOR_ID_HEADER = "X-Visitor-Id"
 
 #: Strong references to work that must outlive a cancelled request.
 _detached: set[asyncio.Task[None]] = set()
@@ -187,6 +189,48 @@ def session_token(
     return x_session_token
 
 
+def visitor_id_header(
+    x_visitor_id: Annotated[str | None, Header(alias=VISITOR_ID_HEADER)] = None,
+) -> str | None:
+    return normalize_visitor_id(x_visitor_id)
+
+
+def resolve_visitor_identity(
+    request: Request,
+    client_visitor_id: str | None,
+) -> tuple[str, str] | None:
+    """Return ``(visitor_hash, ip_hash)`` when the browser sent a valid id."""
+    if not client_visitor_id:
+        return None
+    settings = request.app.state.settings
+    ip = client_ip_from_headers(
+        request.headers.get("x-forwarded-for"),
+        request.client.host if request.client else None,
+    )
+    ip_digest = hash_ip(salt=settings.visitor_hash_salt, ip=ip)
+    return (
+        visitor_hash(
+            salt=settings.visitor_hash_salt,
+            client_visitor_id=client_visitor_id,
+            ip=ip,
+        ),
+        ip_digest,
+    )
+
+
+async def require_visitor_hash(
+    request: Request,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)],
+) -> str:
+    identity = resolve_visitor_identity(request, client_visitor_id)
+    if identity is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Нужен заголовок X-Visitor-Id (UUID из localStorage).",
+        )
+    return identity[0]
+
+
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 SessionToken = Annotated[str | None, Depends(session_token)]
 
@@ -215,3 +259,4 @@ async def require_session(
 
 
 AuthorizedSession = Annotated[Session, Depends(require_session)]
+VisitorHash = Annotated[str, Depends(require_visitor_hash)]

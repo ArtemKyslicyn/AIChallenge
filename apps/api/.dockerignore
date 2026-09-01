@@ -11,3 +11,9 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 tests/
+
+# macOS AppleDouble / Finder junk (null bytes break Alembic if copied into versions/)
+._*
+.DS_Store
+**/.DS_Store
+**/._*

@@ -4,13 +4,20 @@ import {
   MAX_MESSAGE_CHARS,
   isNotFound,
   listMessages,
+  probeComplete,
   sendMessageSSE,
   type ChatEvent,
   type MessageDto,
   type SessionCredentials,
 } from "../api/client";
-import type { Turn } from "../types";
-import { Composer } from "./Composer";
+import {
+  prefsToProbeBody,
+  templateLabelForCompare,
+} from "../generationPrefs";
+import type { CompareSlotState, ThreadItem, Turn } from "../types";
+import { EMPTY_COMPARE_SLOT, isCompareTurn, isTurn } from "../types";
+import { CompareTurnView } from "./CompareTurnView";
+import { Composer, type OutgoingMessage } from "./Composer";
 import { TurnView } from "./Turn";
 
 const SUGGESTIONS = [
@@ -34,11 +41,13 @@ function toTurn(message: MessageDto): Turn {
 export function Chat({
   session,
   onStaleSession,
+  onFirstMessage,
 }: {
   session: SessionCredentials;
   onStaleSession: () => void;
+  onFirstMessage?: (text: string) => void;
 }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [items, setItems] = useState<ThreadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +61,7 @@ export function Chat({
 
   useEffect(() => {
     listMessages(session)
-      .then((history) => setTurns(history.filter((m) => m.role !== "system").map(toTurn)))
+      .then((history) => setItems(history.filter((m) => m.role !== "system").map(toTurn)))
       .catch((e: Error) => {
         if (isNotFound(e)) {
           onStaleSession();
@@ -64,10 +73,8 @@ export function Chat({
   }, [session, onStaleSession]);
 
   useEffect(() => {
-    // Only follow the stream while the reader is already at the bottom, so
-    // scrolling back to re-read is not yanked away mid-answer.
     if (stick.current) end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [turns]);
+  }, [items]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -77,41 +84,55 @@ export function Chat({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD;
   }, []);
 
-  const send = useCallback(
-    async (content: string) => {
-      const replyId = `reply-${Date.now()}`;
-      const controller = new AbortController();
-      abort.current = controller;
+  const patchCompareSide = useCallback(
+    (compareId: string, side: "baseline" | "constrained", patch: Partial<CompareSlotState>) => {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (!isCompareTurn(item) || item.id !== compareId) return item;
+          return { ...item, [side]: { ...item[side], ...patch } };
+        }),
+      );
+    },
+    [],
+  );
 
-      setSeed(null);
-      setError(null);
-      setStatus("Ждём ответ.");
-      setBusy(true);
-      stick.current = true;
-      setTurns((prev) => [
+  const sendSingle = useCallback(
+    async (
+      { display, api, modelId }: OutgoingMessage,
+      controller: AbortController,
+      hadTurns: boolean,
+    ) => {
+      const replyId = `reply-${Date.now()}`;
+      setItems((prev) => [
         ...prev,
-        { id: `sent-${Date.now()}`, role: "user", content, modelId: null },
+        { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
         { id: replyId, role: "assistant", content: "", modelId: null },
       ]);
+      if (!hadTurns) onFirstMessage?.(display);
 
       const patch = (change: Partial<Turn>) =>
-        setTurns((prev) => prev.map((t) => (t.id === replyId ? { ...t, ...change } : t)));
+        setItems((prev) =>
+          prev.map((item) =>
+            isTurn(item) && item.id === replyId ? { ...item, ...change } : item,
+          ),
+        );
 
       try {
         await sendMessageSSE(
           session,
-          content,
+          api,
           (event: ChatEvent) => {
             switch (event.type) {
               case "model":
-                // Arrives before the first token, so the label never lags.
                 patch({ modelId: event.model_id });
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
               case "token":
-                setTurns((prev) =>
-                  prev.map((t) =>
-                    t.id === replyId ? { ...t, content: t.content + event.text } : t,
+                setItems((prev) =>
+                  prev.map((item) =>
+                    isTurn(item) && item.id === replyId
+                      ? { ...item, content: item.content + event.text }
+                      : item,
                   ),
                 );
                 break;
@@ -127,16 +148,117 @@ export function Chat({
             }
           },
           controller.signal,
+          { model: modelId },
         );
       } catch (e) {
         if (controller.signal.aborted) {
-          // Stopping is a choice, not a failure. The server persists whatever
-          // arrived, so the reply stays readable and is marked interrupted.
           patch({ failed: true });
+        }
+        throw e;
+      }
+    },
+    [session, onFirstMessage],
+  );
+
+  const sendCompare = useCallback(
+    async (
+      { display, api, modelId, prefs }: OutgoingMessage,
+      controller: AbortController,
+      hadTurns: boolean,
+    ) => {
+      const compareId = `compare-${Date.now()}`;
+      setItems((prev) => [
+        ...prev,
+        { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
+        {
+          kind: "compare",
+          id: compareId,
+          templateLabel: templateLabelForCompare(prefs),
+          baseline: { ...EMPTY_COMPARE_SLOT },
+          constrained: { ...EMPTY_COMPARE_SLOT },
+        },
+      ]);
+      if (!hadTurns) onFirstMessage?.(display);
+      setStatus("Сравниваем два ответа…");
+
+      const runSide = async (
+        side: "baseline" | "constrained",
+        prompt: string,
+        body: { model: string } & Record<string, unknown>,
+      ) => {
+        try {
+          const result = await probeComplete(
+            prompt,
+            body as Parameters<typeof probeComplete>[1],
+            controller.signal,
+          );
+          patchCompareSide(compareId, side, {
+            loading: false,
+            error: null,
+            content: result.content,
+            modelId: result.model_id,
+          });
+        } catch (e) {
+          if (controller.signal.aborted) {
+            patchCompareSide(compareId, side, {
+              loading: false,
+              error: null,
+              content: "",
+              modelId: null,
+              aborted: true,
+            });
+            return;
+          }
+          patchCompareSide(compareId, side, {
+            loading: false,
+            error: e instanceof Error ? e.message : String(e),
+            content: "",
+            modelId: null,
+          });
+        }
+      };
+
+      await Promise.all([
+        runSide(
+          "baseline",
+          display,
+          {
+            model: modelId,
+            temperature: prefs.temperature,
+            reasoning: prefs.reasoning,
+          },
+        ),
+        runSide("constrained", api, prefsToProbeBody(prefs)),
+      ]);
+      setStatus("Сравнение готово.");
+    },
+    [patchCompareSide, onFirstMessage],
+  );
+
+  const send = useCallback(
+    async (message: OutgoingMessage) => {
+      const controller = new AbortController();
+      abort.current = controller;
+
+      setSeed(null);
+      setError(null);
+      setStatus("Ждём ответ.");
+      setBusy(true);
+      stick.current = true;
+      const hadTurns = items.length > 0;
+
+      try {
+        if (message.compareMode) {
+          await sendCompare(message, controller, hadTurns);
+        } else {
+          await sendSingle(message, controller, hadTurns);
+        }
+      } catch (e) {
+        if (controller.signal.aborted) {
+          setStatus("Остановлено.");
         } else if (isNotFound(e)) {
           onStaleSession();
         } else {
-          patch({ failed: true });
           setError(e instanceof Error ? e.message : String(e));
         }
       } finally {
@@ -144,10 +266,10 @@ export function Chat({
         setBusy(false);
       }
     },
-    [session, onStaleSession],
+    [items.length, onStaleSession, sendCompare, sendSingle],
   );
 
-  const empty = !loading && turns.length === 0;
+  const empty = !loading && items.length === 0;
 
   return (
     <>
@@ -163,8 +285,8 @@ export function Chat({
             <div className="empty">
               <h2>О чём поговорим?</h2>
               <p>
-                У каждого ответа видно, какая модель его дала. Текст приходит потоком, токен
-                за токеном.
+                Выберите модель и режим «Один» или «Два рядом». Шаблон ответа — в настройках. У
+                каждого ответа видно, какая модель его дала.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (
@@ -182,17 +304,18 @@ export function Chat({
           )}
 
           <div>
-            {turns.map((turn, index) => (
-              <TurnView
-                key={turn.id}
-                turn={turn}
-                streaming={busy && index === turns.length - 1 && turn.role === "assistant"}
-              />
-            ))}
+            {items.map((item, index) => {
+              if (isCompareTurn(item)) {
+                return (
+                  <CompareTurnView key={item.id} turn={item} />
+                );
+              }
+              const streaming =
+                busy && index === items.length - 1 && item.role === "assistant";
+              return <TurnView key={item.id} turn={item} streaming={streaming} />;
+            })}
           </div>
 
-          {/* One short status line instead of a live region over the whole
-              thread, which would re-announce every token. */}
           <p className="sr-only" role="status" aria-live="polite">
             {status}
           </p>
@@ -208,7 +331,7 @@ export function Chat({
       )}
 
       <Composer
-        onSend={(text) => void send(text)}
+        onSend={(message) => void send(message)}
         onStop={() => abort.current?.abort()}
         busy={busy}
         maxChars={MAX_MESSAGE_CHARS}

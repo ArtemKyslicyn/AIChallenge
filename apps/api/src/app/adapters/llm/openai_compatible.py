@@ -15,6 +15,7 @@ import httpx
 
 from app.domain.entities import ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMProviderError
+from app.domain.generation import GenerationParams
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +68,32 @@ class OpenAICompatibleProvider:
         return headers
 
     @staticmethod
-    def _payload(messages: list[ChatMessage], model: str, *, stream: bool) -> dict[str, Any]:
-        return {
+    def _payload(
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        stream: bool,
+        generation: GenerationParams | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
             "model": model,
             "stream": stream,
             "messages": [{"role": str(m.role), "content": m.content} for m in messages],
         }
+        if generation is None:
+            return body
+        if generation.temperature is not None:
+            body["temperature"] = generation.temperature
+        max_tokens = generation.resolved_max_tokens()
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
+        if generation.stop:
+            body["stop"] = list(generation.stop)
+        if generation.reasoning:
+            # OpenRouter / reasoning models: ask for reasoning without surfacing it
+            # as the answer (adapter still filters reasoning deltas on stream).
+            body["reasoning"] = {"enabled": True}
+        return body
 
     @staticmethod
     def _empty_error(model: str) -> LLMProviderError:
@@ -102,11 +123,17 @@ class OpenAICompatibleProvider:
         reported = body.get("model")
         return str(reported) if reported else requested
 
-    async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult:
+    async def complete_chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
+    ) -> CompletionResult:
         try:
             response = await self._client.post(
                 self._url,
-                json=self._payload(messages, model, stream=False),
+                json=self._payload(messages, model, stream=False, generation=generation),
                 headers=self._headers(),
             )
         except httpx.HTTPError as exc:
@@ -129,9 +156,13 @@ class OpenAICompatibleProvider:
         return CompletionResult(content=str(content), model_id=self._resolved_model(body, model))
 
     async def stream_chat(
-        self, messages: list[ChatMessage], model: str
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]:
-        payload = self._payload(messages, model, stream=True)
+        payload = self._payload(messages, model, stream=True, generation=generation)
         emitted = False
         reasoning_seen = False
         try:

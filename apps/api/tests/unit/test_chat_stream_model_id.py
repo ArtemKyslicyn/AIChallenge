@@ -43,7 +43,7 @@ class SpyProvider(FakeLLMProvider):
         super().__init__(text=text)
         self.seen: list[ChatMessage] = []
 
-    async def stream_chat(self, messages: list[ChatMessage], model: str) -> AsyncIterator:
+    async def stream_chat(self, messages: list[ChatMessage], model: str, **_: object) -> AsyncIterator:
         self.seen = list(messages)
         async for chunk in super().stream_chat(messages, model):
             yield chunk
@@ -64,6 +64,7 @@ class Ctx:
         max_message_chars: int = 100,
         max_history_messages: int = 40,
         draft: ReplyDraft | None = None,
+        preferred_model: str | None = None,
     ) -> AsyncIterator[ChatEvent]:
         return send_user_message_and_stream(
             session_id=SESSION_ID,
@@ -79,6 +80,7 @@ class Ctx:
             max_history_messages=max_history_messages,
             id_factory=IdFactory(),
             draft=draft,
+            preferred_model=preferred_model,
         )
 
     def assistant_row(self) -> Message:
@@ -128,6 +130,16 @@ async def test_event_order_and_single_model_attribution() -> None:
     assert sum(isinstance(e, ModelEvent) for e in events) == 1
     assert events[0].model_id == end.model_id == "model-a"
     assert end.content == "one two"
+
+
+async def test_request_preferred_model_overrides_scenario() -> None:
+    ctx = await make_ctx()
+    events = await collect(ctx.stream(preferred_model="model-b"))
+
+    assert isinstance(events[0], ModelEvent)
+    end = events[-1]
+    assert isinstance(end, MessageEndEvent)
+    assert events[0].model_id == end.model_id == "model-b"
 
 
 async def test_assistant_row_persists_content_and_model_id() -> None:

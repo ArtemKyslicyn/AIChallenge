@@ -13,14 +13,20 @@ from app.domain.entities import (
     Message,
     Scenario,
     Session,
+    SessionSummary,
     TokenChunk,
 )
+from app.domain.generation import GenerationParams
 
 
 class SessionRepository(Protocol):
     async def create(self, session: Session) -> Session: ...
 
     async def get(self, session_id: UUID) -> Session | None: ...
+
+    async def list_for_visitor(self, visitor_hash: str, *, limit: int = 50) -> list[SessionSummary]: ...
+
+    async def set_title_if_empty(self, session_id: UUID, title: str) -> None: ...
 
 
 class MessageRepository(Protocol):
@@ -45,9 +51,21 @@ class LLMProvider(Protocol):
     #: Declared as a plain ``def`` returning an ``AsyncIterator`` so that an
     #: ``async def`` generator satisfies the protocol. ``async def`` here would
     #: instead require a coroutine that *returns* an iterator.
-    def stream_chat(self, messages: list[ChatMessage], model: str) -> AsyncIterator[TokenChunk]: ...
+    def stream_chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
+    ) -> AsyncIterator[TokenChunk]: ...
 
-    async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult: ...
+    async def complete_chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
+    ) -> CompletionResult: ...
 
 
 class ChatRouter(Protocol):
@@ -58,11 +76,19 @@ class ChatRouter(Protocol):
     """
 
     def stream_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]: ...
 
     async def complete_chat(
-        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+        self,
+        messages: list[ChatMessage],
+        preferred_model: str = AUTO_MODEL,
+        *,
+        generation: GenerationParams | None = None,
     ) -> CompletionResult: ...
 
 

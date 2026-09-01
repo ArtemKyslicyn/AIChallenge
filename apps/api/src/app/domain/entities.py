@@ -34,6 +34,19 @@ class Session:
     status: SessionStatus
     created_at: datetime
     user_id: UUID | None = None
+    visitor_hash: str | None = None
+    ip_hash: str | None = None
+    title: str | None = None
+
+
+@dataclass(slots=True)
+class SessionSummary:
+    """Lightweight row for chat history sidebars."""
+
+    id: UUID
+    title: str | None
+    created_at: datetime
+    message_count: int
 
 
 @dataclass(slots=True)

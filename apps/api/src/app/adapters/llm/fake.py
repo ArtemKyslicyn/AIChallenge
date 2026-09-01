@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Iterable
 
 from app.domain.entities import ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMProviderError
+from app.domain.generation import GenerationParams
 
 _WORDS = re.compile(r"\S+\s*")
 
@@ -59,12 +60,17 @@ class FakeLLMProvider:
         #: Pause between chunks. Tests that need a stream still running when the
         #: client hangs up set this; the default answers in one go.
         self.delay_seconds = delay_seconds
+        self.last_generation: GenerationParams | None = None
 
     def _resolve(self, model: str) -> str:
         return self.model_id or model or DEFAULT_FAKE_MODEL_ID
 
     async def stream_chat(
-        self, messages: list[ChatMessage], model: str
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]:
         model_id = self._resolve(model)
         for piece in _split(self.text):
@@ -72,7 +78,14 @@ class FakeLLMProvider:
                 await asyncio.sleep(self.delay_seconds)
             yield TokenChunk(text=piece, model_id=model_id)
 
-    async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult:
+    async def complete_chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
+    ) -> CompletionResult:
+        self.last_generation = generation
         return CompletionResult(content=self.text, model_id=self._resolve(model))
 
 
@@ -113,7 +126,11 @@ class FlakyLLMProvider:
         )
 
     async def stream_chat(
-        self, messages: list[ChatMessage], model: str
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
     ) -> AsyncIterator[TokenChunk]:
         if model in self.fail_models:
             raise self._boom(model)
@@ -126,7 +143,13 @@ class FlakyLLMProvider:
         for piece in _split(self.ok_text):
             yield TokenChunk(text=piece, model_id=model)
 
-    async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult:
+    async def complete_chat(
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        *,
+        generation: GenerationParams | None = None,
+    ) -> CompletionResult:
         if model in self.fail_models:
             raise self._boom(model)
         if model in self.empty_models:

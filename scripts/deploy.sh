@@ -17,6 +17,10 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+# Drop macOS AppleDouble / Finder junk that can break Alembic (null bytes in versions/).
+echo "==> remove macOS metadata junk if present"
+find "$ROOT" \( -name '._*' -o -name '.DS_Store' \) -type f -delete 2>/dev/null || true
+
 echo "==> docker compose build + up (prod)"
 docker compose -f docker-compose.prod.yml down --remove-orphans || true
 docker compose -f docker-compose.prod.yml up --build -d --remove-orphans

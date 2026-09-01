@@ -65,6 +65,22 @@ def test_probe_without_prompt_or_messages_is_422(api: TestClient) -> None:
     assert response.json()["error"]["code"] == "message_validation"
 
 
+def test_list_models_includes_auto(api: TestClient) -> None:
+    response = api.get("/api/v1/llm/models")
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["id"] == "auto"
+    assert body[0]["capabilities"]["temperature"] is True
+
+
+def test_probe_accepts_generation_fields(api: TestClient) -> None:
+    response = api.post(
+        "/api/v1/llm/complete",
+        json={"prompt": "ping", "temperature": 0.1, "prompt_format": True},
+    )
+    assert response.status_code == 200
+
+
 def test_malformed_session_id_is_404_not_a_crash(api: TestClient) -> None:
     # Resolved before any database access, so this works without Postgres.
     response = api.get("/api/v1/sessions/not-a-uuid", headers={"X-Session-Token": "x"})
@@ -85,7 +101,7 @@ def test_cors_allows_the_configured_dev_origin() -> None:
             headers={
                 "Origin": origin,
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "X-Session-Token",
+                "Access-Control-Request-Headers": "X-Session-Token, X-Visitor-Id",
             },
         )
     assert response.headers["access-control-allow-origin"] == origin
