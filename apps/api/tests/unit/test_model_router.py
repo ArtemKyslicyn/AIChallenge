@@ -80,3 +80,18 @@ async def test_pinned_model_falls_back_when_it_fails() -> None:
     router = ModelRouter(provider, ["model-a", "model-b"])
     result = await router.complete_chat(USER_TURN, preferred_model="model-b")
     assert result.model_id == "model-a"
+
+
+async def test_stream_moves_on_when_a_model_returns_no_answer() -> None:
+    # Reasoning-only responses cost the reader nothing, so failover is allowed.
+    provider = FlakyLLMProvider(empty_models={"model-a"}, ok_text="hi")
+    router = ModelRouter(provider, ["model-a", "model-b"])
+    chunks = [c async for c in router.stream_chat(USER_TURN, preferred_model="auto")]
+    assert "".join(c.text for c in chunks) == "hi"
+    assert {c.model_id for c in chunks} == {"model-b"}
+
+
+async def test_complete_moves_on_when_a_model_returns_no_answer() -> None:
+    provider = FlakyLLMProvider(empty_models={"model-a"}, ok_text="hi")
+    router = ModelRouter(provider, ["model-a", "model-b"])
+    assert (await router.complete_chat(USER_TURN)).model_id == "model-b"

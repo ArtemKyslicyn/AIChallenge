@@ -62,3 +62,41 @@ async def test_malformed_body_is_not_retryable() -> None:
         await provider.complete_chat(USER_TURN, "model-a")
     assert exc.value.kind == "malformed"
     assert exc.value.status is None
+
+
+REASONING_ONLY_BODY = (
+    b'data: {"model":"m","choices":[{"delta":{"reasoning":"weighing"}}]}\n\n'
+    b'data: {"model":"m","choices":[{"delta":{"reasoning":"still"}}]}\n\n'
+    b"data: [DONE]\n\n"
+)
+
+REASONING_THEN_ANSWER_BODY = (
+    b'data: {"model":"m","choices":[{"delta":{"reasoning":"weighing"}}]}\n\n'
+    b'data: {"model":"m","choices":[{"delta":{"reasoning_content":"still"}}]}\n\n'
+    b'data: {"model":"m","choices":[{"delta":{"content":"Answer"}}]}\n\n'
+    b"data: [DONE]\n\n"
+)
+
+
+async def test_reasoning_only_stream_is_a_retryable_empty_answer() -> None:
+    # A :free reasoning model that runs out of budget mid-thought sends no
+    # content at all. The reader has seen nothing, so the router may move on.
+    provider = _provider(lambda request: httpx.Response(200, content=REASONING_ONLY_BODY))
+    with pytest.raises(LLMProviderError) as exc:
+        _ = [c async for c in provider.stream_chat(USER_TURN, "model-a")]
+    assert exc.value.kind == "empty"
+    assert exc.value.model_id == "model-a"
+
+
+async def test_reasoning_is_never_forwarded_as_the_answer() -> None:
+    provider = _provider(lambda request: httpx.Response(200, content=REASONING_THEN_ANSWER_BODY))
+    chunks = [c async for c in provider.stream_chat(USER_TURN, "model-a")]
+    assert "".join(c.text for c in chunks) == "Answer"
+
+
+async def test_blank_completion_is_a_retryable_empty_answer() -> None:
+    body = {"model": "m", "choices": [{"message": {"content": "   "}}]}
+    provider = _provider(lambda request: httpx.Response(200, json=body))
+    with pytest.raises(LLMProviderError) as exc:
+        await provider.complete_chat(USER_TURN, "model-a")
+    assert exc.value.kind == "empty"
