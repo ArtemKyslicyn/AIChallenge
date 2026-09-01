@@ -53,6 +53,7 @@ class OpenAICompatibleProvider:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
+
     @staticmethod
     def _payload(messages: list[ChatMessage], model: str, *, stream: bool) -> dict[str, Any]:
         return {
