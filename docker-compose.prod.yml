@@ -33,6 +33,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      llm-proxy:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -43,6 +45,14 @@ services:
       timeout: 3s
       retries: 5
       start_period: 20s
+    restart: unless-stopped
+
+  # Bridges api -> host sing-box mixed proxy (127.0.0.1:11080) for OpenRouter etc.
+  llm-proxy:
+    image: alpine/socat:1.0.5
+    # Host sing-box mixed proxy is on 172.18.0.1:11083 (docker bridge). Requires
+    # iptables INPUT allow from 172.18.0.0/16 to tcp/11083 on the host.
+    command: tcp-listen:11081,fork,reuseaddr tcp-connect:172.18.0.1:11083
     restart: unless-stopped
 
   web:

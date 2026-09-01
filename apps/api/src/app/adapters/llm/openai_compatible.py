@@ -31,13 +31,19 @@ class OpenAICompatibleProvider:
         api_key: str,
         *,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        proxy: str | None = None,
         client: httpx.AsyncClient | None = None,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._extra_headers = {k: v for k, v in (extra_headers or {}).items() if v}
-        self._client = client if client is not None else httpx.AsyncClient(timeout=timeout)
+        proxy_url = proxy.strip() if proxy else None
+        self._client = (
+            client
+            if client is not None
+            else httpx.AsyncClient(timeout=timeout, proxy=proxy_url or None)
+        )
         self._owns_client = client is None
 
     async def aclose(self) -> None:

@@ -3,7 +3,7 @@ name: aichallenge-llm
 description: >-
   LLM port, OpenAI-compatible adapter, ModelRouter failover, SSE model
   attribution, and /llm/complete probe for AIChallenge. Use when changing
-  streaming, providers, OpenRouter/DeepSeek, model chain, or model_id UI/API.
+  streaming, providers, RouterAI/OpenRouter/DeepSeek, model chain, or model_id UI/API.
 ---
 
 # AIChallenge LLM
@@ -19,9 +19,24 @@ Both results must expose the **resolved** `model_id` that actually answered.
 
 ## Adapters
 
-- `OpenAICompatibleProvider` — single client via `LLM_BASE_URL` + `LLM_API_KEY`
+- `OpenAICompatibleProvider` — single client via `LLM_BASE_URL` + resolved key
+- Key resolution: `LLM_API_KEY` or, if empty, `ROUTERAI_KEY` (`Settings.resolved_llm_api_key()`)
 - `FakeLLMProvider` — tests/CI without keys
-- DeepSeek / OpenRouter = config, not new domain types
+- RouterAI / OpenRouter / DeepSeek = **config only**, no new domain types
+
+## Default provider (prod / `.env.example`)
+
+- `LLM_BASE_URL=https://routerai.ru/api/v1`
+- Chain (quality/price balance; update docs when changing):
+
+```text
+deepseek/deepseek-v4-flash
+qwen/qwen3-235b-a22b-2507
+deepseek/deepseek-v3.2
+google/gemini-2.5-flash
+```
+
+Cheaper alternative and other providers: comments in `.env.example`, details in `docs/env-local.md`.
 
 ## ModelRouter
 
@@ -31,7 +46,7 @@ Both results must expose the **resolved** `model_id` that actually answered.
   `LLMStreamAbortedError`; the caller persists the partial text + `model_id` and ends with `event: error`.
   Never switch models mid-answer — it splices two different completions.
 - Mark exhausted models with TTL (in-process v1; Redis later behind same API); the clock is injectable so
-  TTL behaviour is testable without sleeping
+  TTL expiration is testable without sleeping
 - Scenario `preferred_model: auto` uses router; explicit id pins when possible
 
 ## Client visibility (required)

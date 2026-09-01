@@ -23,5 +23,5 @@
 
 - API: FastAPI + uv + Postgres + Alembic
 - Web: Vite + React + TypeScript
-- LLM: OpenAI-compatible + failover chain
+- LLM: OpenAI-compatible + failover chain; default provider **RouterAI** (`LLM_BASE_URL` / `ROUTERAI_KEY`)
 - Auth: anonymous sessions in v1

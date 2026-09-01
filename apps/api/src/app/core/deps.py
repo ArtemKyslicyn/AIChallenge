@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
-from app.adapters.llm.router import ModelRouter
+from app.adapters.llm.router import ModelRouter, TieredModelRouter
 from app.adapters.persistence.db import create_engine, create_sessionmaker
 from app.adapters.persistence.repositories import SqlAlchemySessionRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
@@ -68,37 +68,82 @@ class Container:
     engine: AsyncEngine
     sessionmaker: async_sessionmaker[AsyncSession]
     provider: LLMProvider
-    router: ModelRouter
+    router: ModelRouter | TieredModelRouter
     scenarios: ScenarioRepository
+    _extra_providers: list[LLMProvider]
 
     async def aclose(self) -> None:
-        close = getattr(self.provider, "aclose", None)
-        if close is not None:
-            await close()
+        for provider in (self.provider, *self._extra_providers):
+            close = getattr(provider, "aclose", None)
+            if close is not None:
+                await close()
         await self.engine.dispose()
+
+
+def _openai_provider(
+    settings: Settings,
+    *,
+    base_url: str,
+    api_key: str,
+    proxy: str | None,
+) -> OpenAICompatibleProvider:
+    return OpenAICompatibleProvider(
+        base_url,
+        api_key,
+        proxy=proxy,
+        extra_headers={
+            "HTTP-Referer": settings.llm_http_referer,
+            "X-Title": settings.llm_app_title,
+        },
+    )
 
 
 def build_container(settings: Settings) -> Container:
     provider: LLMProvider
+    extra_providers: list[LLMProvider] = []
     if settings.fake_llm_enabled():
         provider = FakeLLMProvider()
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
+        router: ModelRouter | TieredModelRouter = ModelRouter(
+            provider, chain, exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds
+        )
         logger.info("using FakeLLMProvider (no provider key configured)")
     else:
-        provider = OpenAICompatibleProvider(
-            settings.llm_base_url,
-            settings.resolved_llm_api_key(),
-            extra_headers={
-                "HTTP-Referer": settings.llm_http_referer,
-                "X-Title": settings.llm_app_title,
-            },
+        primary_proxy = settings.llm_http_proxy.strip() or None
+        if primary_proxy:
+            logger.info("LLM outbound proxy enabled for primary tier")
+        provider = _openai_provider(
+            settings,
+            base_url=settings.llm_base_url,
+            api_key=settings.primary_llm_api_key(),
+            proxy=primary_proxy,
         )
         chain = settings.model_chain_list()
         if not chain:
-            # Fail at startup rather than on the first user message.
             raise RuntimeError(
                 "LLM_MODEL_CHAIN must list at least one model id when LLM_API_KEY is set."
             )
+        primary_router = ModelRouter(
+            provider, chain, exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds
+        )
+        if settings.llm_fallback_enabled():
+            fallback_proxy = settings.llm_fallback_http_proxy.strip() or None
+            fallback_provider = _openai_provider(
+                settings,
+                base_url=settings.llm_fallback_base_url,
+                api_key=settings.resolved_fallback_api_key(),
+                proxy=fallback_proxy,
+            )
+            extra_providers.append(fallback_provider)
+            fallback_router = ModelRouter(
+                fallback_provider,
+                settings.fallback_chain_list(),
+                exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds,
+            )
+            router = TieredModelRouter([primary_router, fallback_router])
+            logger.info("LLM tiered router enabled (primary + fallback provider)")
+        else:
+            router = primary_router
 
     engine = create_engine(settings.database_url)
     return Container(
@@ -106,10 +151,9 @@ def build_container(settings: Settings) -> Container:
         engine=engine,
         sessionmaker=create_sessionmaker(engine),
         provider=provider,
-        router=ModelRouter(
-            provider, chain, exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds
-        ),
+        router=router,
         scenarios=YamlScenarioRepository(settings.scenarios_path()),
+        _extra_providers=extra_providers,
     )
 
 

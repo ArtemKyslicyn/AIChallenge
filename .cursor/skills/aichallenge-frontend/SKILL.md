@@ -14,9 +14,10 @@ Vite + React + TypeScript SPA under `apps/web`.
 
 ## Session (v1)
 
-1. On load: `POST /api/v1/sessions`
+1. On load: reuse `localStorage` session if `GET /sessions/{id}` succeeds; else forget and `POST /sessions`
 2. Store `session_id` + `access_token`
 3. Send `X-Session-Token` on session-scoped calls
+4. On 404 (stale after DB reset): drop stored session and mint a new one — do not leave chat broken
 
 ## Chat + SSE
 

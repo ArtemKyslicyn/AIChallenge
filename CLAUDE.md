@@ -12,8 +12,9 @@ You are implementing / maintaining this repo in **Claude Code** (Anthropic). Cur
 
 - **Never** read, print, or commit `.env` or secret values.
 - Human creates `.env` from `.env.example` outside the chat.
-- Discuss variable **names** only (`LLM_API_KEY`, `DATABASE_URL`, …).
+- Discuss variable **names** only (`LLM_API_KEY`, `ROUTERAI_KEY`, `DATABASE_URL`, …).
 - If a key is missing: use `USE_FAKE_LLM=true` / `FakeLLMProvider` for tests and demos.
+- Default LLM template: RouterAI — see `.env.example` and `docs/env-local.md`.
 
 ## Deploy
 
@@ -31,6 +32,7 @@ Same conventions live in `.cursor/skills/aichallenge-*` (architecture, secrets, 
 - Docker Compose: `db`, `api`, `web`
 - Every assistant reply exposes resolved `model_id`
 - Domain-agnostic naming only (no patient/doctor in code or default configs)
+- LLM provider switch is env-only (RouterAI / OpenRouter / DeepSeek)
 
 ## When asked to build v1
 

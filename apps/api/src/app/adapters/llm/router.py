@@ -18,8 +18,9 @@ from app.domain.ports import LLMProvider
 logger = logging.getLogger(__name__)
 
 #: Upstream statuses that mean "this model is unavailable right now", not
-#: "this request is wrong": rate limit, out of credit, upstream timeout.
-RETRYABLE_STATUSES = frozenset({402, 408, 429})
+#: "this request is wrong": rate limit, out of credit, upstream timeout,
+#: auth rejected for this model, region block, temporary outage.
+RETRYABLE_STATUSES = frozenset({401, 402, 403, 408, 429, 503})
 RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout"})
 
 DEFAULT_EXHAUSTED_TTL_SECONDS = 300
@@ -120,4 +121,44 @@ class ModelRouter:
                 last_error = exc
                 continue
             return
+        raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
+
+
+class TieredModelRouter:
+    """Run model chains on multiple providers in order.
+
+    The next tier is tried only when every model in the current tier is
+    exhausted (429/quota/timeout). Mid-stream aborts are never retried on
+    another tier — same rule as :class:`ModelRouter`.
+    """
+
+    def __init__(self, tiers: Sequence[ModelRouter]) -> None:
+        if not tiers:
+            raise ValueError("at least one ModelRouter tier is required")
+        self._tiers = list(tiers)
+
+    async def complete_chat(
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+    ) -> CompletionResult:
+        last_error: LLMExhaustedError | None = None
+        for index, tier in enumerate(self._tiers):
+            try:
+                return await tier.complete_chat(messages, preferred_model)
+            except LLMExhaustedError as exc:
+                logger.warning("llm tier exhausted tier_index=%s", index)
+                last_error = exc
+        raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
+
+    async def stream_chat(
+        self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
+    ) -> AsyncIterator[TokenChunk]:
+        last_error: LLMExhaustedError | None = None
+        for index, tier in enumerate(self._tiers):
+            try:
+                async for chunk in tier.stream_chat(messages, preferred_model):
+                    yield chunk
+                return
+            except LLMExhaustedError as exc:
+                logger.warning("llm tier exhausted tier_index=%s", index)
+                last_error = exc
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
