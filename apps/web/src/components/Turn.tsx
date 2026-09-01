@@ -20,7 +20,7 @@ export function TurnView({ turn, streaming }: Props) {
         // The caret is attached in CSS to the last rendered block, so it keeps
         // flowing with the text while Markdown re-renders on every token.
         <div className="body">
-          <Markdown>{turn.content}</Markdown>
+          <Markdown streaming={streaming}>{turn.content}</Markdown>
         </div>
       ) : (
         // What the reader typed is shown verbatim, never re-interpreted.

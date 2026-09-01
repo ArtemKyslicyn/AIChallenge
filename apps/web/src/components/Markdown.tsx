@@ -1,6 +1,8 @@
-import { isValidElement, useState, type ReactNode } from "react";
+import { isValidElement, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+import { Mermaid } from "./Mermaid";
 
 /** Collect the plain text of a rendered subtree — used to copy a code block. */
 function nodeText(node: ReactNode): string {
@@ -53,20 +55,34 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   );
 }
 
-const components: Components = {
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-  a: ({ href, children }) => (
-    // Model output is untrusted: never open a link with the opener intact.
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow">
-      {children}
-    </a>
-  ),
-  table: ({ children }) => (
-    <div className="md-table">
-      <table>{children}</table>
-    </div>
-  ),
-};
+function buildComponents(streaming: boolean): Components {
+  return {
+    pre: ({ children }) => {
+      // A diagram is only drawn once the block is complete: mermaid cannot
+      // parse half a graph, and retrying on every token would just flicker.
+      if (!streaming && nodeLanguage(children) === "mermaid") {
+        return <Mermaid code={nodeText(children).replace(/\n$/, "")} />;
+      }
+      return <CodeBlock>{children}</CodeBlock>;
+    },
+    img: ({ src, alt }) => (
+      // Model output is untrusted: no referrer, lazy, and never wider than the
+      // message. react-markdown already strips dangerous URL schemes.
+      <img className="md-image" src={typeof src === "string" ? src : undefined} alt={alt ?? ""} loading="lazy" referrerPolicy="no-referrer" />
+    ),
+    a: ({ href, children }) => (
+      // Model output is untrusted: never open a link with the opener intact.
+      <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+        {children}
+      </a>
+    ),
+    table: ({ children }) => (
+      <div className="md-table">
+        <table>{children}</table>
+      </div>
+    ),
+  };
+}
 
 /**
  * Renders model output as Markdown.
@@ -75,7 +91,8 @@ const components: Components = {
  * a model and must not be able to inject markup. react-markdown also strips
  * dangerous URL schemes from links by default.
  */
-export function Markdown({ children }: { children: string }) {
+export function Markdown({ children, streaming = false }: { children: string; streaming?: boolean }) {
+  const components = useMemo(() => buildComponents(streaming), [streaming]);
   return (
     <div className="md">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>

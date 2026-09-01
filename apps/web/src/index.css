@@ -371,6 +371,39 @@ textarea {
   font-weight: 600;
 }
 
+.md-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.md-mermaid {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  /* A wide graph scrolls inside the message instead of stretching the page. */
+  overflow-x: auto;
+}
+
+.md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.md-mermaid-pending {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
 .md-code {
   margin: 0 0 var(--space-3);
   border: 1px solid var(--border);
