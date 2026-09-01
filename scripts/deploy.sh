@@ -22,7 +22,8 @@ echo "==> remove macOS metadata junk if present"
 find "$ROOT" \( -name '._*' -o -name '.DS_Store' \) -type f -delete 2>/dev/null || true
 
 echo "==> docker compose build + up (prod)"
-docker compose -f docker-compose.prod.yml down --remove-orphans || true
+# Avoid `down` before `up`: it stops web on :18080 and the host proxy returns 502
+# until the stack finishes booting (~20–30s). Rolling recreate is enough.
 docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
 
 echo "==> wait for api health via local web proxy"
