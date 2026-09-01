@@ -7,6 +7,7 @@ switching to another would splice two different completions together.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Callable, Sequence
@@ -37,6 +38,15 @@ RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout", "empty"})
 
 DEFAULT_EXHAUSTED_TTL_SECONDS = 300
 
+#: How many models one request may try before giving up. Without a cap a long
+#: free chain turns a single message into minutes of silent retrying.
+DEFAULT_MAX_ATTEMPTS = 3
+
+#: How long to wait for a model to produce its *first* answer token. Reasoning
+#: models can think for a long time and then run out of budget without writing
+#: anything; that must cost one bounded wait, not the whole request.
+DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS = 20.0
+
 
 def _is_retryable(exc: LLMProviderError) -> bool:
     return exc.status in RETRYABLE_STATUSES or exc.kind in RETRYABLE_KINDS
@@ -55,11 +65,15 @@ class ModelRouter:
         model_chain: Sequence[str],
         exhausted_ttl_seconds: int = DEFAULT_EXHAUSTED_TTL_SECONDS,
         now: Callable[[], float] = time.monotonic,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+        first_token_timeout_seconds: float = DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS,
     ) -> None:
         self._provider = provider
         self._chain = list(model_chain)
         self._ttl = exhausted_ttl_seconds
         self._now = now
+        self._max_attempts = max(1, max_attempts)
+        self._first_token_timeout = first_token_timeout_seconds
         self._exhausted: dict[str, float] = {}
 
     def _mark_exhausted(self, model: str) -> None:
@@ -86,7 +100,8 @@ class ModelRouter:
                     continue
                 del self._exhausted[model]
             available.append(model)
-        return available
+        # One request walks a bounded prefix of the chain, not all of it.
+        return available[: self._max_attempts]
 
     async def complete_chat(
         self, messages: list[ChatMessage], preferred_model: str = AUTO_MODEL
@@ -116,8 +131,22 @@ class ModelRouter:
         last_error: LLMProviderError | None = None
         for model in candidates:
             emitted: list[str] = []
+            stream = self._provider.stream_chat(messages, model)
             try:
-                async for chunk in self._provider.stream_chat(messages, model):
+                while True:
+                    # Only the wait for the first token is bounded. After that
+                    # the model is clearly answering and must not be cut off.
+                    budget = self._first_token_timeout if not emitted else None
+                    try:
+                        chunk = await asyncio.wait_for(anext(stream), budget)
+                    except StopAsyncIteration:
+                        break
+                    except TimeoutError as exc:
+                        raise LLMProviderError(
+                            "Provider did not start answering in time.",
+                            kind="timeout",
+                            model_id=model,
+                        ) from exc
                     emitted.append(chunk.text)
                     yield chunk
             except LLMProviderError as exc:
@@ -132,6 +161,13 @@ class ModelRouter:
                 self._mark_exhausted(model)
                 last_error = exc
                 continue
+            finally:
+                # The port promises only an AsyncIterator, so closing is
+                # best-effort — but an async generator must be closed, or the
+                # provider's HTTP stream is left dangling.
+                close = getattr(stream, "aclose", None)
+                if close is not None:
+                    await close()
             return
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
