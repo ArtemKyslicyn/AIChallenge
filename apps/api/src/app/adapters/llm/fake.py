@@ -12,6 +12,27 @@ _WORDS = re.compile(r"\S+\s*")
 
 DEFAULT_FAKE_MODEL_ID = "fake-model"
 
+#: The keyless demo answer. Deliberately Markdown: it is what shows the
+#: renderer working when no provider key is configured.
+DEMO_ANSWER = """### Пример ответа
+
+Модель отвечает **Markdown**, и он рендерится по ходу стрима.
+
+- списки и `инлайн-код`
+- таблицы
+- блоки кода с копированием
+
+```python
+def greet(name: str) -> str:
+    return f"Привет, {name}!"
+```
+
+| Поле | Значение |
+| --- | --- |
+| Провайдер | fake |
+| Стриминг | да |
+"""
+
 
 def _split(text: str) -> list[str]:
     """Split into word-sized chunks so a stream looks like a real one."""
@@ -26,9 +47,7 @@ class FakeLLMProvider:
     meaningful in the keyless demo path.
     """
 
-    def __init__(
-        self, text: str = "Это детерминированный тестовый ответ.", model_id: str | None = None
-    ) -> None:
+    def __init__(self, text: str = DEMO_ANSWER, model_id: str | None = None) -> None:
         self.text = text
         self.model_id = model_id
 
