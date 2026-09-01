@@ -98,15 +98,24 @@ def _openai_provider(
     )
 
 
+def _router_for(settings: Settings, provider: LLMProvider, chain: list[str]) -> ModelRouter:
+    """One place for the per-request limits, so no chain can escape them."""
+    return ModelRouter(
+        provider,
+        chain,
+        exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds,
+        max_attempts=settings.llm_max_attempts,
+        first_token_timeout_seconds=settings.llm_first_token_timeout_seconds,
+    )
+
+
 def build_container(settings: Settings) -> Container:
     provider: LLMProvider
     extra_providers: list[LLMProvider] = []
     if settings.fake_llm_enabled():
         provider = FakeLLMProvider()
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
-        router: ModelRouter | TieredModelRouter = ModelRouter(
-            provider, chain, exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds
-        )
+        router: ModelRouter | TieredModelRouter = _router_for(settings, provider, chain)
         logger.info("using FakeLLMProvider (no provider key configured)")
     else:
         primary_proxy = settings.llm_http_proxy.strip() or None
@@ -123,9 +132,7 @@ def build_container(settings: Settings) -> Container:
             raise RuntimeError(
                 "LLM_MODEL_CHAIN must list at least one model id when LLM_API_KEY is set."
             )
-        primary_router = ModelRouter(
-            provider, chain, exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds
-        )
+        primary_router = _router_for(settings, provider, chain)
         if settings.llm_fallback_enabled():
             fallback_proxy = settings.llm_fallback_http_proxy.strip() or None
             fallback_provider = _openai_provider(
@@ -135,10 +142,8 @@ def build_container(settings: Settings) -> Container:
                 proxy=fallback_proxy,
             )
             extra_providers.append(fallback_provider)
-            fallback_router = ModelRouter(
-                fallback_provider,
-                settings.fallback_chain_list(),
-                exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds,
+            fallback_router = _router_for(
+                settings, fallback_provider, settings.fallback_chain_list()
             )
             router = TieredModelRouter([primary_router, fallback_router])
             logger.info("LLM tiered router enabled (primary + fallback provider)")

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     llm_model_chain: str = ""  # csv
     llm_probe_enabled: bool = True
     llm_exhausted_ttl_seconds: int = 300
+    # Bounds on the work one request may do while walking the model chain.
+    llm_max_attempts: int = 3
+    llm_first_token_timeout_seconds: float = 20.0
     # OpenRouter asks for these; harmless for other OpenAI-compatible hosts.
     llm_http_referer: str = "https://aichallenge.arcilite.ru"
     llm_app_title: str = "AIChallenge"
