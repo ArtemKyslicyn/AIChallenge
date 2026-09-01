@@ -91,13 +91,21 @@ class FlakyLLMProvider:
         fail_status: int = 429,
         ok_text: str = "ok",
         fail_mid_stream: Iterable[str] | None = None,
+        empty_models: Iterable[str] | None = None,
         partial_text: str = "",
     ) -> None:
         self.fail_models = set(fail_models or ())
         self.fail_mid_stream = set(fail_mid_stream or ())
+        #: Models that answer with no content at all, the way a reasoning model
+        #: does when it runs out of budget before writing an answer.
+        self.empty_models = set(empty_models or ())
         self.fail_status = fail_status
         self.ok_text = ok_text
         self.partial_text = partial_text
+
+    @staticmethod
+    def _empty(model: str) -> LLMProviderError:
+        return LLMProviderError("no answer content", kind="empty", model_id=model)
 
     def _boom(self, model: str) -> LLMProviderError:
         return LLMProviderError(
@@ -109,6 +117,8 @@ class FlakyLLMProvider:
     ) -> AsyncIterator[TokenChunk]:
         if model in self.fail_models:
             raise self._boom(model)
+        if model in self.empty_models:
+            raise self._empty(model)
         if model in self.fail_mid_stream:
             for piece in _split(self.partial_text):
                 yield TokenChunk(text=piece, model_id=model)
@@ -119,4 +129,6 @@ class FlakyLLMProvider:
     async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult:
         if model in self.fail_models:
             raise self._boom(model)
+        if model in self.empty_models:
+            raise self._empty(model)
         return CompletionResult(content=self.ok_text, model_id=model)

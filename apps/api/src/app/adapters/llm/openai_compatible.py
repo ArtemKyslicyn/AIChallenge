@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 _DONE = "[DONE]"
 _DATA_PREFIX = "data:"
 _STREAM_END = object()
+#: The chunk carried only chain-of-thought, no answer text.
+_REASONING_ONLY = object()
+
+#: Reasoning models put their thinking here instead of in ``content``.
+#: OpenRouter uses ``reasoning``, DeepSeek ``reasoning_content``.
+_REASONING_KEYS = ("reasoning", "reasoning_content")
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
 
@@ -69,6 +75,18 @@ class OpenAICompatibleProvider:
         }
 
     @staticmethod
+    def _empty_error(model: str) -> LLMProviderError:
+        """No answer text at all — usually a reasoning model cut off mid-thought.
+
+        Marked retryable so the router moves on to the next model. That does not
+        break the "no failover after the first token" rule: reasoning is never
+        forwarded downstream, so the reader has seen nothing yet.
+        """
+        return LLMProviderError(
+            "Provider streamed no answer content.", kind="empty", model_id=model
+        )
+
+    @staticmethod
     def _http_error(status: int, model: str) -> LLMProviderError:
         # The body may echo the prompt or the key — it never reaches the message.
         return LLMProviderError(f"Provider returned HTTP {status}.", status=status, model_id=model)
@@ -105,12 +123,17 @@ class OpenAICompatibleProvider:
                 "Provider returned an unreadable response.", kind="malformed", model_id=model
             ) from exc
 
+        if not str(content).strip():
+            raise self._empty_error(model)
+
         return CompletionResult(content=str(content), model_id=self._resolved_model(body, model))
 
     async def stream_chat(
         self, messages: list[ChatMessage], model: str
     ) -> AsyncIterator[TokenChunk]:
         payload = self._payload(messages, model, stream=True)
+        emitted = False
+        reasoning_seen = False
         try:
             async with self._client.stream(
                 "POST", self._url, json=payload, headers=self._headers()
@@ -122,11 +145,20 @@ class OpenAICompatibleProvider:
                 async for line in response.aiter_lines():
                     parsed = self._parse_line(line, model)
                     if parsed is _STREAM_END:
-                        return
+                        break
+                    if parsed is _REASONING_ONLY:
+                        reasoning_seen = True
+                        continue
                     if isinstance(parsed, TokenChunk):
+                        emitted = True
                         yield parsed
         except httpx.HTTPError as exc:
             raise self._transport_error(exc, model) from exc
+
+        if not emitted:
+            if reasoning_seen:
+                logger.info("model produced only reasoning model_id=%s", model)
+            raise self._empty_error(model)
 
     def _parse_line(self, line: str, model: str) -> TokenChunk | object | None:
         """Return a chunk, ``_STREAM_END``, or ``None`` for lines to skip."""
@@ -138,10 +170,15 @@ class OpenAICompatibleProvider:
             return _STREAM_END
         try:
             body: dict[str, Any] = json.loads(data)
-            delta = body["choices"][0]["delta"].get("content")
+            chunk = body["choices"][0]["delta"]
+            delta = chunk.get("content")
         except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError):
             # Keep-alives and vendor-specific frames are not an error.
             return None
         if not delta:
+            # Thinking is not an answer, so it is never forwarded — but it does
+            # tell us the model was alive, which changes how we report failure.
+            if any(chunk.get(key) for key in _REASONING_KEYS):
+                return _REASONING_ONLY
             return None
         return TokenChunk(text=str(delta), model_id=self._resolved_model(body, model))

@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 #: "this request is wrong": rate limit, out of credit, upstream timeout,
 #: auth rejected for this model, region block, temporary outage.
 RETRYABLE_STATUSES = frozenset({401, 402, 403, 408, 429, 503})
-RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout"})
+#: "empty" is retryable on purpose: a model that streams only chain-of-thought
+#: and no answer has shown the reader nothing, so moving on is still safe.
+RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout", "empty"})
 
 DEFAULT_EXHAUSTED_TTL_SECONDS = 300
 
