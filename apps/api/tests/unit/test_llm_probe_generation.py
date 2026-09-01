@@ -1,5 +1,3 @@
-import pytest
-
 from app.adapters.llm.fake import FakeLLMProvider
 from app.adapters.llm.router import ModelRouter
 from app.application.llm_probe import complete_probe

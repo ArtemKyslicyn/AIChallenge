@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from app.domain.entities import Message, MessageRole, Scenario, Session, SessionSummary
+from app.domain.entities import Message, Scenario, Session, SessionSummary
 from app.domain.errors import MessageNotFoundError, ScenarioNotFoundError
 
 FIXED_NOW = datetime(2026, 8, 31, 12, 0, 0, tzinfo=UTC)
@@ -43,11 +43,7 @@ class InMemorySessionRepository:
         return self.rows.get(session_id)
 
     async def list_for_visitor(self, visitor_hash: str, *, limit: int = 50) -> list[SessionSummary]:
-        matches = [
-            s
-            for s in self.rows.values()
-            if s.visitor_hash == visitor_hash
-        ]
+        matches = [s for s in self.rows.values() if s.visitor_hash == visitor_hash]
         matches.sort(key=lambda s: s.created_at, reverse=True)
         return [
             SessionSummary(

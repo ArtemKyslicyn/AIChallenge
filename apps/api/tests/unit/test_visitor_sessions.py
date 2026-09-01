@@ -1,12 +1,16 @@
 from fakes import (
     DEFAULT_SCENARIO,
+    IdFactory,
     InMemoryScenarioRepository,
     InMemorySessionRepository,
     fixed_now,
-    IdFactory,
 )
 
-from app.application.sessions import create_session, list_visitor_sessions, session_title_from_message
+from app.application.sessions import (
+    create_session,
+    list_visitor_sessions,
+    session_title_from_message,
+)
 
 
 async def test_create_session_stores_visitor_hash() -> None:

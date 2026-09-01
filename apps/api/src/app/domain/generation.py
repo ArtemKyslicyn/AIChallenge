@@ -70,9 +70,11 @@ def apply_prompt_controls_to_text(user_text: str, controls: PromptControlFlags) 
 def apply_generation_to_messages(
     messages: list[ChatMessage], generation: GenerationParams | None
 ) -> list[ChatMessage]:
-    if not generation or not generation.prompt_controls or not generation.prompt_controls.any_enabled():
+    if not generation:
         return messages
     controls = generation.prompt_controls
+    if not controls or not controls.any_enabled():
+        return messages
     out = list(messages)
     for index in range(len(out) - 1, -1, -1):
         if out[index].role == MessageRole.USER:
