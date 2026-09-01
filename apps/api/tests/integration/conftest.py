@@ -6,17 +6,21 @@ Runs only with RUN_INTEGRATION=1. Point DATABASE_URL at the Compose database
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
+import uvicorn
 from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from app.adapters.llm.fake import FakeLLMProvider
+from app.adapters.llm.router import ModelRouter
 from app.core.settings import Settings
 from app.main import create_app
 
@@ -65,3 +69,44 @@ async def api(engine: AsyncEngine, migrated_database: str) -> AsyncIterator[Asyn
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
+
+
+def _settings_for(url: str, **overrides: object) -> Settings:
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        use_fake_llm=True,
+        database_url=url,
+        max_message_chars=200,
+        **overrides,  # type: ignore[arg-type]
+    )
+
+
+@pytest.fixture
+async def live_url(engine: AsyncEngine, migrated_database: str) -> AsyncIterator[str]:
+    """A real uvicorn server on a random port.
+
+    ASGITransport is not enough for disconnect tests: closing its response only
+    closes the generator, while a real server also cancels the request task.
+    """
+    app = create_app(_settings_for(migrated_database))
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+
+    # uvicorn exposes a boolean, not an Event, so polling is the only option.
+    while not server.started:  # noqa: ASYNC110
+        await asyncio.sleep(0.01)
+
+    # Slow the answer down so the client can hang up while it is still streaming.
+    container = app.state.container
+    container.router = ModelRouter(
+        FakeLLMProvider(text="один два три четыре пять шесть семь", delay_seconds=0.25),
+        ["fake-model"],
+    )
+
+    port = server.servers[0].sockets[0].getsockname()[1]
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.should_exit = True
+        await task

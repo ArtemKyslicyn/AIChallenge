@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import AsyncIterator, Iterable
 
@@ -47,9 +48,17 @@ class FakeLLMProvider:
     meaningful in the keyless demo path.
     """
 
-    def __init__(self, text: str = DEMO_ANSWER, model_id: str | None = None) -> None:
+    def __init__(
+        self,
+        text: str = DEMO_ANSWER,
+        model_id: str | None = None,
+        delay_seconds: float = 0.0,
+    ) -> None:
         self.text = text
         self.model_id = model_id
+        #: Pause between chunks. Tests that need a stream still running when the
+        #: client hangs up set this; the default answers in one go.
+        self.delay_seconds = delay_seconds
 
     def _resolve(self, model: str) -> str:
         return self.model_id or model or DEFAULT_FAKE_MODEL_ID
@@ -59,6 +68,8 @@ class FakeLLMProvider:
     ) -> AsyncIterator[TokenChunk]:
         model_id = self._resolve(model)
         for piece in _split(self.text):
+            if self.delay_seconds:
+                await asyncio.sleep(self.delay_seconds)
             yield TokenChunk(text=piece, model_id=model_id)
 
     async def complete_chat(self, messages: list[ChatMessage], model: str) -> CompletionResult:
