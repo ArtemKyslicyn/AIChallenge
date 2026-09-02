@@ -32,11 +32,13 @@ services:
       # Always point at the db service, whatever a local .env says.
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aichallenge}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-aichallenge}
       SCENARIOS_DIR: /app/configs/scenarios
+      LAB_DIR: /app/configs/lab
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       MEDIA_DIR: /app/data/media
     volumes:
       # Scenarios are configuration, not code: editable without a rebuild.
       - ./configs/scenarios:/app/configs/scenarios:ro
+      - ./configs/lab:/app/configs/lab:ro
       - media_data:/app/data/media
     depends_on:
       db:

@@ -28,6 +28,7 @@ def _repo_root(start: Path) -> Path:
 
 REPO_ROOT = _repo_root(Path(__file__).resolve())
 DEFAULT_SCENARIOS_DIR = REPO_ROOT / "configs" / "scenarios"
+DEFAULT_LAB_DIR = REPO_ROOT / "configs" / "lab"
 
 
 def _csv(raw: str) -> list[str]:
@@ -53,8 +54,8 @@ class Settings(BaseSettings):
     llm_probe_enabled: bool = True
     llm_exhausted_ttl_seconds: int = 300
     # Bounds on the work one request may do while walking the model chain.
-    llm_max_attempts: int = 3
-    llm_first_token_timeout_seconds: float = 20.0
+    llm_max_attempts: int = 5
+    llm_first_token_timeout_seconds: float = 25.0
     # OpenRouter asks for these; harmless for other OpenAI-compatible hosts.
     llm_http_referer: str = "https://aichallenge.arcilite.ru"
     llm_app_title: str = "AIChallenge"
@@ -71,17 +72,24 @@ class Settings(BaseSettings):
     def primary_llm_api_key(self) -> str:
         if self.llm_api_key:
             return self.llm_api_key
-        if "openrouter.ai" in self.llm_base_url and self.openrouter_api_key:
-            return self.openrouter_api_key
-        if self.openrouter_api_key:
-            return self.openrouter_api_key
-        return self.routerai_key
+        return self._key_for_base_url(self.llm_base_url)
 
     def resolved_llm_api_key(self) -> str:
         return self.primary_llm_api_key()
 
     def resolved_fallback_api_key(self) -> str:
-        return self.llm_fallback_api_key or self.routerai_key
+        if self.llm_fallback_api_key:
+            return self.llm_fallback_api_key
+        return self._key_for_base_url(self.llm_fallback_base_url)
+
+    def _key_for_base_url(self, base_url: str) -> str:
+        """Pick the key that matches the host — never send OpenRouter's key to RouterAI."""
+        base = (base_url or "").lower()
+        if "openrouter.ai" in base:
+            return self.openrouter_api_key or self.routerai_key
+        if "routerai.ru" in base:
+            return self.routerai_key or self.openrouter_api_key
+        return self.routerai_key or self.openrouter_api_key
 
     def fallback_chain_list(self) -> list[str]:
         return _csv(self.llm_fallback_model_chain)
@@ -98,6 +106,7 @@ class Settings(BaseSettings):
     max_history_messages: int = 40
 
     scenarios_dir: str = ""
+    lab_dir: str = ""
     log_level: str = "INFO"
     visitor_hash_salt: str = "aichallenge-visitor-v1"
 
@@ -116,6 +125,9 @@ class Settings(BaseSettings):
 
     def scenarios_path(self) -> Path:
         return Path(self.scenarios_dir) if self.scenarios_dir else DEFAULT_SCENARIOS_DIR
+
+    def lab_path(self) -> Path:
+        return Path(self.lab_dir) if self.lab_dir else DEFAULT_LAB_DIR
 
     def media_path(self) -> Path:
         if self.media_dir:

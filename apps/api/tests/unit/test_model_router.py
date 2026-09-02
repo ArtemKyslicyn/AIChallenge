@@ -119,6 +119,21 @@ async def test_region_block_still_moves_to_the_next_model() -> None:
     assert (await router.complete_chat(USER_TURN)).model_id == "model-b"
 
 
+async def test_missing_model_404_moves_to_the_next_model() -> None:
+    # OpenRouter free ids disappear often; 404 must not abort the whole reply.
+    provider = FlakyLLMProvider(fail_models={"model-a"}, fail_status=404, ok_text="hi")
+    router = ModelRouter(provider, ["model-a", "model-b"])
+    assert (await router.complete_chat(USER_TURN)).model_id == "model-b"
+
+
+async def test_gateway_blip_502_moves_to_the_next_model() -> None:
+    provider = FlakyLLMProvider(fail_models={"model-a"}, fail_status=502, ok_text="hi")
+    router = ModelRouter(provider, ["model-a", "model-b"])
+    chunks = [c async for c in router.stream_chat(USER_TURN)]
+    assert "".join(c.text for c in chunks) == "hi"
+    assert {c.model_id for c in chunks} == {"model-b"}
+
+
 class SlowFirstTokenProvider:
     """Answers instantly for some models and stalls before the first token for others."""
 

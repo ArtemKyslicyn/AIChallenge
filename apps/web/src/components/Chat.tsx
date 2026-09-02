@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
   MAX_MESSAGE_CHARS,
@@ -10,14 +10,27 @@ import {
   type MessageDto,
   type SessionCredentials,
 } from "../api/client";
+import { prefsToProbeBody } from "../chatPrefs/outgoing";
+import { useDebugLog } from "../debug/DebugContext";
+import { countWords } from "../generationPrefs";
 import {
-  prefsToProbeBody,
-  templateLabelForCompare,
-} from "../generationPrefs";
-import type { CompareSlotState, ThreadItem, Turn } from "../types";
-import { EMPTY_COMPARE_SLOT, isCompareTurn, isTurn } from "../types";
-import { CompareTurnView } from "./CompareTurnView";
+  PROMPT_STRATEGY_IDS,
+  runLabJudge,
+  runPromptStrategy,
+} from "../strategies";
+import type { PromptStrategyId } from "../strategies/types";
+import type { ThreadItem, Turn } from "../types";
+import {
+  EMPTY_PROBE_SLOT,
+  isCompareTurn,
+  isLabTurn,
+  isTurn,
+} from "../types";
+import { compareTemplateLabel, CompareTurnView } from "./CompareTurnView";
 import { Composer, type OutgoingMessage } from "./Composer";
+import { DebugFloat } from "./DebugFloat";
+import { emptyLabSlots, LabTurnView } from "./LabTurnView";
+import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
 import { TurnView } from "./Turn";
 
 const SUGGESTIONS = [
@@ -26,7 +39,6 @@ const SUGGESTIONS = [
   "Задавай мне по одному вопросу за раз",
 ];
 
-/** Distance from the bottom, in px, within which the view keeps auto-scrolling. */
 const STICK_THRESHOLD = 80;
 
 function toTurn(message: MessageDto): Turn {
@@ -53,14 +65,26 @@ export function Chat({
   const [error, setError] = useState<string | null>(null);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [status, setStatus] = useState("");
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [resultsPayload, setResultsPayload] = useState<LabResultsPayload | null>(null);
+  const [labExpanded, setLabExpanded] = useState<Record<string, boolean>>({});
+
+  const openResults = useCallback(() => {
+    setDebugOpen(false);
+    setResultsOpen(true);
+  }, []);
+  const openDebug = useCallback((next: boolean) => {
+    if (next) setResultsOpen(false);
+    setDebugOpen(next);
+  }, []);
 
   const thread = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const abort = useRef<AbortController | null>(null);
+  const { push: debug } = useDebugLog();
 
-  // Keep latest stale handler without reloading history on every App re-render
-  // (refreshHistory after first message used to wipe in-thread compare turns).
   const reportStaleSession = useEffectEvent(() => {
     onStaleSession();
   });
@@ -102,7 +126,7 @@ export function Chat({
   }, []);
 
   const patchCompareSide = useCallback(
-    (compareId: string, side: "baseline" | "constrained", patch: Partial<CompareSlotState>) => {
+    (compareId: string, side: "baseline" | "constrained", patch: Partial<typeof EMPTY_PROBE_SLOT>) => {
       setItems((prev) =>
         prev.map((item) => {
           if (!isCompareTurn(item) || item.id !== compareId) return item;
@@ -113,6 +137,32 @@ export function Chat({
     [],
   );
 
+  const patchLabSlot = useCallback(
+    (labId: string, strategyId: PromptStrategyId, patch: Partial<typeof EMPTY_PROBE_SLOT>) => {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (!isLabTurn(item) || item.id !== labId) return item;
+          return {
+            ...item,
+            slots: {
+              ...item.slots,
+              [strategyId]: { ...item.slots[strategyId], ...patch },
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const patchLabJudge = useCallback((labId: string, judge: LabTurnJudge) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        isLabTurn(item) && item.id === labId ? { ...item, judge, compact: true } : item,
+      ),
+    );
+  }, []);
+
   const sendSingle = useCallback(
     async (
       { display, api, modelId }: OutgoingMessage,
@@ -120,6 +170,7 @@ export function Chat({
       hadTurns: boolean,
     ) => {
       const replyId = `reply-${Date.now()}`;
+      debug("info", `SSE сообщение · model=${modelId}`);
       setItems((prev) => [
         ...prev,
         { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
@@ -142,6 +193,7 @@ export function Chat({
             switch (event.type) {
               case "model":
                 patch({ modelId: event.model_id });
+                debug("model", event.model_id);
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
               case "tool_start":
@@ -153,6 +205,7 @@ export function Chat({
                 break;
               case "tool_result":
                 if (event.status === "error") {
+                  debug("error", event.error || "media tool error");
                   setStatus(event.error || "Медиа-инструмент не сработал.");
                 } else {
                   setStatus(
@@ -173,10 +226,12 @@ export function Chat({
                 break;
               case "message_end":
                 patch({ content: event.content, modelId: event.model_id });
+                debug("info", `SSE готово · ${event.model_id}`);
                 setStatus(`Ответ готов, модель ${event.model_id}.`);
                 break;
               case "error":
                 patch({ failed: true });
+                debug("error", event.message);
                 setError(event.message);
                 setStatus("Ответ прерван.");
                 break;
@@ -192,25 +247,26 @@ export function Chat({
         throw e;
       }
     },
-    [session, onFirstMessage],
+    [session, onFirstMessage, debug],
   );
 
   const sendCompare = useCallback(
     async (
-      { display, api, modelId, prefs }: OutgoingMessage,
+      { display, api, effective }: OutgoingMessage,
       controller: AbortController,
       hadTurns: boolean,
     ) => {
       const compareId = `compare-${Date.now()}`;
+      debug("lab", "Compare ×2 start");
       setItems((prev) => [
         ...prev,
         { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
         {
           kind: "compare",
           id: compareId,
-          templateLabel: templateLabelForCompare(prefs),
-          baseline: { ...EMPTY_COMPARE_SLOT },
-          constrained: { ...EMPTY_COMPARE_SLOT },
+          templateLabel: compareTemplateLabel(effective),
+          baseline: { ...EMPTY_PROBE_SLOT },
+          constrained: { ...EMPTY_PROBE_SLOT },
         },
       ]);
       if (!hadTurns) onFirstMessage?.(display);
@@ -227,6 +283,7 @@ export function Chat({
             body as Parameters<typeof probeComplete>[1],
             controller.signal,
           );
+          debug("model", `×2 ${side}: ${result.model_id}`);
           patchCompareSide(compareId, side, {
             loading: false,
             error: null,
@@ -244,9 +301,11 @@ export function Chat({
             });
             return;
           }
+          const msg = e instanceof Error ? e.message : String(e);
+          debug("error", `×2 ${side}: ${msg}`);
           patchCompareSide(compareId, side, {
             loading: false,
-            error: e instanceof Error ? e.message : String(e),
+            error: msg,
             content: "",
             modelId: null,
           });
@@ -254,20 +313,153 @@ export function Chat({
       };
 
       await Promise.all([
-        runSide(
-          "baseline",
-          display,
-          {
-            model: modelId,
-            temperature: prefs.temperature,
-            reasoning: prefs.reasoning,
-          },
-        ),
-        runSide("constrained", api, prefsToProbeBody(prefs)),
+        runSide("baseline", display, {
+          model: effective.modelId,
+          temperature: effective.temperature,
+          reasoning: effective.reasoning,
+        }),
+        runSide("constrained", api, prefsToProbeBody(effective)),
       ]);
       setStatus("Сравнение готово.");
     },
-    [patchCompareSide, onFirstMessage],
+    [patchCompareSide, onFirstMessage, debug],
+  );
+
+  const sendLab = useCallback(
+    async (
+      { display, effective, labMeta }: OutgoingMessage,
+      controller: AbortController,
+      hadTurns: boolean,
+    ) => {
+      const labId = `lab-${Date.now()}`;
+      const golden = labMeta?.goldenAnswer ?? "";
+      const rubric = labMeta?.rubric ?? "";
+      debug("lab", `Lab ×4 start · task «${display.slice(0, 48)}…»`);
+      setLabExpanded((m) => ({ ...m, [labId]: true }));
+      setItems((prev) => [
+        ...prev,
+        { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
+        {
+          kind: "lab",
+          id: labId,
+          taskDisplay: display,
+          slots: emptyLabSlots(),
+          goldenAnswer: golden,
+          compact: false,
+        },
+      ]);
+      if (!hadTurns) onFirstMessage?.(display);
+      setStatus("Лаборатория: 4 стратегии…");
+
+      const probeOpts = {
+        model: effective.modelId,
+        temperature: effective.temperature,
+        reasoning: effective.reasoning,
+        sessionContext: effective.sessionContext,
+      };
+
+      const collected: Partial<
+        Record<PromptStrategyId, { content: string; modelId: string | null; latencyMs?: number; error: string | null }>
+      > = {};
+
+      await Promise.all(
+        PROMPT_STRATEGY_IDS.map(async (strategyId) => {
+          try {
+            debug("lab", `${strategyId}: старт`);
+            const result = await runPromptStrategy(
+              strategyId,
+              display,
+              probeOpts,
+              controller.signal,
+              (hint) => {
+                patchLabSlot(labId, strategyId, { statusHint: hint });
+                debug("lab", `${strategyId}: ${hint}`);
+              },
+              (expertSlots) => {
+                patchLabSlot(labId, strategyId, { expertSlots, loading: true });
+              },
+            );
+            debug("model", `${strategyId} → ${result.model_id} (${result.latencyMs ?? "?"}мс)`);
+            collected[strategyId] = {
+              content: result.content,
+              modelId: result.model_id,
+              latencyMs: result.latencyMs,
+              error: null,
+            };
+            patchLabSlot(labId, strategyId, {
+              loading: false,
+              error: null,
+              content: result.content,
+              modelId: result.model_id,
+              statusHint: null,
+              metaPrompt: result.metaPrompt ?? null,
+              expertSlots: result.expertSlots,
+              latencyMs: result.latencyMs,
+            });
+          } catch (e) {
+            if (controller.signal.aborted) {
+              patchLabSlot(labId, strategyId, {
+                loading: false,
+                aborted: true,
+                statusHint: null,
+              });
+              collected[strategyId] = { content: "", modelId: null, error: null };
+              return;
+            }
+            const msg = e instanceof Error ? e.message : String(e);
+            debug("error", `${strategyId}: ${msg}`);
+            collected[strategyId] = { content: "", modelId: null, error: msg };
+            patchLabSlot(labId, strategyId, {
+              loading: false,
+              error: msg,
+              content: "",
+              modelId: null,
+              statusHint: null,
+            });
+          }
+        }),
+      );
+
+      setStatus("Судья оценивает ответы…");
+      debug("judge", "запуск модели-судьи");
+
+      const answers = PROMPT_STRATEGY_IDS.map((id) => ({
+        id,
+        content: collected[id]?.content ?? "",
+      }));
+
+      const judge = await runLabJudge({
+        task: display,
+        goldenAnswer: golden,
+        rubric,
+        answers,
+        model: effective.modelId,
+        temperature: 0.2,
+        signal: controller.signal,
+      });
+      if (judge.error) debug("error", `судья: ${judge.error}`);
+      else debug("judge", `победитель=${judge.winnerId} · ${judge.rationale.slice(0, 80)}`);
+
+      patchLabJudge(labId, judge);
+
+      const payload: LabResultsPayload = {
+        labId,
+        task: display,
+        judge,
+        rows: PROMPT_STRATEGY_IDS.map((id) => ({
+          id,
+          modelId: collected[id]?.modelId ?? null,
+          words: countWords(collected[id]?.content ?? ""),
+          latencyMs: collected[id]?.latencyMs,
+          error: collected[id]?.error ?? null,
+        })),
+      };
+      setResultsPayload(payload);
+      setDebugOpen(false);
+      setResultsOpen(true);
+      setStatus("Лаборатория готова — смотрите «Результаты».");
+    },
+    [patchLabSlot, patchLabJudge, onFirstMessage, debug],
   );
 
   const send = useCallback(
@@ -283,7 +475,9 @@ export function Chat({
       const hadTurns = items.length > 0;
 
       try {
-        if (message.compareMode) {
+        if (message.chatMode === "lab") {
+          await sendLab(message, controller, hadTurns);
+        } else if (message.chatMode === "compare") {
           await sendCompare(message, controller, hadTurns);
         } else {
           await sendSingle(message, controller, hadTurns);
@@ -294,17 +488,27 @@ export function Chat({
         } else if (isNotFound(e)) {
           onStaleSession();
         } else {
-          setError(e instanceof Error ? e.message : String(e));
+          const msg = e instanceof Error ? e.message : String(e);
+          debug("error", msg);
+          setError(msg);
         }
       } finally {
         abort.current = null;
         setBusy(false);
       }
     },
-    [items.length, onStaleSession, sendCompare, sendSingle],
+    [items.length, onStaleSession, sendCompare, sendLab, sendSingle, debug],
   );
 
   const empty = !loading && items.length === 0;
+
+  const latestLabId = useMemo(() => {
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const it = items[i];
+      if (isLabTurn(it)) return it.id;
+    }
+    return null;
+  }, [items]);
 
   return (
     <>
@@ -320,8 +524,9 @@ export function Chat({
             <div className="empty">
               <h2>О чём поговорим?</h2>
               <p>
-                Выберите модель и режим «Один» или «Два рядом». Шаблон ответа — в настройках. У
-                каждого ответа видно, какая модель его дала.
+                Режим <strong>Один</strong> — чат. <strong>×2</strong> — шаблоны.{" "}
+                <strong>×4</strong> — лаборатория стратегий с судьёй. Пресеты задач — в настройках
+                чата. Отладка — плавающая кнопка Debug.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (
@@ -340,10 +545,38 @@ export function Chat({
 
           <div>
             {items.map((item, index) => {
-              if (isCompareTurn(item)) {
+              if (isLabTurn(item)) {
+                const expanded = labExpanded[item.id] ?? true;
                 return (
-                  <CompareTurnView key={item.id} turn={item} />
+                  <LabTurnView
+                    key={item.id}
+                    turn={item}
+                    expanded={expanded}
+                    onToggleExpand={() =>
+                      setLabExpanded((m) => ({ ...m, [item.id]: !expanded }))
+                    }
+                    onOpenResults={() => {
+                      if (resultsPayload?.labId !== item.id) {
+                        setResultsPayload({
+                          labId: item.id,
+                          task: item.taskDisplay,
+                          judge: item.judge ?? null,
+                          rows: PROMPT_STRATEGY_IDS.map((id) => ({
+                            id,
+                            modelId: item.slots[id].modelId,
+                            words: countWords(item.slots[id].content),
+                            latencyMs: item.slots[id].latencyMs,
+                            error: item.slots[id].error,
+                          })),
+                        });
+                      }
+                      openResults();
+                    }}
+                  />
                 );
+              }
+              if (isCompareTurn(item)) {
+                return <CompareTurnView key={item.id} turn={item} />;
               }
               const streaming =
                 busy && index === items.length - 1 && item.role === "assistant";
@@ -366,12 +599,36 @@ export function Chat({
       )}
 
       <Composer
+        sessionId={session.id}
         onSend={(message) => void send(message)}
         onStop={() => abort.current?.abort()}
         busy={busy}
         maxChars={MAX_MESSAGE_CHARS}
         seed={seed}
       />
+
+      <div className="float-dock">
+        {/* Results above Debug; mutex via openResults / openDebug. */}
+        <LabResultsFloat
+          open={resultsOpen}
+          payload={resultsPayload}
+          onClose={() => setResultsOpen(false)}
+          onExpand={openResults}
+          onJumpToLab={
+            latestLabId
+              ? () => {
+                  document.getElementById(`lab-${latestLabId}`)?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }
+              : undefined
+          }
+        />
+        <DebugFloat open={debugOpen} onOpenChange={openDebug} />
+      </div>
     </>
   );
 }
+
+type LabTurnJudge = NonNullable<import("../types").LabTurn["judge"]>;

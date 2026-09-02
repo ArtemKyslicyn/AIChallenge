@@ -41,13 +41,12 @@ Cheaper alternative and other providers: comments in `.env.example`, details in 
 ## ModelRouter
 
 - Ordered chain: env `LLM_MODEL_CHAIN` only (no YAML chain file — one source of truth)
-- Failover on 429 / quota / payment-required / timeout → next model
+- Failover on 429 / quota / payment-required / timeout / **404 (missing model)** / 5xx / transport blips → next model
 - **Failover only before the first token.** After a token has been streamed, a provider failure raises
   `LLMStreamAbortedError`; the caller persists the partial text + `model_id` and ends with `event: error`.
   Never switch models mid-answer — it splices two different completions.
-- Mark exhausted models with TTL (in-process v1; Redis later behind same API); the clock is injectable so
-  TTL expiration is testable without sleeping
-- Scenario `preferred_model: auto` uses router; explicit id pins when possible
+- Optional second provider tier (`LLM_FALLBACK_*`): tried after the primary chain is exhausted (or 401 on the tier)
+- API keys are matched to the host (`OPENROUTER_API_KEY` only for openrouter.ai, `ROUTERAI_KEY` for routerai.ru)
 
 ## Client visibility (required)
 

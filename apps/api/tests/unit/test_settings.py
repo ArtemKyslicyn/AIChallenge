@@ -39,6 +39,34 @@ def test_fake_llm_enabled_when_key_missing() -> None:
         _settings(llm_api_key="primary", routerai_key="alias").resolved_llm_api_key() == "primary"
     )
     assert _settings(llm_api_key="", openrouter_api_key="or-key").resolved_llm_api_key() == "or-key"
+    # Host decides which named key wins when both are present.
+    both = dict(llm_api_key="", routerai_key="ra-key", openrouter_api_key="or-key")
+    assert (
+        _settings(
+            **both, llm_base_url="https://routerai.ru/api/v1"
+        ).resolved_llm_api_key()
+        == "ra-key"
+    )
+    assert (
+        _settings(
+            **both, llm_base_url="https://openrouter.ai/api/v1"
+        ).resolved_llm_api_key()
+        == "or-key"
+    )
+    assert (
+        _settings(
+            **both,
+            llm_fallback_base_url="https://openrouter.ai/api/v1",
+        ).resolved_fallback_api_key()
+        == "or-key"
+    )
+    assert (
+        _settings(
+            **both,
+            llm_fallback_base_url="https://routerai.ru/api/v1",
+        ).resolved_fallback_api_key()
+        == "ra-key"
+    )
 
 
 def test_scenarios_path_defaults_into_repo_configs() -> None:

@@ -12,6 +12,7 @@ import {
 } from "./api/client";
 import { Chat } from "./components/Chat";
 import { SessionSidebar } from "./components/SessionSidebar";
+import { DebugProvider } from "./debug/DebugContext";
 
 export default function App() {
   const [session, setSession] = useState<SessionCredentials | null>(null);
@@ -99,6 +100,7 @@ export default function App() {
   );
 
   return (
+    <DebugProvider>
     <div className="app">
       <SessionSidebar
         items={history}
@@ -159,5 +161,6 @@ export default function App() {
         )}
       </div>
     </div>
+    </DebugProvider>
   );
 }

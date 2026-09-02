@@ -307,8 +307,14 @@ async def send_user_message_and_stream(
             await finalize(None)
             yield ErrorEvent(message=ERROR_NO_MODEL)
             return
-        except LLMProviderError:
-            logger.warning("provider failed session_id=%s", session.id)
+        except LLMProviderError as exc:
+            logger.warning(
+                "provider failed session_id=%s status=%s kind=%s model_id=%s",
+                session.id,
+                exc.status,
+                exc.kind,
+                exc.model_id,
+            )
             await finalize(resolved_model)
             yield ErrorEvent(message=ERROR_GENERIC)
             return

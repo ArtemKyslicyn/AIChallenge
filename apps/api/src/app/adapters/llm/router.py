@@ -21,13 +21,14 @@ logger = logging.getLogger(__name__)
 
 #: Upstream statuses that mean "this model is unavailable right now", not
 #: "this request is wrong": rate limit, out of credit, upstream timeout,
-#: region block, temporary outage.
+#: region block, temporary outage, missing/retired free model id (404),
+#: and common gateway blips (5xx).
 #:
 #: 401 is deliberately absent. A rejected credential will not become valid on
 #: the next model, so retrying only burns the whole chain, marks every model
 #: exhausted for the TTL, and turns a plain authentication failure into
 #: "no model is available" — which sends whoever debugs it the wrong way.
-RETRYABLE_STATUSES = frozenset({402, 403, 408, 429, 503})
+RETRYABLE_STATUSES = frozenset({402, 403, 404, 408, 429, 500, 502, 503, 504})
 
 #: A rejected credential disqualifies a whole *tier*, not one model: every model
 #: in a chain shares one key. So 401 is fatal inside a chain (above) but is a
@@ -35,18 +36,19 @@ RETRYABLE_STATUSES = frozenset({402, 403, 408, 429, 503})
 TIER_FATAL_STATUSES = frozenset({401})
 #: "empty" is retryable on purpose: a model that streams only chain-of-thought
 #: and no answer has shown the reader nothing, so moving on is still safe.
-RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout", "empty"})
+#: "transport" covers proxy/connect blips before any token is shown.
+RETRYABLE_KINDS = frozenset({"quota", "rate_limit", "timeout", "empty", "transport"})
 
 DEFAULT_EXHAUSTED_TTL_SECONDS = 300
 
 #: How many models one request may try before giving up. Without a cap a long
 #: free chain turns a single message into minutes of silent retrying.
-DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_MAX_ATTEMPTS = 5
 
 #: How long to wait for a model to produce its *first* answer token. Reasoning
 #: models can think for a long time and then run out of budget without writing
 #: anything; that must cost one bounded wait, not the whole request.
-DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS = 20.0
+DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS = 25.0
 
 
 def _is_retryable(exc: LLMProviderError) -> bool:
@@ -77,9 +79,23 @@ class ModelRouter:
         self._first_token_timeout = first_token_timeout_seconds
         self._exhausted: dict[str, float] = {}
 
-    def _mark_exhausted(self, model: str) -> None:
+    def _mark_exhausted(self, model: str, *, reason: str = "") -> None:
         self._exhausted[model] = self._now() + self._ttl
-        logger.warning("model exhausted model_id=%s ttl_seconds=%s", model, self._ttl)
+        if reason:
+            logger.warning(
+                "model exhausted model_id=%s ttl_seconds=%s reason=%s",
+                model,
+                self._ttl,
+                reason,
+            )
+        else:
+            logger.warning("model exhausted model_id=%s ttl_seconds=%s", model, self._ttl)
+
+    @staticmethod
+    def _fail_reason(exc: LLMProviderError) -> str:
+        if exc.status is not None:
+            return f"http_{exc.status}"
+        return exc.kind or "unknown"
 
     def _candidates(self, preferred_model: str = AUTO_MODEL) -> list[str]:
         """Chain order, with an explicit ``preferred_model`` pinned first.
@@ -125,7 +141,7 @@ class ModelRouter:
             except LLMProviderError as exc:
                 if not _is_retryable(exc):
                     raise
-                self._mark_exhausted(model)
+                self._mark_exhausted(model, reason=self._fail_reason(exc))
                 last_error = exc
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
 
@@ -170,7 +186,7 @@ class ModelRouter:
                     ) from exc
                 if not _is_retryable(exc):
                     raise
-                self._mark_exhausted(model)
+                self._mark_exhausted(model, reason=self._fail_reason(exc))
                 last_error = exc
                 continue
             finally:
