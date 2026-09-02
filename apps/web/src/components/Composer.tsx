@@ -1,37 +1,33 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { listModels, type ModelCatalogItemDto } from "../api/client";
+import { listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
 import {
-  activeTemplateSummary,
-  buildOutgoingMessage,
-  CUSTOM_RULES_MAX_CHARS,
-  loadGenerationPrefs,
-  previewResponseRules,
-  responseRulesActive,
-  saveGenerationPrefs,
-  type GenerationPrefs,
-} from "../generationPrefs";
-import {
-  CUSTOM_RULE_EXAMPLES,
-  PROMPT_CONTROLS,
-  RESPONSE_TEMPLATES,
-  type PromptControlId,
-  type ResponseTemplateId,
-} from "../promptControls";
+  initSessionChatPrefs,
+  loadGlobalChatPrefs,
+  mergeChatPrefs,
+  saveGlobalChatPrefs,
+  saveSessionChatPrefs,
+  type ChatMode,
+  type EffectiveChatPrefs,
+  type GlobalChatPrefs,
+  type SessionChatPrefs,
+} from "../chatPrefs";
+import { buildOutgoingMessage } from "../chatPrefs/outgoing";
+import { activeTemplateSummary } from "../generationPrefs";
+import { hasResponseRules } from "../promptControls";
+import { ComposerSettings } from "./ComposerSettings";
 
 export interface OutgoingMessage {
-  /** Shown in the thread — the user's own wording. */
   display: string;
-  /** Sent to the API — may include response-shape rules. */
   api: string;
-  /** Model pin for this reply (`auto` = router chain). */
   modelId: string;
-  /** Side-by-side compare in the thread (probe, not saved as chat rows). */
-  compareMode: boolean;
-  prefs: GenerationPrefs;
+  chatMode: ChatMode;
+  effective: EffectiveChatPrefs;
+  labMeta?: { goldenAnswer?: string; rubric?: string; presetId?: string };
 }
 
 interface Props {
+  sessionId: string;
   onSend: (message: OutgoingMessage) => void;
   onStop: () => void;
   busy: boolean;
@@ -41,12 +37,27 @@ interface Props {
 
 const MAX_HEIGHT = 200;
 
-export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
+const LAB_SUGGESTION =
+  "В магазине акция: при покупке от 3 товаров скидка 10% на каждый. Товар стоит 400 ₽. Клиент покупает ровно 4 штуки. Сколько заплатит? Покажите расчёт.";
+
+export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Props) {
   const [value, setValue] = useState("");
-  const [prefs, setPrefs] = useState<GenerationPrefs>(() => loadGenerationPrefs());
+  const [global, setGlobal] = useState<GlobalChatPrefs>(() => loadGlobalChatPrefs());
+  const [session, setSession] = useState<SessionChatPrefs>(() =>
+    initSessionChatPrefs(sessionId, loadGlobalChatPrefs().defaultChatMode),
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"global" | "session">("global");
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
+  const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
+  const [labPresetId, setLabPresetId] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setSession(initSessionChatPrefs(sessionId, global.defaultChatMode));
+  }, [sessionId, global.defaultChatMode]);
+
+  const effective = useMemo(() => mergeChatPrefs(global, session), [global, session]);
 
   useLayoutEffect(() => {
     if (seed) setValue(seed.text);
@@ -61,62 +72,99 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
 
   useEffect(() => {
     listModels().then(setModels).catch(() => setModels([]));
+    listLabPresets().then(setLabPresets).catch(() => setLabPresets([]));
   }, []);
 
-  const patchPrefs = useCallback((patch: Partial<GenerationPrefs>) => {
-    setPrefs((prev) => {
+  const patchGlobal = useCallback((patch: Partial<GlobalChatPrefs>) => {
+    setGlobal((prev) => {
       const next = { ...prev, ...patch };
-      saveGenerationPrefs(next);
+      saveGlobalChatPrefs(next);
       return next;
     });
   }, []);
 
-  const toggleControl = (id: PromptControlId) => {
-    patchPrefs({
-      responseTemplateId: "custom",
-      promptControls: {
-        ...prefs.promptControls,
-        [id]: !prefs.promptControls[id],
-      },
-    });
-  };
+  const patchSession = useCallback(
+    (patch: Partial<SessionChatPrefs>) => {
+      setSession((prev) => {
+        const next = { ...prev, ...patch };
+        saveSessionChatPrefs(sessionId, next);
+        return next;
+      });
+    },
+    [sessionId],
+  );
+
+  const setChatMode = useCallback(
+    (chatMode: ChatMode) => patchSession({ chatMode }),
+    [patchSession],
+  );
 
   const trimmed = value.trim();
-  const outgoing = buildOutgoingMessage(trimmed, prefs);
+  const manualControls =
+    session.promptControlsOverride ?? global.promptControls;
+  const outgoing = buildOutgoingMessage(trimmed, effective, global, manualControls);
   const tooLong = outgoing.api.length > maxChars;
   const canSend = Boolean(trimmed) && !busy && !tooLong;
-  const templateSummary = activeTemplateSummary(prefs);
-  const rulesPreview = previewResponseRules(
-    prefs.responseTemplateId,
-    prefs.promptControls,
-    prefs.customRulesText,
-  );
-  const customRulesLen = prefs.customRulesText.length;
+  const templateSummary = activeTemplateSummary({
+    responseTemplateId: effective.responseTemplateId,
+    promptControls: effective.promptControls,
+    customRulesText: effective.customRulesText,
+  });
   const rulesMissing =
-    prefs.compareMode &&
-    prefs.responseTemplateId === "custom" &&
-    !responseRulesActive(prefs);
-  const selectedModel = models.find((m) => m.id === prefs.modelId);
-  const reasoningAllowed = selectedModel?.capabilities.reasoning ?? true;
+    effective.chatMode === "compare" &&
+    effective.responseTemplateId === "custom" &&
+    !hasResponseRules(
+      effective.responseTemplateId,
+      effective.promptControls,
+      effective.customRulesText,
+    );
+
   const modelOptions =
     models.length > 0
       ? models
       : [{ id: "auto", label: "Авто (цепочка)", capabilities: { reasoning: false } }];
 
-  const appendExample = (text: string) => {
-    patchPrefs({
-      responseTemplateId: "custom",
-      customRulesText: prefs.customRulesText.trim()
-        ? `${prefs.customRulesText.trim()}\n${text}`
-        : text,
-    });
-  };
+  const selectedModel = modelOptions.find((m) => m.id === effective.modelId);
+  const reasoningAllowed = selectedModel?.capabilities.reasoning ?? true;
+  const globalModelLabel =
+    modelOptions.find((m) => m.id === global.modelId)?.label ?? global.modelId;
 
   function submit() {
     if (!canSend) return;
-    onSend(outgoing);
+    const preset = labPresets.find((p) => p.id === labPresetId);
+    onSend({
+      display: outgoing.display,
+      api: outgoing.api,
+      modelId: outgoing.modelId,
+      chatMode: effective.chatMode,
+      effective,
+      labMeta:
+        effective.chatMode === "lab"
+          ? {
+              goldenAnswer: preset?.golden_answer,
+              rubric: preset?.rubric,
+              presetId: preset?.id,
+            }
+          : undefined,
+    });
     setValue("");
   }
+
+  const modeHint =
+    effective.chatMode === "lab"
+      ? "Четыре стратегии промпта параллельно"
+      : effective.chatMode === "compare"
+        ? "Два ответа: без шаблона и с шаблоном"
+        : templateSummary
+          ? `Шаблон: ${templateSummary}`
+          : null;
+
+  const placeholder =
+    effective.chatMode === "lab"
+      ? "Задача для лаборатории (логика, расчёт, анализ)…"
+      : effective.chatMode === "compare"
+        ? "Сообщение для сравнения двух ответов…"
+        : "Напишите сообщение…";
 
   return (
     <div className="composer-wrap">
@@ -124,7 +172,7 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
         <p className="alert" role="alert">
           <strong>Слишком длинно.</strong> {outgoing.api.length.toLocaleString()} из{" "}
           {maxChars.toLocaleString()} символов
-          {templateSummary ? " (с учётом шаблона)" : ""}.
+          {templateSummary || effective.sessionContext ? " (с учётом правил и контекста)" : ""}.
         </p>
       )}
 
@@ -134,10 +182,14 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
             <span className="composer-options-label">Модель</span>
             <select
               className="composer-model-select"
-              value={prefs.modelId}
-              onChange={(e) => patchPrefs({ modelId: e.target.value })}
+              value={session.modelIdOverride}
+              onChange={(e) => {
+                patchSession({ modelIdOverride: e.target.value });
+                if (e.target.value) setSettingsTab("session");
+              }}
               aria-label="Модель ответа"
             >
+              <option value="">Общие: {globalModelLabel}</option>
               {modelOptions.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
@@ -151,20 +203,63 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
             <button
               type="button"
               className="mode-chip"
-              aria-pressed={!prefs.compareMode}
-              onClick={() => patchPrefs({ compareMode: false })}
+              aria-pressed={effective.chatMode === "single"}
+              onClick={() => setChatMode("single")}
             >
               Один
             </button>
             <button
               type="button"
               className="mode-chip"
-              aria-pressed={prefs.compareMode}
-              onClick={() => patchPrefs({ compareMode: true })}
+              aria-pressed={effective.chatMode === "compare"}
+              onClick={() => setChatMode("compare")}
             >
-              Два рядом
+              ×2
+            </button>
+            <button
+              type="button"
+              className="mode-chip mode-chip-lab"
+              aria-pressed={effective.chatMode === "lab"}
+              onClick={() => setChatMode("lab")}
+              title="Лаборатория: 4 стратегии промпта"
+            >
+              ×4
             </button>
           </div>
+
+          {effective.chatMode === "lab" && labPresets.length > 0 && (
+            <label className="composer-model-picker composer-lab-preset">
+              <span className="composer-options-label">Пресет</span>
+              <select
+                className="composer-model-select"
+                value={labPresetId}
+                aria-label="Пресет задачи лаборатории"
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setLabPresetId(id);
+                  const preset = labPresets.find((p) => p.id === id);
+                  if (preset) setValue(preset.task);
+                }}
+              >
+                <option value="">Своя задача</option>
+                {labPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {effective.chatMode === "lab" && !trimmed && !labPresetId && (
+            <button
+              type="button"
+              className="ghost-button composer-lab-sample"
+              onClick={() => setValue(LAB_SUGGESTION)}
+            >
+              Пример задачи
+            </button>
+          )}
 
           <button
             type="button"
@@ -176,141 +271,29 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
           </button>
         </div>
 
-        {(templateSummary || prefs.compareMode || rulesMissing) && (
+        {(modeHint || rulesMissing || effective.sessionContext) && (
           <p className={`composer-options-hint${rulesMissing ? " composer-options-warn" : ""}`}>
             {rulesMissing
-              ? "Режим «Два рядом»: добавьте текст правил или быстрые дополнения — иначе ответы совпадут."
-              : prefs.compareMode
-                ? "Два ответа рядом: без шаблона и с шаблоном"
-                : "Следующее сообщение"}
-            {!rulesMissing && templateSummary ? `: ${templateSummary}` : ""}
-            {!rulesMissing && prefs.compareMode && !templateSummary ? " · шаблон «Свободный»" : ""}
+              ? "Режим «×2»: задайте правила шаблона — иначе ответы совпадут."
+              : modeHint}
+            {effective.sessionContext && !rulesMissing
+              ? ` · контекст чата (${effective.sessionContext.length} симв.)`
+              : ""}
           </p>
         )}
 
         {settingsOpen && (
-          <div className="composer-more">
-            <p className="composer-more-lead">
-              Шаблон задаёт формат ответа. В режиме «Два рядом» сравниваются свободный ответ и ответ
-              с выбранным шаблоном.
-            </p>
-
-            <label className="composer-field">
-              <span>Шаблон ответа</span>
-              <select
-                value={prefs.responseTemplateId}
-                onChange={(e) =>
-                  patchPrefs({ responseTemplateId: e.target.value as ResponseTemplateId })
-                }
-              >
-                {RESPONSE_TEMPLATES.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-              <span className="composer-field-hint">
-                {RESPONSE_TEMPLATES.find((t) => t.id === prefs.responseTemplateId)?.hint}
-              </span>
-            </label>
-
-            {prefs.responseTemplateId === "custom" && (
-              <div className="composer-custom-rules">
-                <label className="composer-field">
-                  <span className="composer-field-row">
-                    <span>Правила для модели</span>
-                    <span className="composer-char-count" aria-live="polite">
-                      {customRulesLen.toLocaleString()} / {CUSTOM_RULES_MAX_CHARS.toLocaleString()}
-                    </span>
-                  </span>
-                  <textarea
-                    className="composer-rules-input"
-                    rows={3}
-                    value={prefs.customRulesText}
-                    maxLength={CUSTOM_RULES_MAX_CHARS}
-                    placeholder="Например: ответь тремя пунктами; без вступления; закончи строкой «Готово»."
-                    aria-describedby="custom-rules-hint"
-                    onChange={(e) =>
-                      patchPrefs({
-                        responseTemplateId: "custom",
-                        customRulesText: e.target.value,
-                      })
-                    }
-                  />
-                  <span id="custom-rules-hint" className="composer-field-hint">
-                    Этот текст увидит модель после вашего вопроса. Можно комбинировать с быстрыми
-                    дополнениями ниже.
-                  </span>
-                </label>
-
-                <div className="composer-custom-extras">
-                  <span className="composer-options-label">Быстрые дополнения</span>
-                  <div className="composer-options-chips" role="group" aria-label="Быстрые правила">
-                    {PROMPT_CONTROLS.map((control) => (
-                      <button
-                        key={control.id}
-                        type="button"
-                        className="control-chip"
-                        aria-pressed={prefs.promptControls[control.id]}
-                        title={control.hint}
-                        onClick={() => toggleControl(control.id)}
-                      >
-                        {control.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="composer-custom-extras">
-                  <span className="composer-options-label">Примеры фраз</span>
-                  <div className="composer-options-chips" role="group" aria-label="Примеры правил">
-                    {CUSTOM_RULE_EXAMPLES.map((example) => (
-                      <button
-                        key={example.label}
-                        type="button"
-                        className="control-chip control-chip-muted"
-                        title={example.text}
-                        onClick={() => appendExample(example.text)}
-                      >
-                        + {example.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {rulesPreview && (
-                  <details className="composer-rules-preview">
-                    <summary>Как увидит модель</summary>
-                    <pre>{rulesPreview}</pre>
-                  </details>
-                )}
-              </div>
-            )}
-
-            <label className="composer-field">
-              <span>
-                Температура <strong>{prefs.temperature.toFixed(1)}</strong>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.1}
-                value={prefs.temperature}
-                onChange={(e) => patchPrefs({ temperature: Number(e.target.value) })}
-              />
-            </label>
-
-            <label className="composer-toggle">
-              <input
-                type="checkbox"
-                checked={prefs.reasoning}
-                disabled={!reasoningAllowed}
-                onChange={(e) => patchPrefs({ reasoning: e.target.checked })}
-              />
-              <span>Расширенное рассуждение{!reasoningAllowed ? " (недоступно)" : ""}</span>
-            </label>
-          </div>
+          <ComposerSettings
+            tab={settingsTab}
+            onTabChange={setSettingsTab}
+            global={global}
+            session={session}
+            onPatchGlobal={patchGlobal}
+            onPatchSession={patchSession}
+            chatMode={effective.chatMode}
+            reasoningAllowed={reasoningAllowed}
+            globalModelLabel={globalModelLabel}
+          />
         )}
 
         <form
@@ -331,11 +314,7 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
                 submit();
               }
             }}
-            placeholder={
-              prefs.compareMode
-                ? "Сообщение для сравнения двух ответов…"
-                : "Напишите сообщение…"
-            }
+            placeholder={placeholder}
             aria-label="Сообщение"
           />
 
@@ -377,6 +356,7 @@ export function Composer({ onSend, onStop, busy, maxChars, seed }: Props) {
 
       <p className="hint">
         <kbd>Enter</kbd> — отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка
+        {effective.chatMode === "lab" ? " · ×4 не сохраняется в истории сервера" : ""}
       </p>
     </div>
   );

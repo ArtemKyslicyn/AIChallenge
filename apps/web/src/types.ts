@@ -1,43 +1,66 @@
+import type { ExpertSlotResult } from "./strategies/runStrategy";
+import type { JudgeScorecard } from "./strategies/judge";
+import type { PromptStrategyId } from "./strategies/types";
+
 export interface Turn {
   id: string;
   role: "user" | "assistant";
   content: string;
-  /** Which model produced this reply. Null until the model event arrives. */
   modelId: string | null;
-  /** The answer was cut short — by the provider or by the reader stopping it. */
   failed?: boolean;
 }
 
-export interface CompareSlotState {
+export interface ProbeSlotState {
   loading: boolean;
   error: string | null;
   content: string;
   modelId: string | null;
   aborted?: boolean;
+  statusHint?: string | null;
+  metaPrompt?: string | null;
+  expertSlots?: ExpertSlotResult[];
+  latencyMs?: number;
 }
 
-/** Side-by-side probe pair in the thread (not persisted on the server). */
+export type CompareSlotState = ProbeSlotState;
+
 export interface CompareTurn {
   kind: "compare";
   id: string;
   templateLabel: string;
-  baseline: CompareSlotState;
-  constrained: CompareSlotState;
+  baseline: ProbeSlotState;
+  constrained: ProbeSlotState;
 }
 
-export type ThreadItem = Turn | CompareTurn;
+export interface LabTurn {
+  kind: "lab";
+  id: string;
+  taskDisplay: string;
+  slots: Record<PromptStrategyId, ProbeSlotState>;
+  judge?: JudgeScorecard | null;
+  goldenAnswer?: string;
+  compact?: boolean;
+}
+
+export type ThreadItem = Turn | CompareTurn | LabTurn;
 
 export function isCompareTurn(item: ThreadItem): item is CompareTurn {
   return "kind" in item && item.kind === "compare";
 }
 
-export function isTurn(item: ThreadItem): item is Turn {
-  return !isCompareTurn(item);
+export function isLabTurn(item: ThreadItem): item is LabTurn {
+  return "kind" in item && item.kind === "lab";
 }
 
-export const EMPTY_COMPARE_SLOT: CompareSlotState = {
+export function isTurn(item: ThreadItem): item is Turn {
+  return !isCompareTurn(item) && !isLabTurn(item);
+}
+
+export const EMPTY_PROBE_SLOT: ProbeSlotState = {
   loading: true,
   error: null,
   content: "",
   modelId: null,
 };
+
+export const EMPTY_COMPARE_SLOT = EMPTY_PROBE_SLOT;

@@ -60,6 +60,14 @@ def detect_media_intent(text: str) -> list[ToolCallRequest]:
     clean = " ".join((text or "").split())
     if not clean:
         return []
+    # Composer may append response-template rules; keep only the user wording.
+    for marker in ("\n\nУсловие завершения:", "\nУсловие завершения:", " — Условие завершения:"):
+        if marker in clean:
+            clean = clean.split(marker, 1)[0].strip()
+    for marker in ("AI Challenge —", "Как отвечать"):
+        if marker in clean and clean.index(marker) > 8:
+            # Template was appended after the user prompt.
+            clean = clean.split(marker, 1)[0].strip(" —-\n")
     calls: list[ToolCallRequest] = []
     prompt = _PROMPT_STRIP.sub("", clean).strip(" .,!:;—-") or clean
     if _VIDEO_HINT.search(clean):
@@ -179,6 +187,14 @@ async def execute_media_tool(
             provider_label=None,
             markdown="",
             error=str(exc),
+        )
+    except OSError as exc:
+        return ExecutedTool(
+            call=call,
+            media_url=None,
+            provider_label=None,
+            markdown="",
+            error=f"Не удалось сохранить медиа: {exc}",
         )
 
 

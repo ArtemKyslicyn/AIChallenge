@@ -38,6 +38,18 @@ async def test_tiered_router_falls_back_to_second_provider() -> None:
     assert result.content == "paid"
 
 
+async def test_tiered_router_falls_back_after_primary_404s() -> None:
+    primary = ModelRouter(
+        FlakyLLMProvider(fail_models={"free-a", "free-b"}, fail_status=404),
+        ["free-a", "free-b"],
+    )
+    fallback = ModelRouter(FlakyLLMProvider(ok_text="paid"), ["paid-a"])
+    router = TieredModelRouter([primary, fallback])
+    chunks = [c async for c in router.stream_chat(USER_TURN)]
+    assert "".join(c.text for c in chunks) == "paid"
+    assert {c.model_id for c in chunks} == {"paid-a"}
+
+
 async def test_tiered_router_raises_when_all_tiers_exhausted() -> None:
     primary = ModelRouter(
         FlakyLLMProvider(fail_models={"free-a"}, fail_status=429),

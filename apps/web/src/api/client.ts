@@ -495,6 +495,21 @@ export function listModels(): Promise<ModelCatalogItemDto[]> {
   return request<ModelCatalogItemDto[]>("/llm/models");
 }
 
+export interface LabPresetDto {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: string;
+  task: string;
+  golden_answer: string;
+  golden_hint: string;
+  rubric: string;
+}
+
+export function listLabPresets(): Promise<LabPresetDto[]> {
+  return request<LabPresetDto[]>("/lab/presets");
+}
+
 export function probeComplete(
   prompt: string,
   options: { model: string } & ProbeGenerationDto,

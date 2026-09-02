@@ -5,42 +5,62 @@
 - Уже в `.gitignore` (и `.cursorignore`) — не попадёт в коммит и не должен читаться агентом.
 - Шаблон без секретов: `.env.example` (в git).
 
-## Заполнить ключ (RouterAI — по умолчанию)
+## Заполнить ключ (рекомендуемый prod: free-first)
 
-1. Открой `.env`
-2. Выставь:
+Цель: стабильность ≥90% при минимуме оплаты — OpenRouter `:free` → дешёвые платные OR → RouterAI.
 
 ```env
-LLM_BASE_URL=https://routerai.ru/api/v1
-LLM_API_KEY=сюда_ключ_routerai
-# или только ROUTERAI_KEY=... — API подхватит, если LLM_API_KEY пуст
-ROUTERAI_KEY=
-LLM_MODEL_CHAIN=deepseek/deepseek-v4-flash,qwen/qwen3-235b-a22b-2507,deepseek/deepseek-v3.2,google/gemini-2.5-flash
+LLM_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=сюда_ключ_openrouter
+LLM_HTTP_PROXY=http://llm-proxy:11081
+LLM_MODEL_CHAIN=openrouter/free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,google/gemini-2.5-flash,deepseek/deepseek-chat
+ROUTERAI_KEY=сюда_ключ_routerai
+LLM_FALLBACK_BASE_URL=https://routerai.ru/api/v1
+LLM_FALLBACK_MODEL_CHAIN=deepseek/deepseek-v4-flash,mistralai/mistral-nemo
+LLM_MAX_ATTEMPTS=4
+LLM_FIRST_TOKEN_TIMEOUT_SECONDS=18
+LLM_EXHAUSTED_TTL_SECONDS=180
 USE_FAKE_LLM=false
 ```
 
-### Цепочка по умолчанию (баланс ум / цена)
+### Цепочка (free → cheap → RA)
 
-| Порядок | Model id | Зачем |
-|--------:|----------|--------|
-| 1 | `deepseek/deepseek-v4-flash` | основной, дёшево и заметно умнее tiny-моделей |
-| 2 | `qwen/qwen3-235b-a22b-2507` | крупный MoE, failover |
-| 3 | `deepseek/deepseek-v3.2` | стабильный mid-tier |
-| 4 | `google/gemini-2.5-flash` | сильный запасной |
+| Порядок | Tier | Model | Зачем |
+|--------:|------|-------|--------|
+| 1–3 | OR primary | `openrouter/free`, nemotron-super:free, gemma:free | \$0 |
+| 4–5 | OR primary | `gemini-2.5-flash`, `deepseek-chat` | дешёвый paid, добирает до ≥90% |
+| 6–7 | RA fallback | `deepseek-v4-flash`, `mistral-nemo` | якорь стабильности |
 
-Каталог и цены: [routerai.ru](https://routerai.ru). Бесплатных chat-моделей у RouterAI нет — только pay-as-you-go в ₽.
+Каталог free: [openrouter.ai/collections/free-models](https://openrouter.ai/collections/free-models). RouterAI: [routerai.ru](https://routerai.ru).
 
-При `429` / quota / payment-required роутер уходит на следующий id **до первого токена**.
+При `429` / quota / 404 / timeout роутер уходит на следующий id **до первого токена**.
 
-### Дешёвая альтернатива (если нужен минимум ₽)
+### Дешёвая альтернатива только RouterAI
 
 ```env
+LLM_BASE_URL=https://routerai.ru/api/v1
+ROUTERAI_KEY=...
+LLM_HTTP_PROXY=
 LLM_MODEL_CHAIN=mistralai/mistral-nemo,meta-llama/llama-3.1-8b-instruct,deepseek/deepseek-v4-flash
 ```
 
-Другие провайдеры (один за раз): OpenRouter `:free` (через sing-box на VPS) или прямой DeepSeek — см. `.env.example`.
+Другие варианты — см. `.env.example`.
 
-### OpenRouter free через sing-box (если с VPS 403)
+### Рекомендуемый prod: OpenRouter free-first + RouterAI fallback
+
+Primary — free и дешёвые платные через proxy. Fallback — RouterAI flash/nemo.
+
+```env
+LLM_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=...
+LLM_HTTP_PROXY=http://llm-proxy:11081
+LLM_MODEL_CHAIN=openrouter/free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,google/gemini-2.5-flash,deepseek/deepseek-chat
+LLM_FALLBACK_BASE_URL=https://routerai.ru/api/v1
+LLM_FALLBACK_MODEL_CHAIN=deepseek/deepseek-v4-flash,mistralai/mistral-nemo
+ROUTERAI_KEY=...
+```
+
+### OpenRouter как primary (если с VPS 403 — нужен proxy)
 
 На проде настроен `llm-proxy` в Docker → sing-box mixed на хосте. Проверено: OpenRouter **200** через прокси (без 403).
 
@@ -53,10 +73,10 @@ LLM_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=ключ_openrouter
 LLM_API_KEY=
 LLM_HTTP_PROXY=http://llm-proxy:11081
-LLM_MODEL_CHAIN=nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-3.5-lightning:free,minimax/minimax-m3:free,thinkingmachines/inkling:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,z-ai/glm-5.2:free,minimax/minimax-m2.7:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,poolside/laguna-s-2.1:free,cohere/north-mini-code:free,inclusionai/ling-3.0-flash-fin:free,openrouter/free,liquid/lfm-2.5-2.6b:free
+LLM_MODEL_CHAIN=nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-3.5-lightning:free,minimax/minimax-m3:free,thinkingmachines/inkling:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,z-ai/glm-5.2:free,minimax/minimax-m2.7:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,poolside/laguna-s-2.1:free,cohere/north-mini-code:free,inclusionai/ling-3.0-flash-fin:free,openrouter/free,liquid/lfm-2.5-2.6b:free,google/gemini-2.5-flash,deepseek/deepseek-chat,openai/gpt-4o-mini
 LLM_FALLBACK_BASE_URL=https://routerai.ru/api/v1
-LLM_FALLBACK_MODEL_CHAIN=deepseek/deepseek-v4-flash,qwen/qwen3-235b-a22b-2507,deepseek/deepseek-v3.2,google/gemini-2.5-flash
-ROUTERAI_KEY=...   # fallback tier после исчерпания всех :free
+LLM_FALLBACK_MODEL_CHAIN=mistralai/mistral-nemo,meta-llama/llama-3.1-8b-instruct,deepseek/deepseek-v4-flash
+ROUTERAI_KEY=...   # fallback: дешёвые RouterAI после OpenRouter
 ```
 
 4. `docker compose -f docker-compose.prod.yml up -d api --force-recreate`

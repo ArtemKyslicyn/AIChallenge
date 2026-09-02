@@ -38,6 +38,19 @@ def test_detect_video_intent() -> None:
     assert calls[0].name == VIDEO_TOOL_NAME
 
 
+def test_detect_strips_response_template() -> None:
+    wrapped = (
+        "нарисуй рыжего кота\n\n"
+        "AI Challenge — Как отвечать — Условие завершения: ответь коротко"
+    )
+    calls = detect_media_intent(wrapped)
+    assert len(calls) == 1
+    prompt = calls[0].arguments["prompt"].casefold()
+    assert "кот" in prompt or "рыж" in prompt
+    assert "условие" not in prompt
+    assert "challenge" not in prompt
+
+
 def test_soft_media_gate() -> None:
     assert maybe_needs_media_tools("нарисуй закат")
     assert not maybe_needs_media_tools("сколько будет 2+2?")
