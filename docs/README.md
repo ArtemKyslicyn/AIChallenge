@@ -26,12 +26,18 @@
 | [../.env.example](../.env.example) | Шаблон env: RouterAI / OpenRouter / DeepSeek (один провайдер за раз). |
 | [env-local.md](env-local.md) | Локальный `.env` (gitignore): RouterAI по умолчанию, цепочка моделей, заливка на хост. |
 | [../docker-compose.yml](../docker-compose.yml) | Стек `db + api + web`; работает без `.env` (keyless). |
-| [../docker-compose.prod.yml](../docker-compose.prod.yml) | Prod compose (web на loopback). |
+| [../docker-compose.prod.yml](../docker-compose.prod.yml) | Prod compose (web на loopback `18080`). |
+| [../scripts/deploy.sh](../scripts/deploy.sh) | Деплой на VPS: `git reset` + `compose up --build` **без** `down`. |
 | [../.github/workflows/ci.yml](../.github/workflows/ci.yml) | CI: ruff, mypy, unit + integration, сборка фронта. |
 | [../.github/workflows/deploy.yml](../.github/workflows/deploy.yml) | CD после зелёного CI / вручную (нужен явный запрос на деплой). |
+
+## Live
+
+Рабочий URL для браузера: **https://aichallenge.arcilite.ru:8443/** (см. README → Production). Не публикуем IP/SSH в доках.
 
 ## Как обновлять доки
 
 1. Существенные архитектурные решения — сначала в **design spec**, потом в код.  
-2. Порядок реализации — в **plan** (чеклисты задач).  
-3. README — лицо челленджа: цели, статус, быстрый старт, ссылки сюда.
+2. Порядок реализации — в **plan** (чеклисты задач; v1 plan уже выполнен).  
+3. README — лицо челленджа: цели, статус, API, live URL, ограничения.  
+4. После UX/API-дополнений (compare, visitor history, model catalog) синхронизируй README + design §5/§8.

@@ -17,6 +17,7 @@ from app.domain.entities import (
     TokenChunk,
 )
 from app.domain.generation import GenerationParams
+from app.domain.media import MediaArtifact, StoredMedia
 
 
 class SessionRepository(Protocol):
@@ -67,6 +68,7 @@ class LLMProvider(Protocol):
         model: str,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult: ...
 
 
@@ -91,7 +93,27 @@ class ChatRouter(Protocol):
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult: ...
+
+
+class MediaGenerator(Protocol):
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str = "flux",
+        width: int = 1024,
+        height: int = 1024,
+    ) -> MediaArtifact: ...
+
+    async def generate_video(self, prompt: str) -> MediaArtifact: ...
+
+
+class MediaStore(Protocol):
+    async def save(self, artifact: MediaArtifact) -> StoredMedia: ...
+
+    async def get(self, media_id: object) -> tuple[bytes, str] | None: ...
 
 
 class UnitOfWork(Protocol):

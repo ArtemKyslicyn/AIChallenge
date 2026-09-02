@@ -182,6 +182,10 @@ async def send_message(
                 max_message_chars=container.settings.max_message_chars,
                 max_history_messages=container.settings.max_history_messages,
                 draft=draft,
+                media_tools_enabled=container.settings.media_tools_enabled,
+                media_generator=container.media_generator,
+                media_store=container.media_store,
+                media_limiter=container.media_limiter,
             )
             async for frame in to_sse(events):
                 yield frame

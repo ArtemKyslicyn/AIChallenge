@@ -2,7 +2,14 @@ import json
 from uuid import UUID
 
 from app.adapters.api.sse import SSE_HEADERS, event_to_frame, to_sse
-from app.application.chat import ErrorEvent, MessageEndEvent, ModelEvent, TokenEvent
+from app.application.chat import (
+    ErrorEvent,
+    MessageEndEvent,
+    ModelEvent,
+    TokenEvent,
+    ToolResultEvent,
+    ToolStartEvent,
+)
 
 
 def _parse(frame: str) -> tuple[str, dict]:
@@ -38,6 +45,24 @@ def test_message_end_frame_carries_canonical_attribution() -> None:
 
 def test_error_frame() -> None:
     assert _parse(event_to_frame(ErrorEvent(message="nope"))) == ("error", {"message": "nope"})
+
+
+def test_tool_frames() -> None:
+    start = _parse(event_to_frame(ToolStartEvent(name="generate_image", call_id="c1")))
+    assert start == ("tool_start", {"name": "generate_image", "call_id": "c1"})
+    result = _parse(
+        event_to_frame(
+            ToolResultEvent(
+                name="generate_image",
+                call_id="c1",
+                status="ok",
+                media_url="/api/v1/media/x",
+                provider_label="Pollinations flux",
+            )
+        )
+    )
+    assert result[0] == "tool_result"
+    assert result[1]["media_url"] == "/api/v1/media/x"
 
 
 def test_headers_disable_proxy_buffering() -> None:

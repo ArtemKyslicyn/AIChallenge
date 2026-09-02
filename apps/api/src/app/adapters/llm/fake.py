@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Iterable
 from app.domain.entities import ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMProviderError
 from app.domain.generation import GenerationParams
+from app.domain.media import IMAGE_TOOL_NAME, ToolCallRequest
 
 _WORDS = re.compile(r"\S+\s*")
 
@@ -84,8 +85,24 @@ class FakeLLMProvider:
         model: str,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
         self.last_generation = generation
+        if tools:
+            last = next((m.content for m in reversed(messages) if m.content), "")
+            if "TOOL_IMAGE:" in last:
+                prompt = last.split("TOOL_IMAGE:", 1)[1].strip() or "test"
+                return CompletionResult(
+                    content="",
+                    model_id=self._resolve(model),
+                    tool_calls=[
+                        ToolCallRequest(
+                            id="fake-tool-1",
+                            name=IMAGE_TOOL_NAME,
+                            arguments={"prompt": prompt, "model": "flux"},
+                        )
+                    ],
+                )
         return CompletionResult(content=self.text, model_id=self._resolve(model))
 
 
@@ -149,7 +166,9 @@ class FlakyLLMProvider:
         model: str,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
+        _ = tools
         if model in self.fail_models:
             raise self._boom(model)
         if model in self.empty_models:

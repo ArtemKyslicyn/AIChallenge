@@ -12,6 +12,8 @@ from app.application.chat import (
     MessageEndEvent,
     ModelEvent,
     TokenEvent,
+    ToolResultEvent,
+    ToolStartEvent,
 )
 
 SSE_MEDIA_TYPE = "text/event-stream"
@@ -46,6 +48,23 @@ def event_to_frame(event: ChatEvent) -> str:
             )
         case ErrorEvent():
             return format_frame("error", {"message": event.message})
+        case ToolStartEvent():
+            return format_frame(
+                "tool_start",
+                {"name": event.name, "call_id": event.call_id},
+            )
+        case ToolResultEvent():
+            return format_frame(
+                "tool_result",
+                {
+                    "name": event.name,
+                    "call_id": event.call_id,
+                    "status": event.status,
+                    "media_url": event.media_url,
+                    "provider_label": event.provider_label,
+                    "error": event.error,
+                },
+            )
 
 
 async def to_sse(events: AsyncIterator[ChatEvent]) -> AsyncIterator[str]:

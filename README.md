@@ -25,6 +25,8 @@
 
 v1 **в `main` и на live**: API (hexagonal, ModelRouter, Postgres/Alembic), SPA с SSE и лейблом `model_id`, Docker Compose / prod, CI/CD. Провайдер по умолчанию — **RouterAI** (`routerai.ru`), цепочка моделей — env `LLM_MODEL_CHAIN`.
 
+Дополнительно в UI: выбор модели в композере, режим **«Два рядом»** (compare через probe), шаблоны/свои правила ответа, сайдбар истории чатов (локальный кэш + `X-Visitor-Id`).
+
 ## Документация (с чего читать)
 
 | Документ | Зачем |
@@ -133,19 +135,24 @@ RUN_INTEGRATION=1 USE_FAKE_LLM=true \
 
 ## API (v1, контракт)
 
-Префикс: `/api/v1`. Для сессии: заголовок `X-Session-Token`.
+Префикс: `/api/v1`. Для сессии: `X-Session-Token`. Для истории посетителя: `X-Visitor-Id` (UUID из `localStorage`).
 
 | Method | Path | Назначение |
 |--------|------|------------|
 | `GET` | `/health` | Liveness |
 | `POST` | `/sessions` | Создать анонимную сессию → `{id, access_token}` |
+| `GET` | `/sessions/history` | Сводка сессий текущего visitor (title / count) |
 | `GET` | `/sessions/{id}` | Метаданные (токен никогда не возвращается повторно) |
 | `GET` | `/sessions/{id}/messages` | История (с `model_id`) |
-| `POST` | `/sessions/{id}/messages` | Сообщение пользователя → **SSE** |
+| `POST` | `/sessions/{id}/messages` | Сообщение пользователя → **SSE**; опционально `{model}` |
 | `GET` | `/sessions/{id}/stream?message_id=` | Повтор сохранённого ответа тем же набором событий |
-| `POST` | `/llm/complete` | Прямой probe к модели (без сессии) |
+| `GET` | `/llm/models` | Каталог моделей для UI (id, label, capabilities) |
+| `POST` | `/llm/complete` | Probe (без записи в чат); generation: temperature / reasoning / … |
+| `GET` | `/media/{id}.ext` | Сгенерированные картинка/видео (если `MEDIA_TOOLS_ENABLED`) |
 
-SSE-события: `model` → `token`* → `message_end` (или `error`). В `model` / `message_end` всегда есть фактический `model_id`.
+SSE-события: `model` → (`tool_start` / `tool_result`)* → `token`* → `message_end` (или `error`). В `model` / `message_end` всегда есть фактический `model_id`.
+
+Media tools (опционально): intent / OpenAI `tool_calls` → Pollinations (image) / Pixazo LTX (video). Включается `MEDIA_TOOLS_ENABLED=true`; см. `.env.example`.
 
 ## Секреты
 
@@ -175,18 +182,23 @@ SSE-события: `model` → `token`* → `message_end` (или `error`). В 
 - **Нет аутентификации.** Сессии анонимные с bearer-токеном; `user_id` зарезервирован и не используется.
 - **Нет rate-limit** на создание сессий.
 - **Сессия в `localStorage`.** После сброса БД id становится призраком; SPA проверяет сессию на load и при 404 создаёт новую («Новый чат» делает то же вручную).
+- **Compare («Два рядом»)** идёт через `POST /llm/complete`, не пишется в Postgres; после перезагрузки страницы пары сравнения в треде нет.
+- **Сайдбар истории** показывает только чаты с токеном в этом браузере; сервер обогащает title/count, чужие сессии не отдаёт.
+- **Media tools** выключены по умолчанию (`MEDIA_TOOLS_ENABLED=false`). Картинки — Pollinations (ключ опционален), видео — Pixazo LTX (`PIXAZO_API_KEY`). Локальный GPU не используется.
 
 ## Вне скоупа v1
 
-Auth/роли, админка сценариев, Redis для роутера, голос, биллинг, микросервисы.
+Auth/роли, админка сценариев, Redis для роутера, голос, биллинг, микросервисы, live-resume SSE.
 
 ## Production / CI/CD
 
-- **Live:** http://aichallenge.arcilite.ru/
+- **Live (предпочтительно):** https://aichallenge.arcilite.ru:8443/  
+  На части сетей обычный HTTPS `:443` к этому хосту зависает на TLS (на том же IP слушает VPN/SNI). HTTP `:80` редиректит на `:8443`. Health: `/api/v1/health`.
 - **CI:** `.github/workflows/ci.yml` — lint, mypy, unit + integration (FakeLLM), web build
-- **CD:** `.github/workflows/deploy.yml` — после зелёного CI на `main` (или вручную) деплой через GitHub Secrets
-- **Compose prod:** `docker-compose.prod.yml`
+- **CD:** `.github/workflows/deploy.yml` → на сервере `scripts/deploy.sh` (без `compose down`, rolling recreate)
+- **Compose prod:** `docker-compose.prod.yml` (web на `127.0.0.1:18080`, снаружи — host nginx)
 - Секреты и `.env` только на хосте деплоя, **не** в git
+- Деплой на VPS агентом — только по **явному** запросу («задеплой» и т.п.)
 
 ## Лицензия / использование
 

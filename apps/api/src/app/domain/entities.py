@@ -11,6 +11,8 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+from app.domain.media import ToolCallRequest
+
 #: Sentinel for ``Scenario.preferred_model``: let the router pick from the chain.
 AUTO_MODEL = "auto"
 
@@ -86,3 +88,5 @@ class TokenChunk:
 class CompletionResult:
     content: str
     model_id: str
+    #: Present when the provider answered with OpenAI-style tool calls.
+    tool_calls: list[ToolCallRequest] | None = None

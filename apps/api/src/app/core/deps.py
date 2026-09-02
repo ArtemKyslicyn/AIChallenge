@@ -17,15 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
 from app.adapters.llm.router import ModelRouter, TieredModelRouter
+from app.adapters.media.fake import FakeMediaGenerator
+from app.adapters.media.pixazo import PixazoVideoClient
+from app.adapters.media.pollinations import PollinationsImageClient
+from app.adapters.media.store import CompositeMediaGenerator, DiskMediaStore
 from app.adapters.persistence.db import create_engine, create_sessionmaker
 from app.adapters.persistence.repositories import SqlAlchemySessionRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
+from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
 from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_id, visitor_hash
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
-from app.domain.ports import LLMProvider, ScenarioRepository
+from app.domain.ports import LLMProvider, MediaGenerator, MediaStore, ScenarioRepository
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +77,19 @@ class Container:
     provider: LLMProvider
     router: ModelRouter | TieredModelRouter
     scenarios: ScenarioRepository
+    media_generator: MediaGenerator | None
+    media_store: MediaStore | None
+    media_limiter: SessionMediaRateLimiter | None
     _extra_providers: list[LLMProvider]
+    _extra_closers: list[object]
 
     async def aclose(self) -> None:
         for provider in (self.provider, *self._extra_providers):
             close = getattr(provider, "aclose", None)
+            if close is not None:
+                await close()
+        for item in self._extra_closers:
+            close = getattr(item, "aclose", None)
             if close is not None:
                 await close()
         await self.engine.dispose()
@@ -152,6 +165,35 @@ def build_container(settings: Settings) -> Container:
         else:
             router = primary_router
 
+    media_generator: MediaGenerator | None = None
+    media_store: MediaStore | None = None
+    media_limiter: SessionMediaRateLimiter | None = None
+    extra_closers: list[object] = []
+    if settings.media_tools_enabled:
+        media_store = DiskMediaStore(settings.media_path())
+        media_limiter = SessionMediaRateLimiter(
+            image_limit=settings.media_image_limit_per_hour,
+            video_limit=settings.media_video_limit_per_hour,
+        )
+        if settings.fake_llm_enabled():
+            media_generator = FakeMediaGenerator(
+                fail_video=not bool(settings.pixazo_api_key.strip())
+            )
+            logger.info("media tools enabled (FakeMediaGenerator)")
+        else:
+            images = PollinationsImageClient(api_key=settings.pollinations_api_key)
+            videos = (
+                PixazoVideoClient(api_key=settings.pixazo_api_key)
+                if settings.pixazo_api_key.strip()
+                else None
+            )
+            media_generator = CompositeMediaGenerator(images=images, videos=videos)
+            extra_closers.append(media_generator)
+            logger.info(
+                "media tools enabled (Pollinations%s)",
+                " + Pixazo" if videos is not None else "",
+            )
+
     engine = create_engine(settings.database_url)
     return Container(
         settings=settings,
@@ -160,7 +202,11 @@ def build_container(settings: Settings) -> Container:
         provider=provider,
         router=router,
         scenarios=YamlScenarioRepository(settings.scenarios_path()),
+        media_generator=media_generator,
+        media_store=media_store,
+        media_limiter=media_limiter,
         _extra_providers=extra_providers,
+        _extra_closers=extra_closers,
     )
 
 
