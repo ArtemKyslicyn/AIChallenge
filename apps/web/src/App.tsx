@@ -42,7 +42,13 @@ export default function App() {
       })
       .catch((e: Error) => {
         setSession(null);
-        setError(e.message);
+        if (e.name === "TimeoutError" || e.name === "AbortError") {
+          setError(
+            "Сервер не отвечает (часто порт 443). Откройте https://aichallenge.arcilite.ru:8443/ или обновите страницу.",
+          );
+        } else {
+          setError(e.message);
+        }
       })
       .finally(() => setBooting(false));
   }, [refreshHistory]);
@@ -75,6 +81,21 @@ export default function App() {
       await refreshHistory();
     },
     [refreshHistory],
+  );
+
+  const onStaleSession = useCallback(() => {
+    forgetActiveSession();
+    setSession(null);
+    boot();
+  }, [boot]);
+
+  const onFirstMessage = useCallback(
+    (text: string) => {
+      if (!session) return;
+      touchSessionTitle(session.id, text);
+      void refreshHistory();
+    },
+    [session, refreshHistory],
   );
 
   return (
@@ -132,15 +153,8 @@ export default function App() {
           <Chat
             key={session.id}
             session={session}
-            onStaleSession={() => {
-              forgetActiveSession();
-              setSession(null);
-              boot();
-            }}
-            onFirstMessage={(text) => {
-              touchSessionTitle(session.id, text);
-              void refreshHistory();
-            }}
+            onStaleSession={onStaleSession}
+            onFirstMessage={onFirstMessage}
           />
         )}
       </div>

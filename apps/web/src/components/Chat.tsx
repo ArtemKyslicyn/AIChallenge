@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
   MAX_MESSAGE_CHARS,
@@ -59,18 +59,35 @@ export function Chat({
   const stick = useRef(true);
   const abort = useRef<AbortController | null>(null);
 
+  // Keep latest stale handler without reloading history on every App re-render
+  // (refreshHistory after first message used to wipe in-thread compare turns).
+  const reportStaleSession = useEffectEvent(() => {
+    onStaleSession();
+  });
+
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     listMessages(session)
-      .then((history) => setItems(history.filter((m) => m.role !== "system").map(toTurn)))
+      .then((history) => {
+        if (cancelled) return;
+        setItems(history.filter((m) => m.role !== "system").map(toTurn));
+      })
       .catch((e: Error) => {
+        if (cancelled) return;
         if (isNotFound(e)) {
-          onStaleSession();
+          reportStaleSession();
           return;
         }
         setError(e.message);
       })
-      .finally(() => setLoading(false));
-  }, [session, onStaleSession]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   useEffect(() => {
     if (stick.current) end.current?.scrollIntoView({ block: "end", behavior: "smooth" });

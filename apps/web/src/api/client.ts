@@ -89,9 +89,45 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Default JSON request timeout — avoids infinite boot spinner on network hangs. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+function mergeAbortSignals(signals: AbortSignal[]): AbortSignal | undefined {
+  const active = signals.filter(Boolean);
+  if (active.length === 0) return undefined;
+  if (active.length === 1) return active[0];
+  if (typeof AbortSignal.any === "function") return AbortSignal.any(active);
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  for (const signal of active) {
+    if (signal.aborted) {
+      controller.abort();
+      return controller.signal;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
+  return controller.signal;
+}
+
+function requestTimeoutSignal(timeoutMs: number): AbortSignal {
+  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(timeoutMs);
+  const controller = new AbortController();
+  const id = window.setTimeout(() => controller.abort(new DOMException("Timeout", "TimeoutError")), timeoutMs);
+  controller.signal.addEventListener("abort", () => window.clearTimeout(id), { once: true });
+  return controller.signal;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  const timeoutSignal = requestTimeoutSignal(timeoutMs);
+  const signal = mergeAbortSignals([init.signal, timeoutSignal].filter(Boolean) as AbortSignal[]);
+
   const response = await fetch(`${BASE}${path}`, {
     ...init,
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...visitorHeaders(),
@@ -454,9 +490,13 @@ export function probeComplete(
   options: { model: string } & ProbeGenerationDto,
   signal?: AbortSignal,
 ): Promise<ProbeResultDto> {
-  return request<ProbeResultDto>("/llm/complete", {
-    method: "POST",
-    body: JSON.stringify({ prompt, stream: false, ...options }),
-    signal,
-  });
+  return request<ProbeResultDto>(
+    "/llm/complete",
+    {
+      method: "POST",
+      body: JSON.stringify({ prompt, stream: false, ...options }),
+      signal,
+    },
+    120_000,
+  );
 }
