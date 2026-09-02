@@ -101,6 +101,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     visitor_hash_salt: str = "aichallenge-visitor-v1"
 
+    media_tools_enabled: bool = False
+    pollinations_api_key: str = ""
+    pixazo_api_key: str = ""
+    media_dir: str = ""
+    media_image_limit_per_hour: int = 20
+    media_video_limit_per_hour: int = 5
+
     def model_chain_list(self) -> list[str]:
         return _csv(self.llm_model_chain)
 
@@ -109,6 +116,11 @@ class Settings(BaseSettings):
 
     def scenarios_path(self) -> Path:
         return Path(self.scenarios_dir) if self.scenarios_dir else DEFAULT_SCENARIOS_DIR
+
+    def media_path(self) -> Path:
+        if self.media_dir:
+            return Path(self.media_dir)
+        return REPO_ROOT / "data" / "media"
 
     def fake_llm_enabled(self) -> bool:
         """A missing key is treated as "keyless mode", not as a crash."""

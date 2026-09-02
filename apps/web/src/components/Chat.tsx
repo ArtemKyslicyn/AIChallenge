@@ -144,6 +144,24 @@ export function Chat({
                 patch({ modelId: event.model_id });
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
+              case "tool_start":
+                setStatus(
+                  event.name === "generate_video"
+                    ? "Генерирую видео…"
+                    : "Генерирую картинку…",
+                );
+                break;
+              case "tool_result":
+                if (event.status === "error") {
+                  setStatus(event.error || "Медиа-инструмент не сработал.");
+                } else {
+                  setStatus(
+                    event.provider_label
+                      ? `Готово: ${event.provider_label}`
+                      : "Медиа готово.",
+                  );
+                }
+                break;
               case "token":
                 setItems((prev) =>
                   prev.map((item) =>

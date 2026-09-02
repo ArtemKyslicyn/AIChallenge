@@ -22,6 +22,7 @@
 ## Stack reminder
 
 - API: FastAPI + uv + Postgres + Alembic
-- Web: Vite + React + TypeScript
+- Web: Vite + React + TypeScript (composer model pin, compare via probe, visitor history sidebar)
 - LLM: OpenAI-compatible + failover chain; default provider **RouterAI** (`LLM_BASE_URL` / `ROUTERAI_KEY`)
-- Auth: anonymous sessions in v1
+- Auth: anonymous sessions in v1 (`X-Session-Token` + `X-Visitor-Id`)
+- Live: see README Production (`:8443` when `:443` TLS stalls)

@@ -17,6 +17,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from app.application.media_tools import (
+    MEDIA_TOOLS,
+    SessionMediaRateLimiter,
+    detect_media_intent,
+    execute_media_tool,
+    maybe_needs_media_tools,
+    tool_calls_from_completion,
+)
 from app.application.sessions import authorize_session, session_title_from_message
 from app.domain.entities import (
     ChatMessage,
@@ -34,6 +42,8 @@ from app.domain.errors import (
 )
 from app.domain.ports import (
     ChatRouter,
+    MediaGenerator,
+    MediaStore,
     MessageRepository,
     ScenarioRepository,
     SessionRepository,
@@ -98,7 +108,25 @@ class ErrorEvent:
     message: str
 
 
-ChatEvent = ModelEvent | TokenEvent | MessageEndEvent | ErrorEvent
+@dataclass(slots=True)
+class ToolStartEvent:
+    name: str
+    call_id: str
+
+
+@dataclass(slots=True)
+class ToolResultEvent:
+    name: str
+    call_id: str
+    status: str
+    media_url: str | None = None
+    provider_label: str | None = None
+    error: str | None = None
+
+
+ChatEvent = (
+    ModelEvent | TokenEvent | MessageEndEvent | ErrorEvent | ToolStartEvent | ToolResultEvent
+)
 
 
 def build_llm_turns(
@@ -135,6 +163,10 @@ async def send_user_message_and_stream(
     id_factory: Callable[[], UUID] = uuid4,
     draft: ReplyDraft | None = None,
     preferred_model: str | None = None,
+    media_tools_enabled: bool = False,
+    media_generator: MediaGenerator | None = None,
+    media_store: MediaStore | None = None,
+    media_limiter: SessionMediaRateLimiter | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     session = await authorize_session(
@@ -197,6 +229,58 @@ async def send_user_message_and_stream(
             draft.finished = True
         return answer
 
+    media_prefix = ""
+    if (
+        media_tools_enabled
+        and media_generator is not None
+        and media_store is not None
+        and media_limiter is not None
+        and maybe_needs_media_tools(text)
+    ):
+        calls = detect_media_intent(text)
+        if not calls:
+            try:
+                probe = await router.complete_chat(
+                    turns, preferred_model=model, tools=MEDIA_TOOLS
+                )
+                calls = tool_calls_from_completion(probe.tool_calls)
+                if probe.model_id:
+                    resolved_model = probe.model_id
+                    draft.model_id = resolved_model
+            except (LLMExhaustedError, LLMProviderError):
+                calls = []
+        blocks: list[str] = []
+        for call in calls[:2]:
+            yield ToolStartEvent(name=call.name, call_id=call.id)
+            executed = await execute_media_tool(
+                call,
+                generator=media_generator,
+                store=media_store,
+                session_id=session.id,
+                limiter=media_limiter,
+            )
+            if executed.error:
+                yield ToolResultEvent(
+                    name=call.name,
+                    call_id=call.id,
+                    status="error",
+                    error=executed.error,
+                )
+            else:
+                yield ToolResultEvent(
+                    name=call.name,
+                    call_id=call.id,
+                    status="ok",
+                    media_url=executed.media_url,
+                    provider_label=executed.provider_label,
+                )
+                if executed.markdown:
+                    blocks.append(executed.markdown)
+        if blocks:
+            media_prefix = "\n\n".join(blocks) + "\n\n"
+            accumulated.append(media_prefix)
+            yield TokenEvent(text=media_prefix)
+
     try:
         try:
             async for chunk in router.stream_chat(turns, preferred_model=model):
@@ -229,13 +313,18 @@ async def send_user_message_and_stream(
             yield ErrorEvent(message=ERROR_GENERIC)
             return
 
-        if resolved_model is None:
+        if resolved_model is None and not media_prefix:
             await finalize(None)
             yield ErrorEvent(message=ERROR_EMPTY)
             return
 
-        answer = await finalize(resolved_model)
-        yield MessageEndEvent(message_id=assistant.id, content=answer, model_id=resolved_model)
+        # Media-only success (LLM empty) still needs a model label for history.
+        end_model = resolved_model or "media-tools"
+        draft.model_id = end_model
+        if resolved_model is None:
+            yield ModelEvent(model_id=end_model)
+        answer = await finalize(end_model)
+        yield MessageEndEvent(message_id=assistant.id, content=answer, model_id=end_model)
     finally:
         # Deliberately no database write here. On a client disconnect this code
         # runs inside a task that is already being cancelled, so the await would

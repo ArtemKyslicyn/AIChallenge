@@ -79,3 +79,15 @@ class LLMStreamAbortedError(DomainError):
 
 class MessageNotFoundError(DomainError):
     """Referenced message id does not exist."""
+
+
+class MediaGenerationError(DomainError):
+    """External media provider failed or returned an unusable payload."""
+
+
+class MediaRateLimitError(DomainError):
+    """Session exceeded the configured media generation rate limit."""
+
+
+class MediaNotFoundError(DomainError):
+    """Unknown media id."""

@@ -32,3 +32,9 @@ docker compose exec api <migrate-or-shell>
 ```
 
 Do not invent alternate one-off compose stacks unless asked; extend the root `docker-compose.yml`.
+
+## Prod
+
+- `docker-compose.prod.yml`: web published on loopback only; host nginx terminates TLS.
+- Deploy: `scripts/deploy.sh` — `git reset --hard origin/main` then `compose up --build -d` (**no** `down`; avoids 502 while web is stopped).
+- Public URL and `:8443` vs `:443` notes live in README / `docs/env-local.md` — do not put host IPs in skills.

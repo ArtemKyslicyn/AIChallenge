@@ -33,3 +33,6 @@ apps/web/dist/
 
 # Docker
 docker-compose.override.yml
+
+# Generated media (Pollinations/Pixazo artifacts)
+data/media/

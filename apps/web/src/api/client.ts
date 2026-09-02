@@ -38,7 +38,17 @@ export type ChatEvent =
   | { type: "model"; model_id: string }
   | { type: "token"; text: string }
   | { type: "message_end"; message_id: string | null; content: string; model_id: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "tool_start"; name: string; call_id: string }
+  | {
+      type: "tool_result";
+      name: string;
+      call_id: string;
+      status: string;
+      media_url?: string | null;
+      provider_label?: string | null;
+      error?: string | null;
+    };
 
 const BASE = import.meta.env.VITE_API_URL || "/api/v1";
 const STORE_KEY = "aichallenge.session_store";

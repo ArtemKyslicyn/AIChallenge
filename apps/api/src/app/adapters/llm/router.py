@@ -110,6 +110,7 @@ class ModelRouter:
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -118,7 +119,9 @@ class ModelRouter:
         last_error: LLMProviderError | None = None
         for model in candidates:
             try:
-                return await self._provider.complete_chat(messages, model, generation=generation)
+                return await self._provider.complete_chat(
+                    messages, model, generation=generation, tools=tools
+                )
             except LLMProviderError as exc:
                 if not _is_retryable(exc):
                     raise
@@ -200,11 +203,14 @@ class TieredModelRouter:
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             try:
-                return await tier.complete_chat(messages, preferred_model, generation=generation)
+                return await tier.complete_chat(
+                    messages, preferred_model, generation=generation, tools=tools
+                )
             except LLMExhaustedError as exc:
                 logger.warning("llm tier exhausted tier_index=%s", index)
                 last_error = exc

@@ -16,6 +16,7 @@ import httpx
 from app.domain.entities import ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMProviderError
 from app.domain.generation import GenerationParams
+from app.domain.media import parse_openai_tool_calls
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +75,16 @@ class OpenAICompatibleProvider:
         *,
         stream: bool,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": model,
             "stream": stream,
             "messages": [{"role": str(m.role), "content": m.content} for m in messages],
         }
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
         if generation is None:
             return body
         if generation.temperature is not None:
@@ -129,11 +134,14 @@ class OpenAICompatibleProvider:
         model: str,
         *,
         generation: GenerationParams | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
         try:
             response = await self._client.post(
                 self._url,
-                json=self._payload(messages, model, stream=False, generation=generation),
+                json=self._payload(
+                    messages, model, stream=False, generation=generation, tools=tools
+                ),
                 headers=self._headers(),
             )
         except httpx.HTTPError as exc:
@@ -144,16 +152,22 @@ class OpenAICompatibleProvider:
 
         try:
             body: dict[str, Any] = response.json()
-            content = body["choices"][0]["message"]["content"] or ""
+            message = body["choices"][0]["message"]
+            content = message.get("content") or ""
+            tool_calls = parse_openai_tool_calls(message) if tools else []
         except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError(
                 "Provider returned an unreadable response.", kind="malformed", model_id=model
             ) from exc
 
-        if not str(content).strip():
+        if not str(content).strip() and not tool_calls:
             raise self._empty_error(model)
 
-        return CompletionResult(content=str(content), model_id=self._resolved_model(body, model))
+        return CompletionResult(
+            content=str(content),
+            model_id=self._resolved_model(body, model),
+            tool_calls=tool_calls or None,
+        )
 
     async def stream_chat(
         self,

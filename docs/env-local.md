@@ -67,4 +67,8 @@ ROUTERAI_KEY=...   # fallback tier после исчерпания всех :fre
 
 После смены только `LLM_*` достаточно `docker compose -f docker-compose.prod.yml up -d api --force-recreate` — **не** сноси volume Postgres (иначе браузерные сессии станут «призраками»).
 
+Для полного редеплоя кода на сервере: `scripts/deploy.sh` (не вызывает `compose down`). Браузер: **https://aichallenge.arcilite.ru:8443/** — если обычный `:443` зависает на TLS с твоей сети.
+
+Media tools (картинки/видео в чате): в `.env` на сервере `MEDIA_TOOLS_ENABLED=true`, опционально `POLLINATIONS_API_KEY`, для видео `PIXAZO_API_KEY`. Затем recreate `api`.
+
 Не вставляй ключи в чат Cursor/Claude и не коммить `.env`.

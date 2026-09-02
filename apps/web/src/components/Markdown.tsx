@@ -70,18 +70,35 @@ function buildComponents(streaming: boolean): Components {
       // message. react-markdown already strips dangerous URL schemes.
       <img className="md-image" src={typeof src === "string" ? src : undefined} alt={alt ?? ""} loading="lazy" referrerPolicy="no-referrer" />
     ),
-    a: ({ href, children }) => (
+    a: ({ href, children }) => {
+      const url = typeof href === "string" ? href : undefined;
+      if (url && isMediaVideoUrl(url)) {
+        return (
+          <video className="md-video" controls playsInline preload="metadata" src={url}>
+            <a href={url} target="_blank" rel="noopener noreferrer nofollow">
+              {children}
+            </a>
+          </video>
+        );
+      }
       // Model output is untrusted: never open a link with the opener intact.
-      <a href={href} target="_blank" rel="noopener noreferrer nofollow">
-        {children}
-      </a>
-    ),
+      return (
+        <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+          {children}
+        </a>
+      );
+    },
     table: ({ children }) => (
       <div className="md-table">
         <table>{children}</table>
       </div>
     ),
   };
+}
+
+function isMediaVideoUrl(href: string): boolean {
+  const path = href.split("?")[0]?.toLowerCase() ?? "";
+  return path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mov");
 }
 
 /**
