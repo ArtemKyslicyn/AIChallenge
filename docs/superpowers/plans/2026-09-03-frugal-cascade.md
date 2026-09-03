@@ -842,15 +842,15 @@ def test_pareto_omits_the_summary_when_the_cascade_never_ran(...) -> None:
 
 ### Task 8: Верификация и документация
 
-- [ ] **Step 1:** `cd apps/api && uv run pytest -q && uv run ruff check src tests && uv run mypy src`
-- [ ] **Step 2:** Интеграционный прогон на одноразовом Postgres с `RUN_INTEGRATION=1`
-- [ ] **Step 3:** Живой стенд: включить `CASCADE_ENABLED=true`, отправить короткий и длинный
+- [x] **Step 1:** `cd apps/api && uv run pytest -q && uv run ruff check src tests && uv run mypy src`
+- [x] **Step 2:** Интеграционный прогон на одноразовом Postgres с `RUN_INTEGRATION=1`
+- [x] **Step 3:** Живой стенд: включить `CASCADE_ENABLED=true`, отправить короткий и длинный
       вопросы, убедиться, что бейдж «эскалировали» появляется только на втором,
       а строка эскалаций в Рейтинге считает их
-- [ ] **Step 4:** Дописать имена переменных в `.env.example` и `docs/env-local.md`
+- [x] **Step 4:** Дописать имена переменных в `.env.example` и `docs/env-local.md`
       (**только имена**, значений в репозитории нет)
-- [ ] **Step 5:** Отметить D.2 в мастер-плане; обновить индекс `deferred-features.md`
-- [ ] **Step 6: Commit** `docs: cascade env knobs and phase D status`
+- [x] **Step 5:** Отметить D.2 в мастер-плане; обновить индекс `deferred-features.md`
+- [x] **Step 6: Commit** `docs: cascade env knobs and phase D status`
 
 ---
 
