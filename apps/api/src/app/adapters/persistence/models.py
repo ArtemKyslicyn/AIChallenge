@@ -22,6 +22,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.domain.cascade import CASCADE_OFF
+
 
 class Base(DeclarativeBase):
     pass
@@ -89,12 +91,21 @@ class RunTraceRow(Base):
     tool_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: off | cheap | escalated. The server default matters: rows written before
+    #: the cascade existed must read back as "it did not run", not as null.
+    cascade_stage: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=CASCADE_OFF, server_default=CASCADE_OFF
+    )
+    cheap_model_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    cheap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         # The Lab reads a time window across all sessions; the debug view reads
         # one session newest-first. One index each.
         Index("ix_run_traces_created_at", "created_at"),
         Index("ix_run_traces_session_id_created_at", "session_id", "created_at"),
+        # The escalation summary filters by stage inside a time window.
+        Index("ix_run_traces_cascade_stage", "cascade_stage", "created_at"),
     )
 
 

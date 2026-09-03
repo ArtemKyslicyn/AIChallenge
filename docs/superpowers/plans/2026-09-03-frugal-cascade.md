@@ -675,7 +675,7 @@ git commit -m "feat(chat): escalate from a cheap model before the first token"
 - Modify: `apps/api/src/app/adapters/persistence/trace_repo.py`
 - Test: `apps/api/tests/unit/test_trace_repo_cascade.py`
 
-- [ ] **Step 1: Колонки в `RunTraceRow`**
+- [x] **Step 1: Колонки в `RunTraceRow`**
 
 ```python
     cascade_stage: Mapped[str] = mapped_column(
@@ -685,7 +685,7 @@ git commit -m "feat(chat): escalate from a cheap model before the first token"
     cheap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 ```
 
-- [ ] **Step 2: Миграция**
+- [x] **Step 2: Миграция**
 
 ```python
 """cascade fields on run traces
@@ -724,7 +724,7 @@ def downgrade() -> None:
     op.drop_column("run_traces", "cascade_stage")
 ```
 
-- [ ] **Step 3: Репозиторий — маппинг трёх полей в обе стороны плюс сводка**
+- [x] **Step 3: Репозиторий — маппинг трёх полей в обе стороны плюс сводка**
 
 ```python
     async def cascade_summary(self, *, since: datetime, until: datetime) -> CascadeSummary | None:
@@ -734,9 +734,9 @@ def downgrade() -> None:
 `CascadeSummary` — `@dataclass(frozen=True)` в `domain/cascade.py`: `total`, `cheap`, `escalated`
 и `escalation_rate` как `property`.
 
-- [ ] **Step 4: Тесты зелёные** (`uv run pytest -q`, плюс `RUN_INTEGRATION=1` на одноразовой БД)
+- [x] **Step 4: Тесты зелёные** (`uv run pytest -q`, плюс `RUN_INTEGRATION=1` на одноразовой БД)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/app/adapters/persistence apps/api/alembic/versions/005_cascade_fields.py apps/api/src/app/domain/cascade.py apps/api/tests/unit/test_trace_repo_cascade.py

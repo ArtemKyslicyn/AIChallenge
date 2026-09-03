@@ -36,3 +36,33 @@ class AnswerScorer(Protocol):
     """
 
     def score(self, question: str, answer: str) -> ScoreVerdict: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CascadeSummary:
+    """One window of the cascade, as one sentence: how often cheap was enough.
+
+    Not keyed by model: the question the Lab row answers is "is the cheap stage
+    earning its latency", and that is a property of the window, not of any one
+    model in it.
+    """
+
+    total: int
+    cheap: int
+    escalated: int
+
+    @property
+    def escalation_rate(self) -> float:
+        return self.escalated / self.total if self.total else 0.0
+
+
+def cascade_summary_from_counts(*, cheap: int, escalated: int) -> CascadeSummary | None:
+    """``None`` when the cascade never ran in this window.
+
+    Zeroes would claim it ran and escalated nothing, which is a different fact
+    and would make the panel draw a row about a feature that is switched off.
+    """
+    total = cheap + escalated
+    if total == 0:
+        return None
+    return CascadeSummary(total=total, cheap=cheap, escalated=escalated)
