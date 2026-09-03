@@ -27,7 +27,7 @@ const COPY = {
   error: "Не удалось загрузить рейтинг",
   retry: "Повторить",
   sortedBy: "Сортировка: Score ↓",
-  /** Disclosure label — design spec §4 «Progressive disclosure». */
+  /** Checklist key `formula_details` — design spec §4 «Progressive disclosure». */
   formulaLabel: "Как считается Score",
 } as const;
 
@@ -44,9 +44,15 @@ function formatSeconds(ms: number | null): string {
   return value === null ? DASH : (value / 1000).toFixed(1);
 }
 
+/**
+ * 100% is reserved for a rate that really is 1: `Math.round` alone turned
+ * 99.6% into a perfect score, which is the one number a reader would act on.
+ */
 function formatPercent(rate: number | null): string {
   const value = num(rate);
-  return value === null ? DASH : `${Math.round(value * 100)}%`;
+  if (value === null) return DASH;
+  const rounded = Math.round(value * 100);
+  return `${rounded === 100 && value < 1 ? 99 : rounded}%`;
 }
 
 function formatCost(cost: number | null): string {
@@ -54,10 +60,22 @@ function formatCost(cost: number | null): string {
   return value === null ? DASH : value.toFixed(2);
 }
 
-function formatScore(score: number | null): string {
+/**
+ * One precision for the whole column — per-row precision left the decimal
+ * points unaligned in the column the table is sorted by. Enough decimals for
+ * the smallest score to keep two significant digits, capped at three.
+ */
+function scorePrecision(scores: (number | null)[]): number {
+  const smallest = Math.min(
+    ...scores.map((s) => (s === null ? Infinity : Math.abs(s))).filter((s) => s > 0),
+  );
+  if (!Number.isFinite(smallest) || smallest >= 1) return 2;
+  return Math.min(3, Math.max(2, Math.ceil(-Math.log10(smallest)) + 1));
+}
+
+function formatScore(score: number | null, precision: number): string {
   const value = num(score);
-  if (value === null) return DASH;
-  return Math.abs(value) >= 1 ? value.toFixed(2) : value.toFixed(3);
+  return value === null ? DASH : value.toFixed(precision);
 }
 
 function formatCount(n: number | null): string {
@@ -85,7 +103,15 @@ export interface ParetoPanelProps {
 }
 
 const SKELETON_ROWS = [0, 1, 2];
-const SKELETON_CELLS = [0, 1, 2, 3, 4, 5];
+/** Mirrors the real columns, so `.pareto-col-n` hides in both (see index.css). */
+const SKELETON_CELLS = [
+  "",
+  "pareto-num pareto-col-n",
+  "pareto-num",
+  "pareto-num",
+  "pareto-num",
+  "pareto-num",
+];
 
 export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
   const titleId = useId();
@@ -133,6 +159,7 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
   };
 
   const rows = payload?.models ?? [];
+  const precision = scorePrecision(rows.map((model) => num(model.score)));
 
   return (
     <section className="pareto" aria-labelledby={titleId}>
@@ -162,7 +189,7 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
             <thead>
               <tr>
                 <th scope="col">{COPY.colModel}</th>
-                <th scope="col" className="pareto-num" title={COPY.hintN}>
+                <th scope="col" className="pareto-num pareto-col-n" title={COPY.hintN}>
                   {COPY.colN}
                 </th>
                 <th scope="col" className="pareto-num" title={COPY.hintOk}>
@@ -183,23 +210,27 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
               {loading
                 ? SKELETON_ROWS.map((row) => (
                     <tr key={`skeleton-${row}`} className="pareto-skeleton-row">
-                      {SKELETON_CELLS.map((cell) => (
-                        <td key={cell}>
+                      {SKELETON_CELLS.map((cell, column) => (
+                        <td key={column} className={cell || undefined}>
                           <span className="pareto-skeleton" />
                         </td>
                       ))}
                     </tr>
                   ))
-                : rows.map((model) => (
-                    <tr key={model.model_id}>
-                      <td className="pareto-model" title={model.model_id}>
+                : rows.map((model, index) => (
+                    // Server sorts by score desc, so the first row is the pick.
+                    // `data-winner` is the Lab results table's own idiom.
+                    <tr key={model.model_id} data-winner={index === 0 ? "true" : undefined}>
+                      <th scope="row" className="pareto-model">
                         {model.model_id}
-                      </td>
-                      <td className="pareto-num">{formatCount(model.n)}</td>
+                      </th>
+                      <td className="pareto-num pareto-col-n">{formatCount(model.n)}</td>
                       <td className="pareto-num">{formatPercent(model.success_rate)}</td>
                       <td className="pareto-num">{formatSeconds(model.p50_total_ms)}</td>
                       <td className="pareto-num">{formatCost(model.avg_cost_proxy)}</td>
-                      <td className="pareto-num lab-results-score">{formatScore(model.score)}</td>
+                      <td className="pareto-num lab-results-score">
+                        {formatScore(model.score, precision)}
+                      </td>
                     </tr>
                   ))}
             </tbody>
@@ -207,7 +238,14 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
         </div>
       )}
 
-      <details className="pareto-formula">
+      {/* Bottom-anchored float: expanding used to reveal the text below the
+          panel's edge, so the click looked like it did nothing. */}
+      <details
+        className="pareto-formula"
+        onToggle={(e) => {
+          if (e.currentTarget.open) e.currentTarget.scrollIntoView({ block: "nearest" });
+        }}
+      >
         <summary>{COPY.formulaLabel}</summary>
         <p>{COPY.formulaSummary}</p>
       </details>
