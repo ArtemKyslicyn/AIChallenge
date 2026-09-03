@@ -165,7 +165,11 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 
 - [x] **D.2** Подплан P3 исполнен 2026-09-03 (Tasks 1–8), включая эвристический скорер, миграцию 005, сводку эскалаций в Рейтинге и бейдж «эскалировали»
 
-- [ ] **D.3** (Только после D.A/B/C) Опционально Tier B из research note: MoT / semantic cache / G-Eval→Pareto quality column — отдельные мини-планы
+- [x] **D.3** Tier B, выбран G-Eval → колонка «Качество»: spec [quality-column-design](../specs/2026-09-03-quality-column-design.md) ·
+  подплан [quality-column](./2026-09-03-quality-column.md), исполнен 2026-09-03 (Tasks 1–7).
+  Судья вне пути SSE, миграция 006, ветвление Score по `judged_n`, колонка в Рейтинге.
+  `JUDGE_MODEL` пуст по умолчанию — выключенная фича даёт ровно прежнюю таблицу.
+  Остальные пункты Tier B (MoT consistency cascade, семантический кэш) не начаты.
 
 **Phase D exit:** в Models float виден research-loop (cascade badge **или** threshold routing **или** BT leaderboard), завязанный на те же traces/prefs.
 
