@@ -48,7 +48,12 @@ def migrated_database() -> Iterator[str]:
 async def engine(migrated_database: str) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(migrated_database)
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE run_traces, messages, sessions RESTART IDENTITY CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE message_feedback, run_traces, messages, sessions "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
     yield engine
     await engine.dispose()
 
