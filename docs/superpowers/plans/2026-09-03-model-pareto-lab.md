@@ -193,6 +193,18 @@ def pareto_score(success_rate: float, p50_total_ms: float | None, avg_cost_proxy
 - [x] Failures saving trace must **log and not fail** the user SSE
 - [x] Commit `feat(chat): persist RunTrace after completion`
 
+**Shipped behaviour worth knowing (v1):**
+
+- A reader who disconnects mid-answer leaves **no trace**. `finalize()` is the single
+  save point (prep D3) and a cancelled request never reaches it; the rescue path in
+  `sessions.py::_rescue_unsaved` still saves the partial *message*. Deliberate compromise.
+- `token_count_est` is `None` for an empty answer rather than the plan's `max(1, …)`,
+  which would claim one token for zero text.
+- A **fatal** provider failure (401) writes no attempt record: it is a credential fault,
+  not a verdict on the model, and would otherwise skew that model's aggregates.
+- Reading traces is not gated by `RUN_TRACE_ENABLED` — switching collection off stops new
+  rows, it does not hide the ones already recorded.
+
 ---
 
 ### Task 6: Lab API
