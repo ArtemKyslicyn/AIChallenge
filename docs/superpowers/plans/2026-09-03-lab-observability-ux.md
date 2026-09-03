@@ -95,11 +95,11 @@ type ModelsTab = "ranking" | "feedback";
 - Create: `apps/web/src/components/ParetoPanel.tsx`
 - Modify: `client.ts` — `getLabPareto(hours)`
 
-- [ ] **Step 1: Table** columns per UX spec; format p50 as seconds with 1 decimal
-- [ ] **Step 2: Skeleton / empty / error+Retry**
-- [ ] **Step 3: `<details>` formula** using checklist microcopy
-- [ ] **Step 4: `aria`** on table; sort indicator text «по Score»
-- [ ] **Step 5: Commit** `feat(web): Pareto ranking panel with full UI states`
+- [x] **Step 1: Table** columns per UX spec; format p50 as seconds with 1 decimal
+- [x] **Step 2: Skeleton / empty / error+Retry**
+- [x] **Step 3: `<details>` formula** using checklist microcopy
+- [x] **Step 4: `aria`** on table; sort indicator text «по Score»
+- [x] **Step 5: Commit** `feat(web): Pareto ranking panel with full UI states`
 
 ---
 

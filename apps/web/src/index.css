@@ -1900,6 +1900,142 @@ textarea {
   }
 }
 
+/* ---------- pareto ranking panel (Models float → «Рейтинг») ---------- */
+/* Density and table rules are borrowed from .lab-results-table on purpose:
+   the ranking must read as the same component family as Lab results, so no
+   new accent colour and no chart chrome are introduced here. */
+
+.pareto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.pareto-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pareto-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.pareto-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.pareto-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.pareto-table {
+  min-width: 100%;
+}
+
+.lab-results-table.pareto-table th.pareto-num,
+.lab-results-table.pareto-table td.pareto-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lab-results-table.pareto-table td.pareto-model {
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pareto-empty,
+.pareto-error-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.pareto-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pareto-formula {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pareto-formula summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pareto-formula p {
+  margin: var(--space-1) 0 0;
+  line-height: 1.4;
+}
+
+/* Skeleton: three placeholder rows inside the real table, so the header and
+   column widths do not jump when data lands. */
+.pareto-skeleton {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    color-mix(in srgb, var(--border) 55%, var(--surface-2)) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: pareto-shimmer 1.4s ease-in-out infinite;
+}
+
+.pareto-skeleton-row td:first-child .pareto-skeleton {
+  width: 72px;
+}
+
+@keyframes pareto-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pareto-skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
+}
+
+@media (max-width: 480px) {
+  /* 44px targets without touching `display: list-item` — the disclosure
+     triangle must survive. */
+  .pareto-error .ghost-button {
+    min-height: 44px;
+  }
+
+  .pareto-formula summary {
+    min-height: 44px;
+    padding: 12px 0;
+  }
+}
+
 /* ---------- lab results float ---------- */
 
 .lab-results-float {

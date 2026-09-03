@@ -32,6 +32,7 @@ import { DebugFloat } from "./DebugFloat";
 import { emptyLabSlots, LabTurnView } from "./LabTurnView";
 import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
 import { ModelsFloat } from "./ModelsFloat";
+import { ParetoPanel } from "./ParetoPanel";
 import { MediaJobCard } from "./MediaJobCard";
 import { TurnView } from "./Turn";
 
@@ -705,7 +706,14 @@ export function Chat({
           }
         />
         <DebugFloat open={activeFloat === "debug"} onOpenChange={openDebug} />
-        <ModelsFloat open={activeFloat === "models"} onOpenChange={openModels} />
+        <ModelsFloat
+          open={activeFloat === "models"}
+          onOpenChange={openModels}
+          /* Function form: the panel refetches when the window changes and
+             stays idle while the tab is hidden. Lab API failures stay inside
+             the panel and never reach the chat thread. */
+          ranking={({ hours, active }) => <ParetoPanel hours={hours} active={active} />}
+        />
       </div>
     </>
   );

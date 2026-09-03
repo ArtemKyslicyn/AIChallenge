@@ -525,3 +525,33 @@ export function probeComplete(
     240_000,
   );
 }
+
+/**
+ * `GET /api/v1/lab/pareto` — aggregates per `model_id` over a time window.
+ *
+ * Shape is the locked prep contract (D9): `p50_ttft_ms`, `p50_total_ms` and
+ * `avg_cost_proxy` are nullable (unknown cost proxy / no samples), so the UI
+ * must render a dash instead of `NaN`.
+ */
+export interface LabParetoModelDto {
+  model_id: string;
+  n: number;
+  success_rate: number;
+  p50_ttft_ms: number | null;
+  p50_total_ms: number | null;
+  avg_cost_proxy: number | null;
+  score: number;
+}
+
+export interface LabParetoDto {
+  formula: string;
+  hours: number;
+  models: LabParetoModelDto[];
+}
+
+/** Open endpoint (prep D5) — no session token, visitor header as everywhere else. */
+export function getLabPareto(hours: number, signal?: AbortSignal): Promise<LabParetoDto> {
+  return request<LabParetoDto>(`/lab/pareto?hours=${encodeURIComponent(String(hours))}`, {
+    signal,
+  });
+}
