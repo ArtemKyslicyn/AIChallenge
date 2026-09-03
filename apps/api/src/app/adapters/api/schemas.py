@@ -46,6 +46,32 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
 
+class AttemptResponse(BaseModel):
+    """One model the router tried while answering, in the order it tried them."""
+
+    model_id: str
+    ok: bool
+    reason: str
+    ttft_ms: int | None
+    error_kind: str | None
+
+
+class RunTraceResponse(BaseModel):
+    """Debug view of one measured turn. Deliberately carries no prompt text."""
+
+    message_id: UUID
+    resolved_model_id: str | None
+    status: str
+    ttft_ms: int | None
+    total_ms: int | None
+    attempts: list[AttemptResponse]
+    created_at: datetime
+
+
+class SessionTracesResponse(BaseModel):
+    traces: list[RunTraceResponse]
+
+
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_CONTENT_BYTES)
     #: Pin a model for this reply; ``None`` keeps the scenario default.

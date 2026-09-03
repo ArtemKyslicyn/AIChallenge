@@ -210,7 +210,7 @@ GET /api/v1/sessions/{session_id}/traces
 → { "traces": [ ... ] }  # session token required
 ```
 
-- [ ] Commit `feat(api): lab pareto and session traces endpoints`
+- [x] Commit `feat(api): lab pareto and session traces endpoints`
 
 ---
 
