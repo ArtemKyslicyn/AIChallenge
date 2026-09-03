@@ -11,12 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.adapters.api.schemas import (
+    AttemptResponse,
     CreateSessionRequest,
     MessageResponse,
+    RunTraceResponse,
     SendMessageRequest,
     SessionCreatedResponse,
     SessionResponse,
     SessionSummaryResponse,
+    SessionTracesResponse,
 )
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
 from app.adapters.persistence.repositories import (
@@ -30,6 +33,7 @@ from app.core.deps import (
     AuthorizedSession,
     Container,
     DbSession,
+    RunTraces,
     SessionToken,
     VisitorHash,
     close_quietly,
@@ -149,6 +153,42 @@ async def list_messages(
 ) -> list[MessageResponse]:
     rows = await SqlAlchemyMessageRepository(db).list_for_session(session.id)
     return [_to_message_response(row) for row in rows]
+
+
+@router.get("/{session_id}/traces", response_model=SessionTracesResponse)
+async def list_session_traces(
+    session: AuthorizedSession,
+    traces: RunTraces,
+) -> SessionTracesResponse:
+    """Why these models answered this chat — newest turn first.
+
+    Scoped by the session token like every other session route, because a trace
+    names the chat it belongs to.
+    """
+    rows = await traces.list_for_session(session.id)
+    return SessionTracesResponse(
+        traces=[
+            RunTraceResponse(
+                message_id=row.message_id,
+                resolved_model_id=row.resolved_model_id,
+                status=row.status,
+                ttft_ms=row.ttft_ms,
+                total_ms=row.total_ms,
+                attempts=[
+                    AttemptResponse(
+                        model_id=a.model_id,
+                        ok=a.ok,
+                        reason=a.reason,
+                        ttft_ms=a.ttft_ms,
+                        error_kind=a.error_kind,
+                    )
+                    for a in row.attempts
+                ],
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+    )
 
 
 @router.post("/{session_id}/messages")

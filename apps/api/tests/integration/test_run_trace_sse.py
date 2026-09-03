@@ -56,3 +56,38 @@ async def test_one_chat_turn_writes_one_run_trace(api: AsyncClient, engine: Asyn
 
     journal = attempts if isinstance(attempts, list) else json.loads(attempts)
     assert [(a["model_id"], a["ok"]) for a in journal] == [("fake-model", True)]
+
+
+async def test_traces_endpoint_returns_the_row_for_its_own_session(
+    api: AsyncClient, engine: AsyncEngine
+) -> None:
+    session_id, headers = await start_session(api)
+    await send(api, session_id, headers)
+
+    response = await api.get(f"/api/v1/sessions/{session_id}/traces", headers=headers)
+    assert response.status_code == 200
+    traces = response.json()["traces"]
+    assert len(traces) == 1
+    assert traces[0]["resolved_model_id"] == "fake-model"
+    assert traces[0]["status"] == "ok"
+    assert traces[0]["attempts"][0]["model_id"] == "fake-model"
+
+    # Someone else's session token must not open this window.
+    other = await api.get(f"/api/v1/sessions/{session_id}/traces", headers={
+        "X-Session-Token": "not-the-token"
+    })
+    assert other.status_code == 404
+
+
+async def test_pareto_window_ranks_the_model_that_answered(
+    api: AsyncClient, engine: AsyncEngine
+) -> None:
+    session_id, headers = await start_session(api)
+    await send(api, session_id, headers)
+
+    body = (await api.get("/api/v1/lab/pareto?hours=24")).json()
+    assert body["hours"] == 24
+    assert body["formula"]
+    models = {row["model_id"]: row for row in body["models"]}
+    assert models["fake-model"]["n"] >= 1
+    assert models["fake-model"]["success_rate"] == 1.0
