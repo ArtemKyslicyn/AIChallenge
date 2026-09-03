@@ -22,7 +22,11 @@ from app.adapters.media.pixazo import PixazoVideoClient
 from app.adapters.media.pollinations import PollinationsImageClient
 from app.adapters.media.store import CompositeMediaGenerator, DiskMediaStore
 from app.adapters.persistence.db import create_engine, create_sessionmaker
-from app.adapters.persistence.repositories import SqlAlchemySessionRepository
+from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
+from app.adapters.persistence.repositories import (
+    SqlAlchemyMessageRepository,
+    SqlAlchemySessionRepository,
+)
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.media_tools import SessionMediaRateLimiter
@@ -32,11 +36,15 @@ from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
 from app.domain.ports import (
+    FeedbackRepository,
     LLMProvider,
     MediaGenerator,
     MediaStore,
+    MessageRepository,
     RunTraceRepository,
     ScenarioRepository,
+    SessionRepository,
+    UnitOfWork,
 )
 
 logger = logging.getLogger(__name__)
@@ -299,6 +307,33 @@ def get_run_traces(db: DbSession) -> RunTraceRepository:
 
 
 RunTraces = Annotated[RunTraceRepository, Depends(get_run_traces)]
+
+
+def get_feedback(db: DbSession) -> FeedbackRepository:
+    return SqlAlchemyFeedbackRepository(db)
+
+
+def get_messages(db: DbSession) -> MessageRepository:
+    return SqlAlchemyMessageRepository(db)
+
+
+def get_sessions(db: DbSession) -> SessionRepository:
+    return SqlAlchemySessionRepository(db)
+
+
+def get_uow(db: DbSession) -> UnitOfWork:
+    """The transaction boundary, named as the port the use case asks for.
+
+    The session *is* the unit of work; giving it a name of its own is what lets
+    a route be tested with in-memory repositories and no database at all.
+    """
+    return db
+
+
+Feedback = Annotated[FeedbackRepository, Depends(get_feedback)]
+Messages = Annotated[MessageRepository, Depends(get_messages)]
+Sessions = Annotated[SessionRepository, Depends(get_sessions)]
+Uow = Annotated[UnitOfWork, Depends(get_uow)]
 
 
 async def require_session(
