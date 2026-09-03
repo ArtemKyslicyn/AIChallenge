@@ -19,7 +19,7 @@ import {
   runPromptStrategy,
 } from "../strategies";
 import type { PromptStrategyId } from "../strategies/types";
-import type { ThreadItem, Turn } from "../types";
+import type { MediaJobState, ThreadItem, Turn } from "../types";
 import {
   EMPTY_PROBE_SLOT,
   isCompareTurn,
@@ -31,6 +31,7 @@ import { Composer, type OutgoingMessage } from "./Composer";
 import { DebugFloat } from "./DebugFloat";
 import { emptyLabSlots, LabTurnView } from "./LabTurnView";
 import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
+import { MediaJobCard } from "./MediaJobCard";
 import { TurnView } from "./Turn";
 
 const SUGGESTIONS = [
@@ -69,6 +70,7 @@ export function Chat({
   const [debugOpen, setDebugOpen] = useState(false);
   const [resultsPayload, setResultsPayload] = useState<LabResultsPayload | null>(null);
   const [labExpanded, setLabExpanded] = useState<Record<string, boolean>>({});
+  const [activeMediaJob, setActiveMediaJob] = useState<MediaJobState | null>(null);
 
   const openResults = useCallback(() => {
     setDebugOpen(false);
@@ -196,18 +198,49 @@ export function Chat({
                 debug("model", event.model_id);
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
-              case "tool_start":
+              case "tool_start": {
+                const kind = event.name === "generate_video" ? "video" : "image";
+                const job = {
+                  kind: kind as "image" | "video",
+                  phase: "running" as const,
+                  startedAt: Date.now(),
+                };
+                patch({ mediaJob: job });
+                setActiveMediaJob(job);
                 setStatus(
-                  event.name === "generate_video"
-                    ? "Генерирую видео…"
-                    : "Генерирую картинку…",
+                  kind === "video" ? "Генерирую видео…" : "Генерирую картинку…",
                 );
+                debug("info", `media job start · ${kind}`);
                 break;
+              }
               case "tool_result":
                 if (event.status === "error") {
                   debug("error", event.error || "media tool error");
+                  const errJob = {
+                    kind:
+                      event.name === "generate_video"
+                        ? ("video" as const)
+                        : ("image" as const),
+                    phase: "error" as const,
+                    startedAt: Date.now(),
+                    error: event.error || "Медиа-инструмент не сработал.",
+                  };
+                  patch({ mediaJob: errJob });
+                  setActiveMediaJob(errJob);
                   setStatus(event.error || "Медиа-инструмент не сработал.");
                 } else {
+                  patch({
+                    mediaJob: {
+                      kind:
+                        event.name === "generate_video"
+                          ? ("video" as const)
+                          : ("image" as const),
+                      phase: "done",
+                      startedAt: Date.now(),
+                      providerLabel: event.provider_label,
+                    },
+                  });
+                  setActiveMediaJob(null);
                   setStatus(
                     event.provider_label
                       ? `Готово: ${event.provider_label}`
@@ -219,18 +252,32 @@ export function Chat({
                 setItems((prev) =>
                   prev.map((item) =>
                     isTurn(item) && item.id === replyId
-                      ? { ...item, content: item.content + event.text }
+                      ? {
+                          ...item,
+                          content: item.content + event.text,
+                          // Hide running card once media markdown arrives
+                          mediaJob:
+                            item.mediaJob?.phase === "running" && event.text.trim()
+                              ? { ...item.mediaJob, phase: "done" }
+                              : item.mediaJob,
+                        }
                       : item,
                   ),
                 );
                 break;
               case "message_end":
-                patch({ content: event.content, modelId: event.model_id });
+                patch({
+                  content: event.content,
+                  modelId: event.model_id,
+                  mediaJob: null,
+                });
+                setActiveMediaJob(null);
                 debug("info", `SSE готово · ${event.model_id}`);
                 setStatus(`Ответ готов, модель ${event.model_id}.`);
                 break;
               case "error":
                 patch({ failed: true });
+                setActiveMediaJob(null);
                 debug("error", event.message);
                 setError(event.message);
                 setStatus("Ответ прерван.");
@@ -270,7 +317,7 @@ export function Chat({
         },
       ]);
       if (!hadTurns) onFirstMessage?.(display);
-      setStatus("Сравниваем два ответа…");
+      setStatus("Сравниваем два ответа (до ~4 мин)…");
 
       const runSide = async (
         side: "baseline" | "constrained",
@@ -302,10 +349,15 @@ export function Chat({
             return;
           }
           const msg = e instanceof Error ? e.message : String(e);
+          const timedOut =
+            (e instanceof DOMException && e.name === "TimeoutError") ||
+            /timeout/i.test(msg);
           debug("error", `×2 ${side}: ${msg}`);
           patchCompareSide(compareId, side, {
             loading: false,
-            error: msg,
+            error: timedOut
+              ? "Таймаут ожидания модели — попробуйте ещё раз."
+              : msg,
             content: "",
             modelId: null,
           });
@@ -320,7 +372,7 @@ export function Chat({
         }),
         runSide("constrained", api, prefsToProbeBody(effective)),
       ]);
-      setStatus("Сравнение готово.");
+      setStatus("Сравнение готово (частичные ошибки остаются в панелях).");
     },
     [patchCompareSide, onFirstMessage, debug],
   );
@@ -349,7 +401,7 @@ export function Chat({
         },
       ]);
       if (!hadTurns) onFirstMessage?.(display);
-      setStatus("Лаборатория: 4 стратегии…");
+      setStatus("Лаборатория: 4 стратегии (долгие запросы до ~4 мин)…");
 
       const probeOpts = {
         model: effective.modelId,
@@ -407,11 +459,17 @@ export function Chat({
               return;
             }
             const msg = e instanceof Error ? e.message : String(e);
-            debug("error", `${strategyId}: ${msg}`);
-            collected[strategyId] = { content: "", modelId: null, error: msg };
+            const timedOut =
+              (e instanceof DOMException && e.name === "TimeoutError") ||
+              /timeout/i.test(msg);
+            const errMsg = timedOut
+              ? "Таймаут ожидания модели — слот пропущен."
+              : msg;
+            debug("error", `${strategyId}: ${errMsg}`);
+            collected[strategyId] = { content: "", modelId: null, error: errMsg };
             patchLabSlot(labId, strategyId, {
               loading: false,
-              error: msg,
+              error: errMsg,
               content: "",
               modelId: null,
               statusHint: null,
@@ -420,7 +478,13 @@ export function Chat({
         }),
       );
 
-      setStatus("Судья оценивает ответы…");
+      const failed = PROMPT_STRATEGY_IDS.filter((id) => collected[id]?.error).length;
+      const ok = PROMPT_STRATEGY_IDS.length - failed;
+      setStatus(
+        failed
+          ? `Судья оценивает ответы (${ok}/4 ок, ${failed} с ошибкой)…`
+          : "Судья оценивает ответы…",
+      );
       debug("judge", "запуск модели-судьи");
 
       const answers = PROMPT_STRATEGY_IDS.map((id) => ({
@@ -457,7 +521,11 @@ export function Chat({
       setResultsPayload(payload);
       setDebugOpen(false);
       setResultsOpen(true);
-      setStatus("Лаборатория готова — смотрите «Результаты».");
+      setStatus(
+        failed
+          ? `Лаборатория готова с частичными ошибками (${ok}/4). Смотрите «Результаты».`
+          : "Лаборатория готова — смотрите «Результаты».",
+      );
     },
     [patchLabSlot, patchLabJudge, onFirstMessage, debug],
   );
@@ -495,6 +563,7 @@ export function Chat({
       } finally {
         abort.current = null;
         setBusy(false);
+        setActiveMediaJob(null);
       }
     },
     [items.length, onStaleSession, sendCompare, sendLab, sendSingle, debug],
@@ -596,6 +665,12 @@ export function Chat({
         <p className="alert" role="alert">
           {error}
         </p>
+      )}
+
+      {activeMediaJob?.phase === "running" && (
+        <div className="media-job-dock">
+          <MediaJobCard job={activeMediaJob} compact />
+        </div>
       )}
 
       <Composer

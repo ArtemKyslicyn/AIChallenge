@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -25,6 +26,11 @@ SSE_HEADERS = {
     "Connection": "keep-alive",
     "X-Accel-Buffering": "no",
 }
+
+#: Comment frames keep proxies from closing idle long jobs (video poll, slow
+#: first token). Clients ignore lines that start with `:`.
+KEEPALIVE_FRAME = ": keepalive\n\n"
+DEFAULT_KEEPALIVE_SECONDS = 15.0
 
 
 def format_frame(event: str, data: dict[str, Any]) -> str:
@@ -70,3 +76,37 @@ def event_to_frame(event: ChatEvent) -> str:
 async def to_sse(events: AsyncIterator[ChatEvent]) -> AsyncIterator[str]:
     async for event in events:
         yield event_to_frame(event)
+
+
+async def to_sse_with_keepalive(
+    events: AsyncIterator[ChatEvent],
+    *,
+    interval_seconds: float = DEFAULT_KEEPALIVE_SECONDS,
+) -> AsyncIterator[str]:
+    """Yield SSE frames; if the use-case is silent too long, emit comment pings."""
+    if interval_seconds <= 0:
+        async for frame in to_sse(events):
+            yield frame
+        return
+
+    aiter = events.__aiter__()
+    pending: asyncio.Task[ChatEvent] = asyncio.create_task(aiter.__anext__())
+    try:
+        while True:
+            done, _ = await asyncio.wait({pending}, timeout=interval_seconds)
+            if not done:
+                yield KEEPALIVE_FRAME
+                continue
+            try:
+                event = pending.result()
+            except StopAsyncIteration:
+                break
+            yield event_to_frame(event)
+            pending = asyncio.create_task(aiter.__anext__())
+    finally:
+        if not pending.done():
+            pending.cancel()
+            try:
+                await pending
+            except (asyncio.CancelledError, StopAsyncIteration):
+                pass

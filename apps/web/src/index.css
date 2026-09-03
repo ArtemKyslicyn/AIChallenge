@@ -1221,6 +1221,107 @@ textarea {
   animation: spin 700ms linear infinite;
 }
 
+/* Media generation job loader (image / video) */
+.media-job {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+.media-job--compact {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.media-job--video.media-job--running {
+  background: color-mix(in srgb, #0d9488 12%, var(--surface));
+  border-color: color-mix(in srgb, #0d9488 35%, var(--border));
+}
+
+.media-job--image.media-job--running {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.media-job--error {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.media-job--done {
+  background: var(--surface-2);
+}
+
+.media-job-visual {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+}
+
+.media-job-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+.media-job--video .media-job-spinner {
+  border-top-color: #0d9488;
+}
+
+.media-job-mark {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.media-job--error .media-job-mark {
+  color: var(--danger);
+}
+
+.media-job-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.media-job-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.media-job-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.media-job-elapsed {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 3.2rem;
+  text-align: right;
+}
+
+.media-job-dock {
+  padding: 0 var(--space-3) var(--space-2);
+  max-width: var(--measure);
+  margin: 0 auto;
+  width: 100%;
+}
+
 .mode-chip-lab[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   background: color-mix(in srgb, var(--accent-soft) 80%, transparent);

@@ -2,12 +2,24 @@ import type { ExpertSlotResult } from "./strategies/runStrategy";
 import type { JudgeScorecard } from "./strategies/judge";
 import type { PromptStrategyId } from "./strategies/types";
 
+export type MediaJobKind = "image" | "video";
+
+export interface MediaJobState {
+  kind: MediaJobKind;
+  phase: "running" | "done" | "error";
+  startedAt: number;
+  providerLabel?: string | null;
+  error?: string | null;
+}
+
 export interface Turn {
   id: string;
   role: "user" | "assistant";
   content: string;
   modelId: string | null;
   failed?: boolean;
+  /** Live media generation job (image / video) for in-bubble loader. */
+  mediaJob?: MediaJobState | null;
 }
 
 export interface ProbeSlotState {

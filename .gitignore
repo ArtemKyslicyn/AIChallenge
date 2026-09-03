@@ -36,3 +36,7 @@ docker-compose.override.yml
 
 # Generated media (Pollinations/Pixazo artifacts)
 data/media/
+
+# Local scratch / data exports
+__OUT__
+exports/
