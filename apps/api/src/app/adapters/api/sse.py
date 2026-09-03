@@ -73,6 +73,15 @@ def event_to_frame(event: ChatEvent) -> str:
             )
 
 
+async def _next_event(events: AsyncIterator[ChatEvent]) -> ChatEvent:
+    """Wrap ``__anext__`` in a coroutine so it can be handed to ``create_task``.
+
+    The async-iterator protocol only promises an ``Awaitable``, and a bare
+    awaitable is not a coroutine — which is what ``create_task`` requires.
+    """
+    return await events.__anext__()
+
+
 async def to_sse(events: AsyncIterator[ChatEvent]) -> AsyncIterator[str]:
     async for event in events:
         yield event_to_frame(event)
@@ -90,7 +99,7 @@ async def to_sse_with_keepalive(
         return
 
     aiter = events.__aiter__()
-    pending: asyncio.Task[ChatEvent] = asyncio.create_task(aiter.__anext__())
+    pending: asyncio.Task[ChatEvent] = asyncio.create_task(_next_event(aiter))
     try:
         while True:
             done, _ = await asyncio.wait({pending}, timeout=interval_seconds)
@@ -102,7 +111,7 @@ async def to_sse_with_keepalive(
             except StopAsyncIteration:
                 break
             yield event_to_frame(event)
-            pending = asyncio.create_task(aiter.__anext__())
+            pending = asyncio.create_task(_next_event(aiter))
     finally:
         if not pending.done():
             pending.cancel()
