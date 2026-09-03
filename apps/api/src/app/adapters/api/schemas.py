@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.cascade import CASCADE_OFF
 from app.domain.entities import AUTO_MODEL
 from app.domain.feedback import FeedbackValue
 
@@ -70,6 +71,11 @@ class RunTraceResponse(BaseModel):
     total_ms: int | None
     attempts: list[AttemptResponse]
     created_at: datetime
+    #: off | cheap | escalated — who answered, and whether a cheap try failed
+    #: first. ``off`` is the normal single-model path.
+    cascade_stage: str = CASCADE_OFF
+    cheap_model_id: str | None = None
+    cheap_score: float | None = None
 
 
 class SessionTracesResponse(BaseModel):

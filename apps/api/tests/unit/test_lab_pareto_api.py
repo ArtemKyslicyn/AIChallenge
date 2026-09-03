@@ -142,6 +142,11 @@ def test_session_traces_return_the_debug_shape(
         "total_ms",
         "attempts",
         "created_at",
+        # Added by the cascade (phase D); their own assertions live in
+        # test_lab_cascade_api.py.
+        "cascade_stage",
+        "cheap_model_id",
+        "cheap_score",
     }
     assert row["resolved_model_id"] == "model-a"
     assert row["status"] == "ok"

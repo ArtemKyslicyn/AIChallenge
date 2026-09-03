@@ -752,7 +752,7 @@ git commit -m "feat(db): persist cascade stage on run traces"
 - Modify: `apps/api/src/app/adapters/api/sessions.py`
 - Test: `apps/api/tests/unit/test_lab_cascade_api.py`
 
-- [ ] **Step 1: Тест на форму ответа**
+- [x] **Step 1: Тест на форму ответа**
 
 ```python
 def test_pareto_reports_the_escalation_summary(...) -> None:
@@ -766,12 +766,12 @@ def test_pareto_omits_the_summary_when_the_cascade_never_ran(...) -> None:
     assert client.get("/api/v1/lab/pareto?hours=24").json()["cascade"] is None
 ```
 
-- [ ] **Step 2: Реализовать** — `cascade: CascadeSummaryResponse | None = None` в модели ответа
+- [x] **Step 2: Реализовать** — `cascade: CascadeSummaryResponse | None = None` в модели ответа
   pareto; три поля в элементе `/sessions/{id}/traces`.
 
-- [ ] **Step 3: Тесты зелёные**
+- [x] **Step 3: Тесты зелёные**
 
-- [ ] **Step 4: Commit** `feat(api): expose cascade stage and escalation rate`
+- [x] **Step 4: Commit** `feat(api): expose cascade stage and escalation rate`
 
 ---
 
