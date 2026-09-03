@@ -14,9 +14,11 @@ from uuid import UUID
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.adapters.lab.rubric import load_judge_rubric
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
 from app.adapters.llm.heuristic_scorer import HeuristicAnswerScorer
+from app.adapters.llm.llm_judge import HourlyJudgeBudget, LLMAnswerJudge
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
 from app.adapters.llm.router import ModelRouter, TieredModelRouter
 from app.adapters.media.fake import FakeMediaGenerator
@@ -49,6 +51,7 @@ from app.domain.ports import (
     SessionRepository,
     UnitOfWork,
 )
+from app.domain.quality import AnswerJudge
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,22 @@ VISITOR_ID_HEADER = "X-Visitor-Id"
 _detached: set[asyncio.Task[None]] = set()
 
 
+def spawn_detached(work: Coroutine[object, object, None]) -> asyncio.Task[None]:
+    """Start ``work`` in a task of its own and let go of it.
+
+    The strong reference is the whole point: the event loop only keeps weak
+    ones, so a task nobody holds can be garbage-collected mid-await.
+
+    Used directly — without the shield below — by work that must not be waited
+    for at all, such as the answer judge: it may take twenty seconds, and the
+    request it measures has no business being open for them.
+    """
+    task = asyncio.create_task(work)
+    _detached.add(task)
+    task.add_done_callback(_detached.discard)
+    return task
+
+
 async def run_shielded(work: Coroutine[object, object, None]) -> None:
     """Run ``work`` to completion even if the current task is being cancelled.
 
@@ -66,9 +85,7 @@ async def run_shielded(work: Coroutine[object, object, None]) -> None:
     returning the connection to the pool — has to survive the cancellation that
     the disconnect itself causes.
     """
-    task = asyncio.create_task(work)
-    _detached.add(task)
-    task.add_done_callback(_detached.discard)
+    task = spawn_detached(work)
     with contextlib.suppress(asyncio.CancelledError):
         await asyncio.shield(task)
 
@@ -106,6 +123,13 @@ class Container:
     #: path substitutes a chain of its own, and the cascade must aim at the
     #: models this process actually has.
     cascade_cheap_models: list[str]
+    #: ``None`` when JUDGE_MODEL is empty — the feature's off switch is the
+    #: absence of the object, so no later code path can forget to check a flag.
+    judge: AnswerJudge | None
+    #: How much of this hour's judging budget this process has spent.
+    #: In-process like the penalty cache, and asked the same way: the answer
+    #: has to already be in memory when a finishing request asks for it.
+    judge_budget: HourlyJudgeBudget
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -162,6 +186,38 @@ def _router_for(
         max_attempts=settings.llm_max_attempts,
         first_token_timeout_seconds=settings.llm_first_token_timeout_seconds,
         penalties=penalties,
+    )
+
+
+def _build_judge(
+    settings: Settings, router: ModelRouter | TieredModelRouter
+) -> AnswerJudge | None:
+    """The judge, or nothing at all when nobody asked for one.
+
+    Two ways to get nothing, and both are silent about it in the chat: an empty
+    ``JUDGE_MODEL`` means the operator never turned the feature on, and an
+    unusable rubric means they turned it on but the file cannot be read. The
+    second is worth a warning; neither is worth a failed start, because in both
+    cases the product simply behaves the way it did before the judge existed.
+    """
+    model_id = settings.judge_model.strip()
+    if not model_id:
+        return None
+    rubric = load_judge_rubric(settings.lab_path())
+    if rubric is None:
+        logger.warning("JUDGE_MODEL is set but no usable rubric was found; judge stays off")
+        return None
+    logger.info(
+        "answer judge enabled model_id=%s sample_rate=%s max_per_hour=%s",
+        model_id,
+        settings.judge_sample_rate,
+        settings.judge_max_per_hour,
+    )
+    return LLMAnswerJudge(
+        router=router,
+        model_id=model_id,
+        rubric=rubric,
+        timeout_seconds=settings.judge_timeout_seconds,
     )
 
 
@@ -261,6 +317,8 @@ def build_container(settings: Settings) -> Container:
             threshold=settings.cascade_score_threshold,
         ),
         cascade_cheap_models=cheap_models,
+        judge=_build_judge(settings, router),
+        judge_budget=HourlyJudgeBudget(),
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )
@@ -337,14 +395,16 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 SessionToken = Annotated[str | None, Depends(session_token)]
 
 
-def get_run_traces(db: DbSession) -> RunTraceRepository:
+def get_run_traces(request: Request, db: DbSession) -> RunTraceRepository:
     """Read side of the run journal, as a port so tests can swap it out.
 
     Reading is not gated by ``RUN_TRACE_ENABLED``: switching collection off
     should stop new rows, not hide the ones already recorded. The streaming
     route builds its own instance, because it also owns its own session.
     """
-    return SqlAlchemyRunTraceRepository(db)
+    return SqlAlchemyRunTraceRepository(
+        db, min_judged_runs=get_container(request).settings.judge_min_runs
+    )
 
 
 RunTraces = Annotated[RunTraceRepository, Depends(get_run_traces)]

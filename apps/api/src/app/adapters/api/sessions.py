@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
+import random
 from collections.abc import AsyncIterator, Mapping
 from typing import Annotated
 from uuid import UUID
@@ -36,6 +38,7 @@ from app.application.chat import (
     interrupted_answer,
     send_user_message_and_stream,
 )
+from app.application.quality import prose_chars, should_judge
 from app.application.sessions import create_session, list_visitor_sessions
 from app.core.deps import (
     AuthorizedSession,
@@ -48,12 +51,14 @@ from app.core.deps import (
     get_container,
     resolve_visitor_identity,
     run_shielded,
+    spawn_detached,
     utcnow,
     visitor_id_header,
 )
 from app.domain.cascade import CASCADE_OFF
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
 from app.domain.feedback import FeedbackValue
+from app.domain.quality import AnswerJudge
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +95,92 @@ async def _rescue_unsaved(container: Container, draft: ReplyDraft) -> None:
         return
 
     await run_shielded(_write_interrupted(container, draft))
+
+
+async def _judge_and_store(
+    container: Container,
+    *,
+    judge: AnswerJudge,
+    question: str,
+    answer: str,
+    answered_by: str,
+    message_id: UUID,
+) -> None:
+    """Grade one delivered answer and file the verdict against its trace.
+
+    Runs with nobody waiting on it, on a session of its own, after the reader
+    already has their answer. That is what makes the blanket ``except`` here
+    correct rather than lazy: there is no caller left to hand a failure to, no
+    user-visible surface to degrade, and nothing this can break except the
+    measurement itself. So every failure ends as one log line.
+    """
+    try:
+        verdict = await judge.judge(question, answer, answered_by=answered_by)
+        if verdict is None:
+            # Either the judge could not be read, or it refused to grade its
+            # own text. Both mean "we do not know", and not knowing is not a
+            # row worth writing.
+            return
+        async with container.sessionmaker() as db:
+            await SqlAlchemyRunTraceRepository(db).set_quality(
+                message_id, score=verdict.score, judge_model_id=verdict.judge_model_id
+            )
+            await db.commit()
+        logger.info(
+            "quality verdict stored message_id=%s score=%.2f judge=%s",
+            message_id,
+            verdict.score,
+            verdict.judge_model_id,
+        )
+    except Exception:
+        logger.warning("judging failed message_id=%s", message_id, exc_info=True)
+
+
+def schedule_judgement(
+    container: Container, question: str, draft: ReplyDraft
+) -> asyncio.Task[None] | None:
+    """Decide whether this answer gets judged, and if so, walk away from it.
+
+    Synchronous on purpose, and that is the design rather than a detail: a
+    function with no ``await`` in it physically cannot put a twenty-second
+    provider call on the path of the request, no matter how it is later
+    edited. Every gate it consults — the budget, the length, the dice — is
+    already in memory, so the only thing that leaves this function is a task
+    nobody is waiting for.
+
+    Returns that task so tests can join it. Callers ignore it by design.
+    """
+    judge = container.judge
+    # No judge configured is the off switch, and it is checked first so that a
+    # process without one does no work here at all.
+    if judge is None or draft.message_id is None or not draft.model_id or not draft.finished:
+        return None
+
+    settings = container.settings
+    if not should_judge(
+        status=draft.status,
+        answer_chars=prose_chars(draft.text),
+        rate=settings.judge_sample_rate,
+        roll=random.random(),
+        judged_this_hour=container.judge_budget.used(),
+        max_per_hour=settings.judge_max_per_hour,
+        min_answer_chars=settings.judge_min_answer_chars,
+    ):
+        return None
+
+    # Spent at the decision, not at the verdict: the cap bounds what judging
+    # costs, and a call that fails costs the same as one that parses.
+    container.judge_budget.take()
+    return spawn_detached(
+        _judge_and_store(
+            container,
+            judge=judge,
+            question=question,
+            answer=draft.text,
+            answered_by=draft.model_id,
+            message_id=draft.message_id,
+        )
+    )
 
 
 async def _refresh_penalties(container: Container, db: AsyncSession) -> None:
@@ -294,6 +385,9 @@ async def send_message(
                 yield frame
         finally:
             await _rescue_unsaved(container, draft)
+            # After the answer is delivered and durable, never before: the
+            # judge measures this turn and has no right to be part of it.
+            schedule_judgement(container, payload.content, draft)
             await close_quietly(db)
 
     return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
