@@ -401,12 +401,22 @@ textarea {
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+  /* Reserved for the rating row, which only mounts once the answer is
+     finished — without it the footer grew and the thread jumped at the end of
+     every stream. */
+  min-height: 34px;
 }
 
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+  /* Block, not inline-flex: `text-overflow` needs a real line box. A long
+     `model_id` used to wrap the pill over two lines and read as a rendering
+     bug; the full id is in `title`. */
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.4;
@@ -434,8 +444,17 @@ textarea {
 .feedback-strip {
   display: inline-flex;
   align-items: center;
+  /* The pair reads as one control: 4px between the thumbs, 8px more than the
+     row's own gap before them, so the group separates from the model badge
+     instead of the badge grouping with 👍. */
   gap: var(--space-1);
-  min-width: 0;
+  margin-left: var(--space-2);
+  /* Never the reason the footer row breaks: the badge keeps its place and the
+     strip takes whatever is left, wrapping a failure message inside itself
+     rather than orphaning the badge on a line of its own. */
+  flex: 1 1 0;
+  min-width: min-content;
+  flex-wrap: wrap;
 }
 
 .feedback-strip-button {
@@ -444,10 +463,12 @@ textarea {
   justify-content: center;
   min-width: 32px;
   min-height: 32px;
-  padding: 0 var(--space-2);
-  border: 1px solid transparent;
+  padding: 0 var(--space-1);
+  /* A resting border and fill, matching the badge beside it: on touch there is
+     no hover to reveal that these are controls. */
+  border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  background: transparent;
+  background: var(--surface-2);
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1;
@@ -458,16 +479,24 @@ textarea {
     transform 100ms ease;
 }
 
+/* Hover is a neutral surface lift. The accent is reserved for the vote that is
+   actually cast — the two used to be ten colour values apart and read alike. */
 .feedback-strip-button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--text) 30%, var(--border));
+  background: var(--surface);
 }
 
 .feedback-strip-button:active:not(:disabled) {
   transform: scale(0.96);
 }
 
-.feedback-strip-button[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+/* The second selector only out-weighs the hover rule above: a cast vote must
+   keep reading as cast while the pointer is still resting on it. */
+.feedback-strip-button[aria-pressed="true"],
+.feedback-strip-button[aria-pressed="true"]:hover:not(:disabled) {
+  /* Full accent on the ring: as a state indicator it needs 3:1 against the
+     page, and the old 55% mix measured 2.65:1. */
+  border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--text);
 }
@@ -482,9 +511,14 @@ textarea {
   font-size: 12px;
 }
 
+/* Subordinate to the thumbs: it takes the leftover width and wraps its own
+   text, and its zero flex-basis keeps it from ever forcing a line break. */
 .feedback-strip-error {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--danger);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
@@ -493,6 +527,10 @@ textarea {
   .feedback-strip-button {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .meta {
+    min-height: 46px;
   }
 }
 
