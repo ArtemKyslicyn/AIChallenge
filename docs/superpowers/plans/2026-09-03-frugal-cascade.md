@@ -152,7 +152,7 @@ git commit -m "feat(domain): cascade stages and answer scorer port"
 - Consumes: `ScoreVerdict` из Task 1
 - Produces: `HeuristicAnswerScorer(min_answer_chars: int = 40, threshold: float = 0.75)`
 
-- [ ] **Step 1: Написать падающие тесты — по одному на признак**
+- [x] **Step 1: Написать падающие тесты — по одному на признак**
 
 ```python
 import pytest
@@ -204,11 +204,11 @@ def test_a_bulleted_answer_is_not_truncated(scorer: HeuristicAnswerScorer) -> No
     assert scorer.score(Q, answer).accepted is True
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_heuristic_scorer.py -v`
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 
 ```python
 """A scorer that costs nothing: no model call, only what the text itself shows.
@@ -309,11 +309,11 @@ class HeuristicAnswerScorer:
         return a_lat > 0.7 and a_cyr < 0.2
 ```
 
-- [ ] **Step 4: Тесты зелёные**
+- [x] **Step 4: Тесты зелёные**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_heuristic_scorer.py -v`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/app/adapters/llm/heuristic_scorer.py apps/api/tests/unit/test_heuristic_scorer.py
