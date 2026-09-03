@@ -31,6 +31,7 @@ import { Composer, type OutgoingMessage } from "./Composer";
 import { DebugFloat } from "./DebugFloat";
 import { emptyLabSlots, LabTurnView } from "./LabTurnView";
 import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
+import { ModelsFloat } from "./ModelsFloat";
 import { MediaJobCard } from "./MediaJobCard";
 import { TurnView } from "./Turn";
 
@@ -83,6 +84,7 @@ export function Chat({
   const openResults = useCallback(() => setFloat("results", true), [setFloat]);
   const closeResults = useCallback(() => setFloat("results", false), [setFloat]);
   const openDebug = useCallback((next: boolean) => setFloat("debug", next), [setFloat]);
+  const openModels = useCallback((next: boolean) => setFloat("models", next), [setFloat]);
 
   const thread = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -703,6 +705,7 @@ export function Chat({
           }
         />
         <DebugFloat open={activeFloat === "debug"} onOpenChange={openDebug} />
+        <ModelsFloat open={activeFloat === "models"} onOpenChange={openModels} />
       </div>
     </>
   );

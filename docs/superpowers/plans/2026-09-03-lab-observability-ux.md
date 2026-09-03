@@ -82,10 +82,10 @@ type ModelsTab = "ranking" | "feedback";
 // Header actions: window select 24h|7д, Close
 ```
 
-- [ ] **Step 1: Scaffold** FAB label «Модели», panel with `role="dialog"` `aria-modal="false"` (non-blocking float like Debug)
-- [ ] **Step 2: CSS** clone dimensions/z-index from `.lab-results-float` / `.debug-float`
-- [ ] **Step 3: Empty tabs render placeholders** («Скоро» only if API not ready — prefer real empty states)
-- [ ] **Step 4: Commit** `feat(web): Models float shell with ranking/feedback tabs`
+- [x] **Step 1: Scaffold** FAB label «Модели», panel with `role="dialog"` `aria-modal="false"` (non-blocking float like Debug)
+- [x] **Step 2: CSS** clone dimensions/z-index from `.lab-results-float` / `.debug-float`
+- [x] **Step 3: Empty tabs render placeholders** («Скоро» only if API not ready — prefer real empty states)
+- [x] **Step 4: Commit** `feat(web): Models float shell with ranking/feedback tabs`
 
 ---
 
