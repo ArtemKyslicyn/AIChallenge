@@ -344,12 +344,12 @@ async def test_no_judge_model_configured_means_no_call_at_all() -> None: ...
 
 ### Task 7: Верификация и документация
 
-- [ ] **Step 1:** `uv run pytest -q && uv run ruff check src tests && uv run mypy src`; web `tsc` + `lint`
-- [ ] **Step 2:** Интеграционный прогон на одноразовом Postgres с `RUN_INTEGRATION=1`
-- [ ] **Step 3:** Живой стенд: `JUDGE_MODEL` задан → после нескольких сообщений в колонке появляются проценты; `JUDGE_MODEL` пуст → таблица идентична сегодняшней
-- [ ] **Step 4:** Имена переменных в `.env.example` и `docs/env-local.md` (**только имена**)
-- [ ] **Step 5:** Отметить D.3 в мастер-плане и в `deferred-features.md`
-- [ ] **Step 6: Commit** `docs: judge env knobs and phase D.3 status`
+- [x] **Step 1:** `uv run pytest -q && uv run ruff check src tests && uv run mypy src`; web `tsc` + `lint`
+- [x] **Step 2:** Интеграционный прогон на одноразовом Postgres с `RUN_INTEGRATION=1`
+- [x] **Step 3:** Живой стенд: `JUDGE_MODEL` задан → после нескольких сообщений в колонке появляются проценты; `JUDGE_MODEL` пуст → таблица идентична сегодняшней
+- [x] **Step 4:** Имена переменных в `.env.example` и `docs/env-local.md` (**только имена**)
+- [x] **Step 5:** Отметить D.3 в мастер-плане и в `deferred-features.md`
+- [x] **Step 6: Commit** `docs: judge env knobs and phase D.3 status`
 
 ---
 
