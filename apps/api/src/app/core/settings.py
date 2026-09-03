@@ -6,10 +6,14 @@ local run: with ``USE_FAKE_LLM=true`` the whole stack works without a provider.
 
 from __future__ import annotations
 
+import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 def _repo_root(start: Path) -> Path:
@@ -33,6 +37,34 @@ DEFAULT_LAB_DIR = REPO_ROOT / "configs" / "lab"
 
 def _csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+@lru_cache(maxsize=4)
+def _parse_cost_proxy(raw: str) -> dict[str, float]:
+    """``{"model-id": 1.5}`` → a lookup table, parsed once per distinct value.
+
+    Bad configuration must never take the API down: anything unparseable is
+    logged (by shape, never by value) and treated as "no cost data", which
+    leaves the affected models with ``cost_proxy = None`` rather than a made-up
+    1.0.
+    """
+    if not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        logger.warning("MODEL_COST_PROXY_JSON is not valid JSON; ignoring it")
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("MODEL_COST_PROXY_JSON must be a JSON object; ignoring it")
+        return {}
+    table: dict[str, float] = {}
+    for model_id, value in parsed.items():
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            logger.warning("MODEL_COST_PROXY_JSON entry is not a number model_id=%s", model_id)
+            continue
+        table[str(model_id)] = float(value)
+    return table
 
 
 class Settings(BaseSettings):
@@ -110,6 +142,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     visitor_hash_salt: str = "aichallenge-visitor-v1"
 
+    # Observability: one row per assistant turn, plus a cost weight per model.
+    run_trace_enabled: bool = True
+    model_cost_proxy_json: str = ""
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""
@@ -119,6 +155,10 @@ class Settings(BaseSettings):
 
     def model_chain_list(self) -> list[str]:
         return _csv(self.llm_model_chain)
+
+    def model_cost_proxy(self) -> dict[str, float]:
+        """Relative cost weight per model id. A model that is absent has none."""
+        return _parse_cost_proxy(self.model_cost_proxy_json)
 
     def cors_origins_list(self) -> list[str]:
         return _csv(self.cors_allow_origins)

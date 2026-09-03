@@ -23,6 +23,7 @@ from app.adapters.media.pollinations import PollinationsImageClient
 from app.adapters.media.store import CompositeMediaGenerator, DiskMediaStore
 from app.adapters.persistence.db import create_engine, create_sessionmaker
 from app.adapters.persistence.repositories import SqlAlchemySessionRepository
+from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
@@ -30,7 +31,13 @@ from app.core.settings import Settings
 from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_id, visitor_hash
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
-from app.domain.ports import LLMProvider, MediaGenerator, MediaStore, ScenarioRepository
+from app.domain.ports import (
+    LLMProvider,
+    MediaGenerator,
+    MediaStore,
+    RunTraceRepository,
+    ScenarioRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +286,19 @@ async def require_visitor_hash(
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 SessionToken = Annotated[str | None, Depends(session_token)]
+
+
+def get_run_traces(db: DbSession) -> RunTraceRepository:
+    """Read side of the run journal, as a port so tests can swap it out.
+
+    Reading is not gated by ``RUN_TRACE_ENABLED``: switching collection off
+    should stop new rows, not hide the ones already recorded. The streaming
+    route builds its own instance, because it also owns its own session.
+    """
+    return SqlAlchemyRunTraceRepository(db)
+
+
+RunTraces = Annotated[RunTraceRepository, Depends(get_run_traces)]
 
 
 async def require_session(

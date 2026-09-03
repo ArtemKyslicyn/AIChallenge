@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.application.pareto import aggregate_models
 from app.domain.entities import Message, Scenario, Session, SessionSummary
 from app.domain.errors import MessageNotFoundError, ScenarioNotFoundError
+from app.domain.tracing import ModelAggregate, RunTrace
 
 FIXED_NOW = datetime(2026, 8, 31, 12, 0, 0, tzinfo=UTC)
 
@@ -100,6 +102,30 @@ class InMemoryScenarioRepository:
         if scenario is None:
             raise ScenarioNotFoundError(self._default_id)
         return scenario
+
+
+class InMemoryRunTraceRepository:
+    """Collects saved traces; ``fail`` makes the write blow up on demand.
+
+    A trace that cannot be written must never break the answer the reader is
+    already watching, so the failure path needs a double of its own.
+    """
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.saved: list[RunTrace] = []
+        self.fail = fail
+
+    async def save(self, trace: RunTrace) -> None:
+        if self.fail:
+            raise RuntimeError("run_traces insert failed")
+        self.saved.append(trace)
+
+    async def list_for_session(self, session_id: UUID) -> list[RunTrace]:
+        return [t for t in self.saved if t.session_id == session_id]
+
+    async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]:
+        window = [t for t in self.saved if since <= t.created_at <= until]
+        return aggregate_models(window)
 
 
 class RecordingUnitOfWork:
