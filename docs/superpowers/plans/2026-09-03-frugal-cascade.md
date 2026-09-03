@@ -562,7 +562,7 @@ git commit -m "feat(application): try a cheap model before streaming"
 - Consumes: `try_cheap_first`, `CascadeOutcome`, `HeuristicAnswerScorer`
 - Produces: новые kwargs `send_user_message_and_stream(..., scorer=None, cascade=None)`, где `cascade` — dataclass настроек
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 ```python
 # Опираться на существующий стиль tests/unit/test_chat_stream_model_id.py:
@@ -577,11 +577,11 @@ git commit -m "feat(application): try a cheap model before streaming"
 # 4. preferred_model задан явно → каскад пропущен (router.complete_chat не звали).
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_chat_cascade.py -v`
 
-- [ ] **Step 3: Реализовать в `chat.py`**
+- [x] **Step 3: Реализовать в `chat.py`**
 
 Настройки каскада передаются одним объектом, чтобы не разносить шесть kwargs:
 
@@ -654,11 +654,11 @@ Settings (имена из спеки, значения — дефолты):
 `deps.py`: собрать `HeuristicAnswerScorer(min_answer_chars=…, threshold=…)` в `Container.scorer`.
 `sessions.py`: передать `scorer=container.scorer` и `cascade=CascadeSettings(...)` в use case.
 
-- [ ] **Step 4: Тесты зелёные, включая существующие**
+- [x] **Step 4: Тесты зелёные, включая существующие**
 
 Run: `cd apps/api && uv run pytest -q` — ни один существующий тест не должен измениться: выключенный каскад обязан быть неотличим от сегодняшнего поведения.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/app/application/chat.py apps/api/src/app/core/settings.py apps/api/src/app/core/deps.py apps/api/src/app/adapters/api/sessions.py apps/api/tests/unit/test_chat_cascade.py

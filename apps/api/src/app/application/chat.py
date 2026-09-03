@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from app.application.cascade import try_cheap_first
 from app.application.media_tools import (
     MEDIA_TOOLS,
     SessionMediaRateLimiter,
@@ -28,7 +29,9 @@ from app.application.media_tools import (
     tool_calls_from_completion,
 )
 from app.application.sessions import authorize_session, session_title_from_message
+from app.domain.cascade import CASCADE_OFF, AnswerScorer
 from app.domain.entities import (
+    AUTO_MODEL,
     ChatMessage,
     Message,
     MessageRole,
@@ -71,6 +74,22 @@ ERROR_INTERRUPTED = "Модель перестала отвечать. Част�
 ERROR_NO_MODEL = "Сейчас нет доступной модели. Попробуйте чуть позже."
 ERROR_EMPTY = "Модель вернула пустой ответ."
 ERROR_GENERIC = "Не удалось получить ответ ассистента."
+
+
+@dataclass(slots=True, frozen=True)
+class CascadeSettings:
+    """One object rather than six kwargs, so the knobs travel together.
+
+    ``enabled`` is separate from ``cheap_models`` on purpose: an operator who
+    empties the model list has misconfigured the cascade, while one who flips
+    the switch has turned it off. Both end up doing nothing, but only the
+    second is intentional.
+    """
+
+    enabled: bool
+    cheap_models: list[str]
+    timeout_seconds: float
+    max_question_chars: int
 
 
 @dataclass(slots=True)
@@ -180,6 +199,8 @@ async def send_user_message_and_stream(
     media_limiter: SessionMediaRateLimiter | None = None,
     traces: RunTraceRepository | None = None,
     cost_proxy: Mapping[str, float] | None = None,
+    scorer: AnswerScorer | None = None,
+    cascade: CascadeSettings | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     session = await authorize_session(
@@ -240,6 +261,12 @@ async def send_user_message_and_stream(
     tool_rounds = 0
     tool_failures = 0
 
+    # Set before the stream opens and read by save_trace, so a turn the cascade
+    # never touched records "off" rather than nothing.
+    cascade_stage = CASCADE_OFF
+    cheap_model_id: str | None = None
+    cheap_score: float | None = None
+
     def _elapsed_ms(until: float) -> int:
         return max(0, int((until - started) * 1000))
 
@@ -267,6 +294,9 @@ async def send_user_message_and_stream(
             tool_ok=(tool_failures == 0) if tool_rounds else None,
             status=status,
             created_at=now(),
+            cascade_stage=cascade_stage,
+            cheap_model_id=cheap_model_id,
+            cheap_score=cheap_score,
         )
         try:
             await traces.save(trace)
@@ -349,6 +379,42 @@ async def send_user_message_and_stream(
             # Counts as the first token: it is the first thing the reader sees.
             first_token_at = time.monotonic()
             yield TokenEvent(text=media_prefix)
+
+    # The cheap stage runs after the tool round (media never cascades) and
+    # before the first token, which is the only moment a model may still be
+    # swapped. It is non-streaming by necessity: the scorer has to see the
+    # whole answer, and an answer already on screen cannot be escalated.
+    #
+    # An explicit pin from the composer beats the automation — the same rule
+    # the feedback penalty follows.
+    pinned = model not in ("", AUTO_MODEL)
+    if cascade is not None and cascade.enabled and scorer is not None and not pinned:
+        outcome = await try_cheap_first(
+            turns=turns,
+            router=router,
+            scorer=scorer,
+            cheap_models=cascade.cheap_models,
+            attempts=attempts,
+            timeout_seconds=cascade.timeout_seconds,
+            max_question_chars=cascade.max_question_chars,
+        )
+        cascade_stage = outcome.stage
+        cheap_model_id = outcome.cheap_model_id
+        cheap_score = outcome.cheap_score
+        if outcome.accepted_text is not None and outcome.model_id is not None:
+            resolved_model = outcome.model_id
+            draft.model_id = resolved_model
+            yield ModelEvent(model_id=resolved_model)
+            accumulated.append(outcome.accepted_text)
+            # One frame, not a typing impersonation: the answer is already whole.
+            yield TokenEvent(text=outcome.accepted_text)
+            if first_token_at is None:
+                first_token_at = time.monotonic()
+            answer = await finalize(resolved_model)
+            yield MessageEndEvent(
+                message_id=assistant.id, content=answer, model_id=resolved_model
+            )
+            return
 
     try:
         try:

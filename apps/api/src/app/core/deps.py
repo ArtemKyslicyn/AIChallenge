@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
+from app.adapters.llm.heuristic_scorer import HeuristicAnswerScorer
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
 from app.adapters.llm.router import ModelRouter, TieredModelRouter
 from app.adapters.media.fake import FakeMediaGenerator
@@ -34,6 +35,7 @@ from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
 from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_id, visitor_hash
+from app.domain.cascade import AnswerScorer
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
 from app.domain.ports import (
@@ -98,6 +100,12 @@ class Container:
     media_limiter: SessionMediaRateLimiter | None
     #: Shared by every router tier, refreshed once per chat request.
     penalties: FeedbackPenaltyCache
+    #: Judges a cheap answer for the cascade. Stateless, so one is enough.
+    scorer: AnswerScorer
+    #: Resolved here rather than read from settings at call time: the keyless
+    #: path substitutes a chain of its own, and the cascade must aim at the
+    #: models this process actually has.
+    cascade_cheap_models: list[str]
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -232,6 +240,10 @@ def build_container(settings: Settings) -> Container:
                 " + Pixazo" if videos is not None else "",
             )
 
+    cheap_models = settings.cascade_cheap_models_list() or chain[:1]
+    if settings.cascade_enabled:
+        logger.info("cascade enabled cheap_models=%s", ",".join(cheap_models) or "<none>")
+
     engine = create_engine(settings.database_url)
     return Container(
         settings=settings,
@@ -244,6 +256,11 @@ def build_container(settings: Settings) -> Container:
         media_store=media_store,
         media_limiter=media_limiter,
         penalties=penalties,
+        scorer=HeuristicAnswerScorer(
+            min_answer_chars=settings.cascade_min_answer_chars,
+            threshold=settings.cascade_score_threshold,
+        ),
+        cascade_cheap_models=cheap_models,
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )
