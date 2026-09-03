@@ -52,6 +52,29 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+
+  // The composer is sticky and its height changes a lot: the options bar wraps,
+  // ×4 adds a preset row, «Настройки» opens a whole panel, the textarea grows.
+  // Publish the measured height as `--composer-h` so `.float-dock` can sit
+  // above it instead of guessing (index.css keeps a fallback for the first
+  // frame). No React state — this must not re-render the thread on every
+  // keystroke that grows the textarea.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty("--composer-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--composer-h");
+    };
+  }, []);
 
   useEffect(() => {
     setSession(initSessionChatPrefs(sessionId, global.defaultChatMode));
@@ -167,7 +190,7 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         : "Напишите сообщение…";
 
   return (
-    <div className="composer-wrap">
+    <div className="composer-wrap" ref={wrap}>
       {tooLong && (
         <p className="alert" role="alert">
           <strong>Слишком длинно.</strong> {outgoing.api.length.toLocaleString()} из{" "}
