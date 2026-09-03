@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
     DomainError,
+    FeedbackTargetError,
     LLMExhaustedError,
     LLMProviderError,
     LLMStreamAbortedError,
@@ -29,6 +30,7 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     ScenarioNotFoundError: status.HTTP_404_NOT_FOUND,
     ProbeDisabledError: status.HTTP_404_NOT_FOUND,
     SessionClosedError: status.HTTP_409_CONFLICT,
+    FeedbackTargetError: status.HTTP_400_BAD_REQUEST,
     MessageValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     LLMExhaustedError: status.HTTP_503_SERVICE_UNAVAILABLE,
     LLMStreamAbortedError: status.HTTP_502_BAD_GATEWAY,

@@ -81,6 +81,14 @@ class MessageNotFoundError(DomainError):
     """Referenced message id does not exist."""
 
 
+class FeedbackTargetError(DomainError):
+    """The caller may reach this message, but it is not something to rate.
+
+    Distinct from "not found" on purpose: ownership was proven, so hiding the
+    reason would only confuse a client that pointed at the wrong turn.
+    """
+
+
 class MediaGenerationError(DomainError):
     """External media provider failed or returned an unusable payload."""
 

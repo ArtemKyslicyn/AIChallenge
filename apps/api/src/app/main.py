@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.api.errors import register_error_handlers
+from app.adapters.api.feedback import router as feedback_router
 from app.adapters.api.health import router as health_router
 from app.adapters.api.lab import router as lab_router
 from app.adapters.api.llm import router as llm_router
@@ -48,7 +49,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["Content-Type", SESSION_TOKEN_HEADER, VISITOR_ID_HEADER],
         )
 
-    for router in (health_router, sessions_router, llm_router, media_router, lab_router):
+    for router in (
+        health_router,
+        sessions_router,
+        llm_router,
+        media_router,
+        lab_router,
+        feedback_router,
+    ):
         app.include_router(router, prefix=API_PREFIX)
 
     register_error_handlers(app)
