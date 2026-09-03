@@ -31,6 +31,7 @@ import { Composer, type OutgoingMessage } from "./Composer";
 import { DebugFloat } from "./DebugFloat";
 import { emptyLabSlots, LabTurnView } from "./LabTurnView";
 import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
+import { FeedbackStatsPanel } from "./FeedbackStatsPanel";
 import { ModelsFloat } from "./ModelsFloat";
 import { ParetoPanel } from "./ParetoPanel";
 import { MediaJobCard } from "./MediaJobCard";
@@ -724,6 +725,9 @@ export function Chat({
              stays idle while the tab is hidden. Lab API failures stay inside
              the panel and never reach the chat thread. */
           ranking={({ hours, active }) => <ParetoPanel hours={hours} active={active} />}
+          feedback={({ hours, active }) => (
+            <FeedbackStatsPanel hours={hours} active={active} />
+          )}
         />
       </div>
     </>

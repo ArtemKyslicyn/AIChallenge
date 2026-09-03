@@ -121,9 +121,9 @@ type ModelsTab = "ranking" | "feedback";
 **Files:**
 - Create: `apps/web/src/components/FeedbackStatsPanel.tsx`
 
-- [ ] **Step 1: Table** ups/downs/down%; show «ниже в очереди» chip if `penalized`
-- [ ] **Step 2: Empty:** «Оценок пока нет — нажмите 👍/👎 под ответом.»
-- [ ] **Step 3: Commit** `feat(web): feedback stats tab in Models float`
+- [x] **Step 1: Table** ups/downs/down%; show «ниже в очереди» chip if `penalized`
+- [x] **Step 2: Empty:** «Оценок пока нет — нажмите 👍/👎 под ответом.»
+- [x] **Step 3: Commit** `feat(web): feedback stats tab in Models float`
 
 ---
 
