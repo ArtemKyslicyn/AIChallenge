@@ -1759,6 +1759,147 @@ textarea {
   }
 }
 
+/* ---------- models float ---------- */
+/* Same dock family as .debug-float / .lab-results-float: identical width,
+   max-height and z-index (inherited from .float-dock), so the three panels
+   read as one component and never cover the composer's send button. */
+
+.models-float-fab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-small);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.models-float-fab:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+.models-float {
+  width: min(360px, 100%);
+  max-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+
+.models-float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+}
+
+.models-float-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.models-float-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.models-float-actions .ghost-button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.models-float-window {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 2px var(--space-1);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.models-float-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  margin: var(--space-2) var(--space-3) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 90%, var(--border));
+  flex-shrink: 0;
+}
+
+.models-float-tab {
+  flex: 1;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.models-float-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.models-float-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.models-float-panel[hidden] {
+  display: none;
+}
+
+.models-float-empty {
+  margin: var(--space-2) 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+/* Mobile: 44px hit targets for the FAB, tabs and window switch. */
+@media (max-width: 480px) {
+  .models-float-fab,
+  .models-float-tab,
+  .models-float-window,
+  .models-float-actions .ghost-button {
+    min-height: 44px;
+  }
+
+  .models-float-fab {
+    justify-content: center;
+  }
+}
+
 /* ---------- lab results float ---------- */
 
 .lab-results-float {
