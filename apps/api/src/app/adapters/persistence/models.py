@@ -6,7 +6,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -84,4 +95,35 @@ class RunTraceRow(Base):
         # one session newest-first. One index each.
         Index("ix_run_traces_created_at", "created_at"),
         Index("ix_run_traces_session_id_created_at", "session_id", "created_at"),
+    )
+
+
+class MessageFeedbackRow(Base):
+    """One vote on one assistant message — at most one row per message.
+
+    The uniqueness is the product decision made physical: v1 collects a single
+    verdict per answer (last write wins) rather than a vote count, so a reader
+    changing their mind updates this row instead of adding a second opinion.
+    """
+
+    __tablename__ = "message_feedback"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    message_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    visitor_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    value: Mapped[str] = mapped_column(String(8), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("message_id", name="uq_message_feedback_message_id"),
+        # The domain only knows two values; the database should refuse a third
+        # rather than let a typo become a row nobody can aggregate.
+        CheckConstraint("value IN ('up', 'down')", name="ck_message_feedback_value"),
+        # Both read paths — the router's window and the export — scan by time.
+        Index("ix_message_feedback_created_at", "created_at"),
     )
