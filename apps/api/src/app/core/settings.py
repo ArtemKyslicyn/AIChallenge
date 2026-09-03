@@ -168,6 +168,20 @@ class Settings(BaseSettings):
     cascade_max_cheap_chars: int = 1200
     cascade_timeout_seconds: float = 12.0
 
+    # G-Eval quality column. JUDGE_MODEL is empty by default and that empty
+    # string is the off switch for the whole feature: no judge is built, no
+    # call is made, and the ranking is computed exactly as it was before.
+    # It must also name a *different* model than the ones being ranked —
+    # a model grading its own writing grades itself generously.
+    judge_model: str = ""
+    judge_sample_rate: float = 0.2
+    judge_min_answer_chars: int = 80
+    judge_max_per_hour: int = 60
+    #: Judged runs a model needs before quality is allowed to move it in the
+    #: ranking. Mirrors ``app.application.pareto.DEFAULT_MIN_JUDGED_RUNS``.
+    judge_min_runs: int = 5
+    judge_timeout_seconds: float = 20.0
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""

@@ -106,6 +106,11 @@ class ReplyDraft:
     chunks: list[str] = field(default_factory=list)
     model_id: str | None = None
     finished: bool = False
+    #: How the turn ended, mirroring the trace. Empty until it has ended at
+    #: all, which is exactly the state a reader who hung up leaves behind.
+    #: Read out of band by the judge, which has nothing to grade in an answer
+    #: that errored, was cut off, or never found a model.
+    status: str = ""
 
     @property
     def text(self) -> str:
@@ -324,6 +329,7 @@ async def send_user_message_and_stream(
             await messages.update_content(assistant.id, answer, model_id)
             await uow.commit()
             draft.finished = True
+            draft.status = status
             # One save point for every ending — ok, aborted, exhausted, error.
             # A reader who hangs up never reaches here, and writes no trace.
             await save_trace(model_id, answer, status)

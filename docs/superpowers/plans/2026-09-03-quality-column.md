@@ -289,7 +289,7 @@ def test_score_uses_quality_once_the_sample_is_big_enough() -> None:
 - Modify: `apps/api/src/app/core/{settings,deps}.py`
 - Test: `apps/api/tests/unit/test_judge_scheduling.py`
 
-- [ ] **Step 1: Падающие тесты**
+- [x] **Step 1: Падающие тесты**
 
 ```python
 async def test_the_judge_is_never_awaited_inside_the_stream() -> None:
@@ -301,14 +301,14 @@ async def test_a_failing_judge_leaves_the_answer_and_the_trace_alone() -> None: 
 async def test_no_judge_model_configured_means_no_call_at_all() -> None: ...
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
-- [ ] **Step 3: Реализовать.** После завершения стрима, там же где живёт `_rescue_unsaved`, поставить задачу через `run_shielded`: открыть **свою** сессию из `container.sessionmaker()`, свериться с `should_judge`, вызвать судью, записать оценку в трейс сообщения, закоммитить. Любое исключение — `logger.warning` и выход. Счётчик судейств за час — в процессе, рядом с `FeedbackPenaltyCache` по стилю.
+- [x] **Step 3: Реализовать.** После завершения стрима, там же где живёт `_rescue_unsaved`, поставить задачу через `run_shielded`: открыть **свою** сессию из `container.sessionmaker()`, свериться с `should_judge`, вызвать судью, записать оценку в трейс сообщения, закоммитить. Любое исключение — `logger.warning` и выход. Счётчик судейств за час — в процессе, рядом с `FeedbackPenaltyCache` по стилю.
 
 Настройки (имена из спеки): `judge_model=""`, `judge_sample_rate=0.2`, `judge_min_answer_chars=80`, `judge_max_per_hour=60`, `judge_min_runs=5`, `judge_timeout_seconds=20.0`. Пустой `judge_model` → судья не собирается в `Container` вовсе.
 
-- [ ] **Step 4: `uv run pytest -q` — существующие тесты не меняются**
-- [ ] **Step 5: Commit** `feat(api): judge answers out of band, never in the stream`
+- [x] **Step 4: `uv run pytest -q` — существующие тесты не меняются**
+- [x] **Step 5: Commit** `feat(api): judge answers out of band, never in the stream`
 
 ---
 
