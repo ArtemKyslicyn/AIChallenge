@@ -3,6 +3,9 @@
 Status: **Phases A–D done (2026-09-03).** Открыт только Tier B из research-заметки (D.3).
 Возврат — через **мастер-план**.
 
+> 🔖 **Возврат после паузы:** [Точка возврата 2026-09-03](./2026-09-03-RESUME.md) —
+> где именно остановились, что уже сделано и как поднять стенд.
+
 ## Entrypoint
 
 **[Master plan: Observability → Prefs → Routing Loop](./2026-09-03-observability-routing-master.md)**  
