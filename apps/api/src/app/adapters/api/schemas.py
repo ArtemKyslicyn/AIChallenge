@@ -80,6 +80,11 @@ class RunTraceResponse(BaseModel):
     cascade_stage: str = CASCADE_OFF
     cheap_model_id: str | None = None
     cheap_score: float | None = None
+    #: Judge verdict 0..1, or null when this run was not judged — the sampler
+    #: looks at a fraction of answers, so null is the common case.
+    quality_score: float | None = None
+    #: Which model gave that verdict, so two judges are never mistaken for one.
+    quality_model_id: str | None = None
 
 
 class SessionTracesResponse(BaseModel):

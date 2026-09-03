@@ -30,6 +30,7 @@ def trace(
     total_ms: int | None = 1000,
     cost: float | None = 1.0,
     minutes_ago: int = 1,
+    quality: float | None = None,
 ) -> RunTrace:
     return RunTrace(
         id=UUID(int=100 + minutes_ago),
@@ -50,6 +51,8 @@ def trace(
         tool_ok=None,
         status=STATUS_OK,
         created_at=datetime.now(UTC) - timedelta(minutes=minutes_ago),
+        quality_score=quality,
+        quality_model_id="judge-1" if quality is not None else None,
     )
 
 
@@ -91,11 +94,30 @@ def test_pareto_row_carries_every_column_the_table_renders(
         "model_id": "model-a",
         "n": 2,
         "success_rate": 1.0,
+        "avg_quality": None,
+        "judged_n": 0,
         "p50_ttft_ms": 120.0,
         "p50_total_ms": 2000.0,
         "avg_cost_proxy": 1.0,
         "score": pytest.approx(0.5),
     }
+
+
+def test_pareto_row_reports_the_judged_average_and_its_sample_size(
+    api: TestClient, traces: InMemoryRunTraceRepository
+) -> None:
+    # Two of three runs judged: the average is over those two, and `judged_n`
+    # says so — a mean without its sample size reads as a settled fact.
+    traces.saved = [
+        trace(minutes_ago=1, quality=0.8),
+        trace(minutes_ago=2, quality=0.6),
+        trace(minutes_ago=3),
+    ]
+
+    (row,) = api.get("/api/v1/lab/pareto").json()["models"]
+
+    assert row["avg_quality"] == pytest.approx(0.7)
+    assert row["judged_n"] == 2
 
 
 def test_unmeasured_columns_are_null_not_zero(
@@ -105,6 +127,9 @@ def test_unmeasured_columns_are_null_not_zero(
     (row,) = api.get("/api/v1/lab/pareto").json()["models"]
     assert row["p50_total_ms"] is None
     assert row["avg_cost_proxy"] is None
+    # Nobody judged this model, so the column has nothing to say. Null, never
+    # 0.0: a zero would read as "the judge disliked it".
+    assert row["avg_quality"] is None
 
 
 def test_pareto_window_is_bounded(api: TestClient) -> None:
@@ -147,9 +172,14 @@ def test_session_traces_return_the_debug_shape(
         "cascade_stage",
         "cheap_model_id",
         "cheap_score",
+        # Added by the quality column (phase D.3).
+        "quality_score",
+        "quality_model_id",
     }
     assert row["resolved_model_id"] == "model-a"
     assert row["status"] == "ok"
+    assert row["quality_score"] is None
+    assert row["quality_model_id"] is None
     assert row["ttft_ms"] == 120
     assert row["attempts"][0] == {
         "model_id": "model-x",
@@ -173,3 +203,16 @@ def test_session_traces_require_the_session_token() -> None:
     app = create_app(Settings(_env_file=None, use_fake_llm=True))  # type: ignore[call-arg]
     with TestClient(app) as client:
         assert client.get("/api/v1/sessions/not-a-uuid/traces").status_code == 404
+
+
+def test_session_trace_carries_the_verdict_and_who_gave_it(
+    api: TestClient, traces: InMemoryRunTraceRepository
+) -> None:
+    # The judge id travels with the score so two judges are never averaged
+    # together silently in whatever reads this.
+    traces.saved = [trace(quality=0.8)]
+
+    (row,) = api.get(f"/api/v1/sessions/{SESSION_ID}/traces").json()["traces"]
+
+    assert row["quality_score"] == pytest.approx(0.8)
+    assert row["quality_model_id"] == "judge-1"

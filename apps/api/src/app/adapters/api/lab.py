@@ -64,6 +64,14 @@ class ModelAggregateResponse(BaseModel):
     model_id: str
     n: int
     success_rate: float
+    #: Mean judge verdict over the judged runs only, 0..1. Null when nobody
+    #: judged this model in the window — never 0.0, which would read as a
+    #: verdict rather than as missing data.
+    avg_quality: float | None
+    #: How many runs that average is over. Published beside it because a mean
+    #: without its sample size reads as a settled fact, and because the score
+    #: only starts using quality once this passes ``JUDGE_MIN_RUNS``.
+    judged_n: int
     #: Null when nothing in the window was measured — the UI shows a dash, and
     #: must never render it as 0 or NaN.
     p50_ttft_ms: float | None
@@ -122,6 +130,8 @@ async def model_pareto(
                 model_id=row.model_id,
                 n=row.n,
                 success_rate=row.success_rate,
+                avg_quality=row.avg_quality,
+                judged_n=row.judged_n,
                 p50_ttft_ms=row.p50_ttft_ms,
                 p50_total_ms=row.p50_total_ms,
                 avg_cost_proxy=row.avg_cost_proxy,

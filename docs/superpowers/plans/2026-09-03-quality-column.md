@@ -319,7 +319,7 @@ async def test_no_judge_model_configured_means_no_call_at_all() -> None: ...
 - Modify: `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md` (сначала!)
 - Modify: `apps/web/src/api/client.ts`, `apps/web/src/components/ParetoPanel.tsx`, `apps/web/src/index.css`
 
-- [ ] **Step 1: Строки в чеклист**
+- [x] **Step 1: Строки в чеклист**
 
 | Key | String |
 |-----|--------|
@@ -327,7 +327,7 @@ async def test_no_judge_model_configured_means_no_call_at_all() -> None: ...
 | `hint_quality` | Оценка ответов судьёй, 0–100%. В скобках — сколько прогонов оценено |
 | `formula_summary` | *обновить*: Score = качество (или успех, пока оценок мало) ÷ время_ответа ÷ cost |
 
-- [ ] **Step 2: API** — `avg_quality` и `judged_n` в элементах `models`; `quality_score`, `quality_model_id` в трейсах. Формы:
+- [x] **Step 2: API** — `avg_quality` и `judged_n` в элементах `models`; `quality_score`, `quality_model_id` в трейсах. Формы:
 
 ```jsonc
 {"model_id": "x", "n": 12, "success_rate": 0.92, "avg_quality": 0.81, "judged_n": 7,

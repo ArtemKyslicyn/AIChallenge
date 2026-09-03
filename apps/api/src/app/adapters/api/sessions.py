@@ -324,6 +324,8 @@ async def list_session_traces(
                 cascade_stage=row.cascade_stage,
                 cheap_model_id=row.cheap_model_id,
                 cheap_score=row.cheap_score,
+                quality_score=row.quality_score,
+                quality_model_id=row.quality_model_id,
             )
             for row in rows
         ]
