@@ -31,6 +31,12 @@ const COPY = {
   formulaLabel: "Как считается Score",
 } as const;
 
+/** Checklist key `escalation_rate`. One number, one thought, one line. */
+function escalationLine(cheap: number, escalated: number): string {
+  const total = cheap + escalated;
+  return `Эскалации: ${escalated} из ${total} (${formatPercent(total ? escalated / total : 0)})`;
+}
+
 /** Never render `NaN`: nulls and non-finite numbers become an em dash. */
 const DASH = "—";
 
@@ -159,6 +165,7 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
   };
 
   const rows = payload?.models ?? [];
+  const cascade = payload?.cascade ?? null;
   const precision = scorePrecision(rows.map((model) => num(model.score)));
 
   return (
@@ -236,6 +243,13 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Only when the window actually saw the cascade run — a zero would
+          claim it ran and escalated nothing, which is a different fact. One
+          `.pareto-meta` line under the table, never a section of its own. */}
+      {cascade && (
+        <p className="pareto-meta">{escalationLine(cascade.cheap, cascade.escalated)}</p>
       )}
 
       {/* Bottom-anchored float: expanding used to reveal the text below the
