@@ -31,7 +31,8 @@ const TAB_LABEL: Record<ModelsTab, string> = {
 /** Honest empty states while the real panels are not mounted yet (no «Скоро»). */
 const TAB_EMPTY: Record<ModelsTab, string> = {
   ranking: "Пока нет замеров. Отправьте пару сообщений в чат.",
-  feedback: "Оценок пока нет — нажмите «Полезно» / «Не полезно» под ответом.",
+  feedback:
+    "Оценок пока нет. Кнопки «Полезно» / «Не полезно» есть под ответом в режиме «Один».",
 };
 
 /** What the shell tells a tab's content about itself. */
