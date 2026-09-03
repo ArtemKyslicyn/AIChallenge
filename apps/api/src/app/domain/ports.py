@@ -133,6 +133,10 @@ class FeedbackRepository(Protocol):
 
     async def get_for_message(self, message_id: UUID) -> MessageFeedback | None: ...
 
+    #: Take one vote back. Answers whether a row went away, so the caller can
+    #: tell a retraction from a no-op — both are success at the API edge.
+    async def delete_for_message(self, message_id: UUID) -> bool: ...
+
     async def stats_by_model(self, *, since: datetime) -> list[ModelFeedbackStats]: ...
 
     #: Declared as a plain ``def`` for the same reason as ``stream_chat``: an

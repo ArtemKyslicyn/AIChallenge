@@ -209,3 +209,100 @@ def test_a_rejected_vote_is_never_committed(api: TestClient, uow: RecordingUnitO
     api.post(URL, json={"value": "up"}, headers=auth("nope"))
     api.post(f"/api/v1/messages/{QUESTION_ID}/feedback", json={"value": "up"}, headers=auth())
     assert uow.commits == 0
+
+
+# --- Taking a vote back -------------------------------------------------------
+#
+# `aria-pressed` on the thumbs promises a control that can be un-pressed, so the
+# API has to offer the way back to "no opinion". Same guard as the POST, and
+# idempotent: asking for a state you are already in is not an error.
+
+
+def test_retracting_a_vote_removes_it_and_says_nothing_back(
+    api: TestClient, votes: InMemoryFeedbackRepository, uow: RecordingUnitOfWork
+) -> None:
+    api.post(URL, json={"value": "up"}, headers=auth())
+
+    response = api.delete(URL, headers=auth())
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert votes.votes == {}
+    assert uow.commits == 2  # the vote, then its removal
+
+
+def test_retracting_when_there_is_no_vote_is_a_quiet_success(
+    api: TestClient, votes: InMemoryFeedbackRepository, uow: RecordingUnitOfWork
+) -> None:
+    # The caller asked for "no vote on this message" and that is the state.
+    assert api.delete(URL, headers=auth()).status_code == 204
+    assert votes.votes == {}
+    # Nothing changed, so nothing was written.
+    assert uow.commits == 0
+
+
+def test_retracting_twice_stays_a_204(api: TestClient) -> None:
+    api.post(URL, json={"value": "down"}, headers=auth())
+    assert api.delete(URL, headers=auth()).status_code == 204
+    assert api.delete(URL, headers=auth()).status_code == 204
+
+
+def test_a_retraction_with_a_wrong_token_is_a_404_and_keeps_the_vote(
+    api: TestClient, votes: InMemoryFeedbackRepository
+) -> None:
+    api.post(URL, json={"value": "up"}, headers=auth())
+
+    assert api.delete(URL, headers=auth("nope")).status_code == 404
+    assert votes.votes[ANSWER_ID].value == "up"
+
+
+def test_a_retraction_without_a_token_is_a_404(api: TestClient) -> None:
+    assert api.delete(URL).status_code == 404
+
+
+def test_retracting_someone_elses_vote_is_a_404(
+    api: TestClient, votes: InMemoryFeedbackRepository
+) -> None:
+    other = f"/api/v1/messages/{OTHER_ANSWER_ID}/feedback"
+    api.post(other, json={"value": "up"}, headers=auth(OTHER_TOKEN))
+
+    assert api.delete(other, headers=auth()).status_code == 404
+    assert votes.votes[OTHER_ANSWER_ID].value == "up"
+
+
+def test_retracting_on_an_unknown_message_is_a_404(api: TestClient) -> None:
+    url = f"/api/v1/messages/{UUID(int=999)}/feedback"
+    assert api.delete(url, headers=auth()).status_code == 404
+
+
+def test_a_malformed_id_is_the_same_404_on_the_way_out_too(api: TestClient) -> None:
+    assert api.delete("/api/v1/messages/nope/feedback", headers=auth()).status_code == 404
+
+
+def test_every_retraction_denial_says_exactly_the_same_thing(api: TestClient) -> None:
+    bodies = [
+        api.delete(URL, headers=auth("nope")).json(),
+        api.delete(f"/api/v1/messages/{OTHER_ANSWER_ID}/feedback", headers=auth()).json(),
+        api.delete(f"/api/v1/messages/{UUID(int=999)}/feedback", headers=auth()).json(),
+    ]
+    assert bodies[0]["error"]["message"] == bodies[1]["error"]["message"]
+    assert bodies[1]["error"]["message"] == bodies[2]["error"]["message"]
+
+
+def test_retracting_on_your_own_question_is_the_same_400_as_rating_it(api: TestClient) -> None:
+    # Ownership was proven, so the mistake is safe to name — and the answer
+    # matches the POST rather than pretending a question could hold a vote.
+    response = api.delete(f"/api/v1/messages/{QUESTION_ID}/feedback", headers=auth())
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "feedback_target"
+
+
+def test_a_retraction_then_a_fresh_vote_leaves_one_row(
+    api: TestClient, votes: InMemoryFeedbackRepository
+) -> None:
+    api.post(URL, json={"value": "up"}, headers=auth())
+    api.delete(URL, headers=auth())
+    api.post(URL, json={"value": "down"}, headers=auth())
+
+    assert len(votes.votes) == 1
+    assert votes.votes[ANSWER_ID].value == "down"

@@ -115,3 +115,47 @@ async def test_the_export_dumps_the_vote_with_its_trace(
     assert '"feedback": "up"' in line
     # Content stays out unless its own flag is on, even for an ops caller.
     assert "prompt" not in line
+
+
+async def test_a_retraction_clears_the_thumb_and_the_lab_table(api: AsyncClient) -> None:
+    """The whole point of the retract: reload shows nothing, «Оценки» agrees."""
+    message_id, headers = await answer(api)
+    url = f"/api/v1/messages/{message_id}/feedback"
+    await api.post(url, json={"value": "down"}, headers=headers | VISITOR)
+
+    retracted = await api.delete(url, headers=headers)
+    assert retracted.status_code == 204
+
+    stats = (await api.get("/api/v1/lab/feedback-stats?hours=1")).json()
+    # The model leaves the table rather than sitting there with 0/0.
+    assert stats["models"] == []
+
+
+async def test_history_forgets_a_retracted_vote_so_a_reload_shows_no_thumb(
+    api: AsyncClient,
+) -> None:
+    created = (await api.post("/api/v1/sessions", json={})).json()
+    headers = {"X-Session-Token": created["access_token"]}
+    history = f"/api/v1/sessions/{created['id']}/messages"
+    async with api.stream("POST", history, json={"content": "привет"}, headers=headers) as reply:
+        assert reply.status_code == 200
+        async for _ in reply.aiter_lines():
+            pass
+
+    written = (await api.get(history, headers=headers)).json()
+    message_id = next(m["id"] for m in written if m["role"] == "assistant")
+    url = f"/api/v1/messages/{message_id}/feedback"
+    await api.post(url, json={"value": "up"}, headers=headers | VISITOR)
+    assert (await api.delete(url, headers=headers)).status_code == 204
+
+    after = {m["role"]: m["feedback"] for m in (await api.get(history, headers=headers)).json()}
+    assert after["assistant"] is None
+
+
+async def test_a_retraction_survives_being_asked_for_twice(api: AsyncClient) -> None:
+    message_id, headers = await answer(api)
+    url = f"/api/v1/messages/{message_id}/feedback"
+    await api.post(url, json={"value": "up"}, headers=headers | VISITOR)
+
+    assert (await api.delete(url, headers=headers)).status_code == 204
+    assert (await api.delete(url, headers=headers)).status_code == 204

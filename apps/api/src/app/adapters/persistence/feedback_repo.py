@@ -89,6 +89,25 @@ class SqlAlchemyFeedbackRepository:
         await self._db.flush()
         return to_feedback(existing)
 
+    async def delete_for_message(self, message_id: UUID) -> bool:
+        """Take the vote back, leaving the message with no opinion on it.
+
+        Deleting rather than storing a third "neutral" value: the absence of a
+        row is already what "nobody voted" means everywhere else here — history,
+        ``stats_by_model`` and the export all read it that way — and a neutral
+        row would have to be filtered out of each of them.
+
+        Answers ``False`` when there was nothing to remove. That is not a
+        failure: the caller asked for "no vote on this message" and that is the
+        state they get either way.
+        """
+        row = await self._row_for(message_id)
+        if row is None:
+            return False
+        await self._db.delete(row)
+        await self._db.flush()
+        return True
+
     async def values_for_session(self, session_id: UUID) -> dict[UUID, FeedbackValue]:
         """Every vote cast in one chat, keyed by message.
 
