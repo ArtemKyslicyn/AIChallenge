@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+
+> ⚠️ **Read first:** [Prep decisions](./2026-09-03-observability-prep-decisions.md) — locked technical contract from a code-reading pass.
+> Where this plan and that file disagree, **the prep decisions win**.
+
 **Goal:** Качественно спроектировать и внедрить UI/UX для Pareto Lab и Feedback так, чтобы метрики и оценки выглядели продуктово, а не «прикрученной админкой».
 
 **Architecture:** Один новый float «Модели» в `float-dock` (mutex с Debug/Results); feedback strip в assistant `Turn`; вкладки Рейтинг / Оценки; переиспользование CSS-паттернов LabResults/Debug.

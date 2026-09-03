@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+
+> ⚠️ **Read first:** [Prep decisions](./2026-09-03-observability-prep-decisions.md) — locked technical contract from a code-reading pass.
+> Where this plan and that file disagree, **the prep decisions win**.
+
 **Goal:** Thumbs on assistant messages, preference export for offline/DS use, and soft router bias from down-vote rates.
 
 **Architecture:** New `MessageFeedback` entity + repo; `POST /messages/{id}/feedback`; Lab stats + JSONL export; ModelRouter consults a `FeedbackPenaltyStore` (in-process TTL map refreshed from DB aggregates on a timer or on each request with cache). Requires **Pareto Lab / RunTrace** shipped first so export rows can join traces.
