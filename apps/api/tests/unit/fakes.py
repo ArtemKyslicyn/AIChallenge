@@ -198,6 +198,10 @@ class InMemoryFeedbackRepository(StubFeedbackStats):
     async def get_for_message(self, message_id: UUID) -> MessageFeedback | None:
         return self.votes.get(message_id)
 
+    async def delete_for_message(self, message_id: UUID) -> bool:
+        # Same "nothing to remove is not a failure" rule as the SQL repo.
+        return self.votes.pop(message_id, None) is not None
+
     async def export_rows(
         self, *, since: datetime, until: datetime, include_content: bool = False
     ) -> AsyncIterator[PreferenceRow]:

@@ -175,3 +175,80 @@ async def test_export_survives_an_answer_with_no_trace(engine: AsyncEngine) -> N
         (row,) = [r async for r in repo.export_rows(since=NOW - timedelta(hours=1), until=NOW)]
         assert row.attempts == []
         assert row.ttft_ms is None
+
+
+async def test_a_retracted_vote_leaves_no_row_behind(engine: AsyncEngine) -> None:
+    await seed(engine, answers=[(UUID(int=2), "model-a")])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        repo = SqlAlchemyFeedbackRepository(db)
+        await repo.upsert(vote(UUID(int=2), "up"))
+        await db.commit()
+
+        assert await repo.delete_for_message(UUID(int=2)) is True
+        await db.commit()
+
+        assert await repo.get_for_message(UUID(int=2)) is None
+        rows = (await db.execute(MessageFeedbackRow.__table__.select())).all()
+        assert rows == []
+
+
+async def test_retracting_nothing_is_reported_rather_than_raised(engine: AsyncEngine) -> None:
+    await seed(engine, answers=[(UUID(int=2), "model-a")])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        repo = SqlAlchemyFeedbackRepository(db)
+        assert await repo.delete_for_message(UUID(int=2)) is False
+
+
+async def test_stats_forget_a_retracted_vote(engine: AsyncEngine) -> None:
+    """The «Оценки» tab has to reflect a retraction, not just the thumb."""
+    await seed(engine, answers=[(UUID(int=2), "model-a"), (UUID(int=3), "model-b")])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        repo = SqlAlchemyFeedbackRepository(db)
+        await repo.upsert(vote(UUID(int=2), "down"))
+        await repo.upsert(vote(UUID(int=3), "up"))
+        await db.commit()
+
+        await repo.delete_for_message(UUID(int=2))
+        await db.commit()
+
+        stats = {s.model_id: s for s in await repo.stats_by_model(since=NOW - timedelta(hours=1))}
+        # Not "zero votes for model-a" — the model drops out of the table
+        # entirely, exactly as if the vote had never been cast.
+        assert "model-a" not in stats
+        assert stats["model-b"].ups == 1
+
+
+async def test_the_export_drops_a_retracted_vote(engine: AsyncEngine) -> None:
+    await seed(engine, answers=[(UUID(int=2), "model-a")])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        repo = SqlAlchemyFeedbackRepository(db)
+        await repo.upsert(vote(UUID(int=2), "up"))
+        await db.commit()
+        await repo.delete_for_message(UUID(int=2))
+        await db.commit()
+
+        rows = [row async for row in repo.export_rows(since=NOW - timedelta(hours=1), until=NOW)]
+        assert rows == []
+
+
+async def test_a_vote_can_be_cast_again_after_being_retracted(engine: AsyncEngine) -> None:
+    """A retraction must not poison the message for future votes."""
+    await seed(engine, answers=[(UUID(int=2), "model-a")])
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        repo = SqlAlchemyFeedbackRepository(db)
+        await repo.upsert(vote(UUID(int=2), "up"))
+        await db.commit()
+        await repo.delete_for_message(UUID(int=2))
+        await db.commit()
+
+        stored = await repo.upsert(vote(UUID(int=2), "down"))
+        await db.commit()
+
+        assert stored.value == "down"
+        rows = (await db.execute(MessageFeedbackRow.__table__.select())).all()
+        assert len(rows) == 1

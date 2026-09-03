@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
-from app.application.feedback import NOT_FOUND, submit_feedback
+from app.application.feedback import NOT_FOUND, retract_feedback, submit_feedback
 from app.core.deps import (
     Feedback,
     Messages,
@@ -39,6 +39,17 @@ class FeedbackResponse(BaseModel):
     value: FeedbackValue
 
 
+def _parsed_id(message_id: str) -> UUID:
+    """Parse in the adapter so a malformed id is the same 404 as an unknown one.
+
+    A 422 would confirm that well-formed ids are the ones worth guessing.
+    """
+    try:
+        return UUID(message_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=NOT_FOUND) from None
+
+
 @router.post("/{message_id}/feedback", response_model=FeedbackResponse)
 async def rate_message(
     message_id: str,
@@ -51,17 +62,8 @@ async def rate_message(
     uow: Uow,
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> FeedbackResponse:
-    """Record "helpful" or "not helpful" for one answer; last vote wins.
-
-    ``message_id`` is taken as a string and parsed here so that a malformed id
-    is the same 404 as an unknown one — a 422 would confirm that well-formed
-    ids are the ones worth guessing.
-    """
-    try:
-        parsed = UUID(message_id)
-    except ValueError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=NOT_FOUND) from None
-
+    """Record "helpful" or "not helpful" for one answer; last vote wins."""
+    parsed = _parsed_id(message_id)
     identity = resolve_visitor_identity(request, client_visitor_id)
     stored = await submit_feedback(
         message_id=parsed,
@@ -75,3 +77,43 @@ async def rate_message(
         now=utcnow,
     )
     return FeedbackResponse(message_id=stored.message_id, value=stored.value)
+
+
+@router.delete(
+    "/{message_id}/feedback",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def unrate_message(
+    message_id: str,
+    token: SessionToken,
+    messages: Messages,
+    sessions: Sessions,
+    feedback: Feedback,
+    uow: Uow,
+) -> Response:
+    """Take the vote back — the pressed thumb, pressed again.
+
+    ``aria-pressed`` on the buttons promises a control that can be un-pressed,
+    so there has to be a way to say "no opinion" after saying something else.
+
+    Idempotent, and therefore ``204`` even when there was nothing to remove: the
+    caller asked for a message with no vote on it and that is what they have.
+    A 404 there would push the client into tracking whether its own optimistic
+    retraction had already landed. No body for the same reason — there is no
+    value left to report, and ``null`` would only invite a client to read it.
+
+    Authorization is the POST's, to the letter (prep D6): a wrong token, an
+    unknown message and someone else's session are one indistinguishable 404.
+    No visitor header is read — the vote being removed is identified by the
+    message alone, and the hash it carried was never a credential.
+    """
+    await retract_feedback(
+        message_id=_parsed_id(message_id),
+        access_token=token,
+        messages=messages,
+        sessions=sessions,
+        feedback=feedback,
+        uow=uow,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

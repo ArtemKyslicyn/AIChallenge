@@ -1,8 +1,9 @@
-"""Submitting a vote, and shaping one export line.
+"""Casting a vote, taking it back, and shaping one export line.
 
-The whole use case is an authorization check followed by an upsert — but the
-check is the interesting half, because a message id is the only thing the
+Both writes are an authorization check followed by one repository call — but
+the check is the interesting half, because a message id is the only thing the
 client sends and it must not become a way to read or rate someone else's chat.
+It is written once, in :func:`_authorized_answer`, so the two cannot drift.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.application.sessions import authorize_session
-from app.domain.entities import MessageRole
+from app.domain.entities import Message, MessageRole
 from app.domain.errors import FeedbackTargetError, MessageNotFoundError, SessionNotFoundError
 from app.domain.feedback import FeedbackValue, MessageFeedback, PreferenceRow
 from app.domain.ports import (
@@ -29,20 +30,14 @@ from app.domain.ports import (
 NOT_FOUND = "Сообщение не найдено."
 
 
-async def submit_feedback(
+async def _authorized_answer(
     *,
     message_id: UUID,
     access_token: str | None,
-    value: FeedbackValue,
-    visitor_hash: str | None = None,
     messages: MessageRepository,
     sessions: SessionRepository,
-    feedback: FeedbackRepository,
-    uow: UnitOfWork,
-    now: Callable[[], datetime],
-    id_factory: Callable[[], UUID] = uuid4,
-) -> MessageFeedback:
-    """Record one reader's verdict on one assistant answer.
+) -> Message:
+    """The assistant message this caller is allowed to have an opinion about.
 
     Ownership is proven the long way round: the message names its session, and
     the caller must hold that session's token. There is no shortcut through the
@@ -65,6 +60,30 @@ async def submit_feedback(
         # pointed at their own question instead of the answer to it.
         raise FeedbackTargetError("Оценить можно только ответ модели.")
 
+    return message
+
+
+async def submit_feedback(
+    *,
+    message_id: UUID,
+    access_token: str | None,
+    value: FeedbackValue,
+    visitor_hash: str | None = None,
+    messages: MessageRepository,
+    sessions: SessionRepository,
+    feedback: FeedbackRepository,
+    uow: UnitOfWork,
+    now: Callable[[], datetime],
+    id_factory: Callable[[], UUID] = uuid4,
+) -> MessageFeedback:
+    """Record one reader's verdict on one assistant answer."""
+    message = await _authorized_answer(
+        message_id=message_id,
+        access_token=access_token,
+        messages=messages,
+        sessions=sessions,
+    )
+
     stored = await feedback.upsert(
         MessageFeedback(
             id=id_factory(),
@@ -77,6 +96,39 @@ async def submit_feedback(
     )
     await uow.commit()
     return stored
+
+
+async def retract_feedback(
+    *,
+    message_id: UUID,
+    access_token: str | None,
+    messages: MessageRepository,
+    sessions: SessionRepository,
+    feedback: FeedbackRepository,
+    uow: UnitOfWork,
+) -> bool:
+    """Take a vote back, returning the answer to "no opinion".
+
+    Guarded exactly like :func:`submit_feedback` — retracting someone else's
+    vote must be no easier than casting one, and hiding the difference between
+    an unknown message and a foreign one matters just as much here.
+
+    Idempotent: a message nobody voted on is already in the state the caller
+    asked for, so that answers ``False`` rather than raising. Only a real
+    removal is committed — a no-op leaves the transaction untouched, which
+    keeps a stray double-click off the database entirely.
+    """
+    message = await _authorized_answer(
+        message_id=message_id,
+        access_token=access_token,
+        messages=messages,
+        sessions=sessions,
+    )
+
+    removed = await feedback.delete_for_message(message.id)
+    if removed:
+        await uow.commit()
+    return removed
 
 
 def preference_row_json(row: PreferenceRow) -> dict[str, Any]:
