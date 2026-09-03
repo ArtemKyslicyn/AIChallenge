@@ -1601,41 +1601,57 @@ textarea {
   text-align: left;
 }
 
-/* ---------- float dock (lab results + debug) ---------- */
-/* Stacks above the composer. Children own pointer-events; dock ignores them
-   so the thread stays clickable underneath. Results first in Chat.tsx = higher. */
+/* ---------- float dock (lab results + debug + models) ---------- */
+/* Stacks above the composer. Only the visible surfaces take pointer events;
+   the dock and its wrappers ignore them so the thread and the composer stay
+   clickable underneath. Results first in Chat.tsx = higher. */
 
 .float-dock {
   position: fixed;
   right: var(--space-3);
-  bottom: 88px;
+  /* Composer.tsx measures the sticky composer and publishes `--composer-h`.
+     Hard-coded offsets used to put the dock on top of the send button as soon
+     as the options bar wrapped, ×4 added a preset row or «Настройки» opened.
+     The fallback covers the frame before the first observation. */
+  bottom: calc(var(--composer-h, 96px) + var(--space-2));
   z-index: 40;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-2);
-  max-width: min(380px, calc(100vw - var(--space-4)));
+  /* A definite width, not shrink-to-fit: the three panels size themselves as
+     `min(360px, 100%)`, and against a shrink-to-fit dock that `100%` made the
+     panel jump 351px ↔ 288px when the Models tabs switched, dragging the FAB
+     underneath it sideways with it. */
+  width: min(380px, calc(100vw - var(--space-4)));
   pointer-events: none;
 }
 
-.float-dock > * {
+/* `.debug-float-root` is an invisible full-width wrapper: giving every dock
+   child `pointer-events: auto` made it swallow taps aimed at «Настройки». */
+.float-dock .debug-float-fab,
+.float-dock .debug-float,
+.float-dock .lab-results-fab,
+.float-dock .lab-results-float,
+.float-dock .models-float-fab,
+.float-dock .models-float {
   pointer-events: auto;
 }
 
 @media (min-width: 720px) {
   .float-dock {
-    bottom: 96px;
     right: var(--space-4);
   }
 }
 
 @media (max-width: 480px) {
   .float-dock {
-    bottom: 72px;
     right: var(--space-2);
     left: var(--space-2);
-    max-width: none;
-    align-items: stretch;
+    width: auto;
+    /* Never `stretch`: it turned each FAB — and the invisible
+       `.debug-float-root` wrapper — into a full-bleed bar over the composer. */
+    align-items: flex-end;
   }
 }
 
@@ -1647,8 +1663,12 @@ textarea {
   align-items: flex-end;
 }
 
+/* One rule for all three dock FABs. `.models-float-fab` used to duplicate this
+   block byte-for-byte, which is how only it ended up with the 44px touch
+   target below. */
 .debug-float-fab,
-.lab-results-fab {
+.lab-results-fab,
+.models-float-fab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -1665,9 +1685,19 @@ textarea {
 }
 
 .debug-float-fab:hover,
-.lab-results-fab:hover {
+.lab-results-fab:hover,
+.models-float-fab:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+/* Mobile: one 44px touch target for the whole FAB family. */
+@media (max-width: 480px) {
+  .debug-float-fab,
+  .lab-results-fab,
+  .models-float-fab {
+    min-height: 44px;
+  }
 }
 
 .debug-float-badge {
@@ -1839,30 +1869,11 @@ textarea {
 }
 
 /* ---------- models float ---------- */
-/* Same dock family as .debug-float / .lab-results-float: identical width,
-   max-height and z-index (inherited from .float-dock), so the three panels
-   read as one component and never cover the composer's send button. */
-
-.models-float-fab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-small);
-  font-weight: 600;
-  box-shadow: var(--shadow-1);
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
-}
-
-.models-float-fab:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
-}
+/* Same dock family as .debug-float / .lab-results-float: the FAB shares their
+   rule above, and the panel repeats their width / max-height / z-index. The
+   dock's definite width is what actually makes the three settle at one size —
+   `min(360px, 100%)` alone did not, because `100%` of a shrink-to-fit dock is
+   whatever the widest panel happens to be. */
 
 .models-float {
   width: min(360px, 100%);
