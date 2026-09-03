@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -42,3 +44,44 @@ class MessageRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("ix_messages_session_id_created_at", "session_id", "created_at"),)
+
+
+class RunTraceRow(Base):
+    """One measured assistant turn. Deliberately holds no prompt text.
+
+    Both foreign keys cascade: a trace is a measurement *of* a message, and
+    keeping it after the message is gone would leave an unjoinable row behind.
+    """
+
+    __tablename__ = "run_traces"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    message_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    visitor_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preferred_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: Null when the whole chain was exhausted and nothing answered.
+    resolved_model_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: The router's per-request journal, as written: ``[{model_id, ok, …}]``.
+    attempts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    ttft_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    token_count_est: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_proxy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tool_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tool_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        # The Lab reads a time window across all sessions; the debug view reads
+        # one session newest-first. One index each.
+        Index("ix_run_traces_created_at", "created_at"),
+        Index("ix_run_traces_session_id_created_at", "session_id", "created_at"),
+    )
