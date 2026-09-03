@@ -28,6 +28,7 @@ const COPY = {
   down: "Не полезно",
   thanks: "Спасибо",
   error: "Не удалось сохранить оценку",
+  retractError: "Не удалось отменить оценку",
 } as const;
 
 /** Design spec §3: «Спасибо» is a 1.2s inline confirmation, not a toast. */
@@ -50,7 +51,7 @@ export interface FeedbackStripProps {
 export function FeedbackStrip({ session, messageId, initialValue = null }: FeedbackStripProps) {
   const [value, setValue] = useState<FeedbackValue | null>(initialValue);
   const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"save" | "retract" | null>(null);
   const [thanks, setThanks] = useState(false);
 
   /** Only the newest click may settle — a fast re-vote must not be overwritten. */
@@ -82,7 +83,7 @@ export function FeedbackStrip({ session, messageId, initialValue = null }: Feedb
       // Optimistic: `aria-pressed` moves before the request, and rolls back below.
       setValue(next);
       setPending(true);
-      setFailed(false);
+      setFailed(null);
       setThanks(false);
       if (thanksTimer.current !== null) {
         window.clearTimeout(thanksTimer.current);
@@ -114,7 +115,10 @@ export function FeedbackStrip({ session, messageId, initialValue = null }: Feedb
           // toggle back and states it here, never touching the chat thread.
           setPending(false);
           setValue(previous);
-          setFailed(true);
+          // A failed retraction is not a failed save: telling someone their
+          // rating could not be *saved* when they were trying to take it back
+          // describes the opposite of what they asked for.
+          setFailed(next === null ? "retract" : "save");
         });
     },
     [session, messageId, value, pending],
@@ -147,7 +151,7 @@ export function FeedbackStrip({ session, messageId, initialValue = null }: Feedb
       </span>
       {failed && (
         <span className="feedback-strip-error" role="alert">
-          {COPY.error}
+          {failed === "retract" ? COPY.retractError : COPY.error}
         </span>
       )}
     </div>

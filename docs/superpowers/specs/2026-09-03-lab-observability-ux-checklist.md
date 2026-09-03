@@ -33,6 +33,7 @@
 | feedback_down | Не полезно |
 | feedback_thanks | Спасибо |
 | feedback_err | Не удалось сохранить оценку |
+| feedback_retract_err | Не удалось отменить оценку |
 | empty_feedback | Оценок пока нет. Кнопки «Полезно» / «Не полезно» есть под ответом в режиме «Один». |
 | penalized_chip | Ниже в очереди |
 | title_feedback | Оценки моделей |
