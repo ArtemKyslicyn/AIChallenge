@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from app.domain.cascade import CASCADE_OFF
+
 #: Terminal states of one turn, mirroring the four ways the chat use case ends.
 STATUS_OK = "ok"
 STATUS_ERROR = "error"
@@ -57,6 +59,16 @@ class RunTrace:
     tool_ok: bool | None
     status: str
     created_at: datetime
+    # Defaults, so every existing construction site keeps working — and so a
+    # turn the cascade never touched cannot be mistaken for a cheap answer.
+    # They sit at the end because a dataclass forbids a defaulted field before
+    # a required one, and ``status``/``created_at`` have no defaults.
+    #: off | cheap | escalated — см. app.domain.cascade
+    cascade_stage: str = CASCADE_OFF
+    #: Кто отвечал первым. None, когда каскад не участвовал.
+    cheap_model_id: str | None = None
+    #: Вердикт скорера 0..1. None, когда скорер не вызывался.
+    cheap_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

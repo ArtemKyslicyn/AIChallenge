@@ -52,7 +52,7 @@
 **Interfaces:**
 - Produces: `ScoreVerdict`, `CASCADE_OFF`, `CASCADE_CHEAP`, `CASCADE_ESCALATED`, `AnswerScorer`; поля `RunTrace.cascade_stage`, `.cheap_model_id`, `.cheap_score`
 
-- [ ] **Step 1: Написать падающий тест**
+- [x] **Step 1: Написать падающий тест**
 
 ```python
 from app.domain.cascade import CASCADE_CHEAP, CASCADE_ESCALATED, CASCADE_OFF, ScoreVerdict
@@ -68,11 +68,11 @@ def test_stages_are_distinct() -> None:
     assert len({CASCADE_OFF, CASCADE_CHEAP, CASCADE_ESCALATED}) == 3
 ```
 
-- [ ] **Step 2: Прогнать — должен упасть на ImportError**
+- [x] **Step 2: Прогнать — должен упасть на ImportError**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_cascade_entities.py -v`
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 
 ```python
 """Cascade domain: was a cheap answer good enough, and who ended up answering."""
@@ -129,11 +129,11 @@ class AnswerScorer(Protocol):
 Импорт в `tracing.py`: `from app.domain.cascade import CASCADE_OFF`.
 В `ports.py` ничего добавлять не нужно — порт живёт в `cascade.py` рядом со своим типом.
 
-- [ ] **Step 4: Тесты зелёные**
+- [x] **Step 4: Тесты зелёные**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_cascade_entities.py tests/unit/test_layering.py -v`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/app/domain/cascade.py apps/api/src/app/domain/tracing.py apps/api/tests/unit/test_cascade_entities.py
