@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.adapters.lab.presets import load_lab_presets
 from app.core.deps import get_container
