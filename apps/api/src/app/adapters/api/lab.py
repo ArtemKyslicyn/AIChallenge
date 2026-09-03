@@ -1,16 +1,27 @@
-"""Lab API — YAML preset tasks, and the model ranking over recent run traces."""
+"""Lab API — preset tasks, the model ranking, and the feedback read models."""
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 
 from app.adapters.lab.presets import load_lab_presets
+from app.adapters.llm.feedback_penalties import should_penalize
+from app.application.feedback import preference_row_json
 from app.application.pareto import PARETO_FORMULA
-from app.core.deps import RunTraces, get_container, utcnow
+from app.core.deps import (
+    Feedback,
+    RunTraces,
+    get_container,
+    resolve_visitor_identity,
+    utcnow,
+    visitor_id_header,
+)
+from app.core.settings import Settings
 
 router = APIRouter(prefix="/lab", tags=["lab"])
 
@@ -94,4 +105,119 @@ async def model_pareto(
             )
             for row in rows
         ],
+    )
+
+
+class ModelFeedbackResponse(BaseModel):
+    model_id: str
+    ups: int
+    downs: int
+    down_rate: float
+    #: True when this model is currently being demoted in the router's chain.
+    #: The Lab shows it as a chip, so the ranking and the routing agree.
+    penalized: bool
+
+
+class FeedbackStatsResponse(BaseModel):
+    hours: int
+    models: list[ModelFeedbackResponse]
+
+
+@router.get("/feedback-stats", response_model=FeedbackStatsResponse)
+async def feedback_stats(
+    request: Request,
+    feedback: Feedback,
+    hours: Annotated[int, Query(ge=1, le=MAX_WINDOW_HOURS)] = 24,
+) -> FeedbackStatsResponse:
+    """Up/down counts per model over a recent window.
+
+    Open like `/lab/pareto`: a row is a model id and two integers.
+
+    ``penalized`` is recomputed from these very counts rather than read off the
+    router's cache, so the table answers "does this model qualify right now",
+    not "had the cache noticed yet" — the two differ for at most one refresh
+    interval, and the honest answer is the one the reader can verify.
+    """
+    settings = get_container(request).settings
+    rows = await feedback.stats_by_model(since=utcnow() - timedelta(hours=hours))
+    models = [
+        ModelFeedbackResponse(
+            model_id=row.model_id,
+            ups=row.ups,
+            downs=row.downs,
+            down_rate=row.down_rate,
+            penalized=should_penalize(
+                row,
+                min_votes=settings.feedback_min_votes,
+                down_rate_threshold=settings.feedback_down_rate_threshold,
+            ),
+        )
+        for row in rows
+    ]
+    # Worst first: the table exists to find the model that needs attention.
+    # Ties broken by name so it does not reshuffle between reloads.
+    models.sort(key=lambda m: (-m.down_rate, -(m.ups + m.downs), m.model_id))
+    return FeedbackStatsResponse(hours=hours, models=models)
+
+
+#: Deliberately the same wording as any other unknown path: when the export is
+#: switched off, the endpoint should not even admit to existing.
+EXPORT_NOT_FOUND = "Not Found"
+
+NDJSON_MEDIA_TYPE = "application/x-ndjson"
+
+
+async def require_export_access(
+    request: Request,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
+) -> str:
+    """Two locks on the dump, and one answer when either is shut.
+
+    Unlike the aggregate routes, an export line names a specific message. So it
+    needs a configuration switch *and* an identified visitor — and a caller who
+    has neither must not be able to tell which of the two stopped them.
+    """
+    settings: Settings = get_container(request).settings
+    if not settings.feedback_export_enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=EXPORT_NOT_FOUND)
+    identity = resolve_visitor_identity(request, client_visitor_id)
+    if identity is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=EXPORT_NOT_FOUND)
+    return identity[0]
+
+
+ExportAccess = Annotated[str, Depends(require_export_access)]
+
+
+@router.get("/preference-export")
+async def preference_export(
+    request: Request,
+    feedback: Feedback,
+    _access: ExportAccess,
+    hours: Annotated[int, Query(ge=1, le=MAX_WINDOW_HOURS)] = 24,
+) -> Response:
+    """The preference dataset as NDJSON — one line per vote.
+
+    Built in full before it is sent, rather than streamed. The row cap already
+    bounds it to a download-sized body, and a plain response either succeeds or
+    fails with a real status code instead of a 200 that dies halfway through
+    somebody's file.
+    """
+    settings = get_container(request).settings
+    until = utcnow()
+    lines = [
+        json.dumps(preference_row_json(row), ensure_ascii=False)
+        async for row in feedback.export_rows(
+            since=until - timedelta(hours=hours),
+            until=until,
+            include_content=settings.feedback_export_include_content,
+        )
+    ]
+    body = "".join(line + "\n" for line in lines)
+    return Response(
+        content=body,
+        media_type=NDJSON_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="preference-export-{hours}h.ndjson"'
+        },
     )

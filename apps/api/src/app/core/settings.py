@@ -153,6 +153,10 @@ class Settings(BaseSettings):
     feedback_min_votes: int = 5
     feedback_penalty_ttl_seconds: int = 86400
     feedback_penalty_refresh_seconds: int = 60
+    # The preference dump is off by default and content-free even when on:
+    # turning it on is a deliberate operator act, twice over.
+    feedback_export_enabled: bool = False
+    feedback_export_include_content: bool = False
 
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
