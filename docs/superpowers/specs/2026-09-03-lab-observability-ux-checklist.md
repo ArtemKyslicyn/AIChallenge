@@ -50,20 +50,53 @@
 
 ## Heuristic gate
 
-- [ ] H1 Visibility — loading/empty/error/pending visible
-- [ ] H2 Language — no raw JSON in primary UI
-- [ ] H3 Control — Escape, change vote, close float
-- [ ] H4 Consistency — float-dock + table styles match Lab/Debug
-- [ ] H5 Prevention — no feedback mid-stream
-- [ ] H6 Recognition — column `title` hints + formula details
-- [ ] H7 Efficiency — 24h/7d switch
-- [ ] H8 Aesthetic — one job per tab; no chart clutter
-- [ ] H9 Recovery — Retry works
-- [ ] H10 Help — empty states tell next action
-- [ ] Mobile ~390px — thumbs ≥44px; dock clear of send
-- [ ] `prefers-reduced-motion` — no jarring scale
+- [x] H1 Visibility — loading/empty/error/pending visible
+- [x] H2 Language — no raw JSON in primary UI
+- [x] H3 Control — Escape, change vote, close float
+- [x] H4 Consistency — float-dock + table styles match Lab/Debug
+- [x] H5 Prevention — no feedback mid-stream
+- [x] H6 Recognition — column `title` hints + formula details
+- [x] H7 Efficiency — 24h/7d switch
+- [x] H8 Aesthetic — one job per tab; no chart clutter
+- [x] H9 Recovery — Retry works
+- [x] H10 Help — empty states tell next action
+- [x] Mobile ~390px — thumbs ≥44px; dock clear of send
+- [x] `prefers-reduced-motion` — no jarring scale
 
 **Block merge if any unchecked after Task 7.**
+
+## Гейт пройден 2026-09-03 — на чём именно
+
+Пять специализированных ревьюеров прогнали живой стенд (throwaway Postgres + FakeLLM API +
+Vite dev, наполненный прогонами и оценками) через Playwright: скриншоты на 1280×900 и 390×844,
+`elementFromPoint` вместо «на глаз», чтение `document.activeElement` вместо чтения исходников,
+замеры контраста по формуле WCAG.
+
+Два пункта изначально **не отмечались** и блокировали мерж:
+
+- **H4** — панель прыгала 344↔287px при переключении вкладок, а `.models-float-fab` на ≤480px
+  становилась полосой во всю ширину, пока Debug оставался пилюлей.
+- **Mobile ~390px** — док лежал поверх композера: `elementFromPoint` на поле ввода и на кнопке
+  отправки возвращал `BUTTON.models-float-fab`. Отправить сообщение с телефона было нельзя.
+
+Корневая причина второго оказалась старше этой фичи: три захардкоженных `bottom` (88/96/72px)
+против реальной высоты композера 177px на десктопе и 244px на телефоне, плюс невидимая
+полноширинная обёртка Debug, перехватывавшая тапы по «Настройкам». Третья панель не создала
+баг, а обнажила его. Починено публикацией реальной высоты композера в `--composer-h`.
+
+После правок все четыре цели композера (textarea, отправка, «Настройки», чип режима)
+резолвятся сами в себя на 390 и 1280, в режимах ×1 и ×4, с открытой панелью и без.
+
+Разобранные, но **не подтвердившиеся** находки:
+
+- «Контраст неактивной вкладки 3.59:1» — не воспроизвёлся. Три независимых замера дают 5.69:1;
+  у аудитора, судя по всему, парсер прочитал сериализацию `color-mix` как 0–255. Токен оставлен
+  как был: менять принятый цвет без причины — ровно то, что запрещает D14 §1.
+
+Остались follow-up'ами (severity ≤2, записаны осознанно): «Оценки» в режимах ×2/×4 не
+показывают strip, хотя пустое состояние на него ссылается; повторный клик по уже нажатой
+оценке переотправляет её вместо отмены; порядок Tab внутри панели идёт вкладки → контент,
+а окно и «Свернуть» достаются только Shift+Tab.
 
 ## Заметки к строкам
 
