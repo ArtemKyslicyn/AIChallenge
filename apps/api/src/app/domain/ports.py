@@ -19,7 +19,7 @@ from app.domain.entities import (
 )
 from app.domain.generation import GenerationParams
 from app.domain.media import MediaArtifact, StoredMedia
-from app.domain.tracing import ModelAggregate, RunTrace
+from app.domain.tracing import AttemptRecord, ModelAggregate, RunTrace
 
 
 class SessionRepository(Protocol):
@@ -81,12 +81,16 @@ class ChatRouter(Protocol):
     on the port rather than on the adapter.
     """
 
+    #: ``attempts`` is the caller's per-request journal. It is a parameter and
+    #: not router state because one router instance serves every concurrent
+    #: stream in the process; ``None`` means "this caller is not measuring".
     def stream_chat(
         self,
         messages: list[ChatMessage],
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> AsyncIterator[TokenChunk]: ...
 
     async def complete_chat(
@@ -96,6 +100,7 @@ class ChatRouter(Protocol):
         *,
         generation: GenerationParams | None = None,
         tools: list[dict[str, object]] | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> CompletionResult: ...
 
 

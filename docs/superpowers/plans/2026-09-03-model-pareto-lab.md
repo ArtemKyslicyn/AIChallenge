@@ -133,17 +133,17 @@ class RunTraceRepository(Protocol):
 
 **Interfaces:**
 - Consumes: existing `ModelRouter.stream_chat`
-- Produces: `ModelRouter.take_last_attempts() -> list[AttemptRecord]` (cleared after take), or pass a mutable `list` into stream context — prefer **instance buffer** `self._last_attempts` set per call
+- Produces: per-request `attempts: list[AttemptRecord] | None` keyword on `stream_chat`/`complete_chat` (prep decision D1 — an instance buffer would interleave concurrent SSE requests on the singleton router) set per call
 
-- [ ] **Step 1: Failing test — FakeLLM first model times out kind, second succeeds; attempts length 2**
+- [x] **Step 1: Failing test — FakeLLM first model times out kind, second succeeds; attempts length 2**
 
 Use existing FakeLLM / router test patterns in `tests/unit/`.
 
-- [ ] **Step 2: Implement recording on retryable fail and on success (ok=True, ttft from monotonic)**
+- [x] **Step 2: Implement recording on retryable fail and on success (ok=True, ttft from monotonic)**
 
-- [ ] **Step 3: Tests pass; no change to failover-before-first-token semantics**
+- [x] **Step 3: Tests pass; no change to failover-before-first-token semantics**
 
-- [ ] **Step 4: Commit** `feat(llm): record per-request router attempts`
+- [x] **Step 4: Commit** `feat(llm): record per-request router attempts`
 
 ---
 
