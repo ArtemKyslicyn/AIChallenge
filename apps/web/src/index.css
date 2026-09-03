@@ -481,19 +481,19 @@ textarea {
 
 /* Hover is a neutral surface lift. The accent is reserved for the vote that is
    actually cast — the two used to be ten colour values apart and read alike. */
-.feedback-strip-button:hover:not(:disabled) {
+.feedback-strip-button:hover:not([aria-disabled="true"]) {
   border-color: color-mix(in srgb, var(--text) 30%, var(--border));
   background: var(--surface);
 }
 
-.feedback-strip-button:active:not(:disabled) {
+.feedback-strip-button:active:not([aria-disabled="true"]) {
   transform: scale(0.96);
 }
 
 /* The second selector only out-weighs the hover rule above: a cast vote must
    keep reading as cast while the pointer is still resting on it. */
 .feedback-strip-button[aria-pressed="true"],
-.feedback-strip-button[aria-pressed="true"]:hover:not(:disabled) {
+.feedback-strip-button[aria-pressed="true"]:hover:not([aria-disabled="true"]) {
   /* Full accent on the ring: as a state indicator it needs 3:1 against the
      page, and the old 55% mix measured 2.65:1. */
   border-color: var(--accent);
@@ -501,7 +501,7 @@ textarea {
   color: var(--text);
 }
 
-.feedback-strip-button:disabled {
+.feedback-strip-button[aria-disabled="true"] {
   opacity: 0.6;
   cursor: default;
 }
@@ -539,7 +539,7 @@ textarea {
     transition: none;
   }
 
-  .feedback-strip-button:active:not(:disabled) {
+  .feedback-strip-button:active:not([aria-disabled="true"]) {
     transform: none;
   }
 }
