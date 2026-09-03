@@ -11,9 +11,7 @@ from app.application.quality import parse_verdict, prose_chars, should_judge
 
 
 def test_parses_a_clean_verdict() -> None:
-    verdict = parse_verdict(
-        '{"relevance": 5, "completeness": 4, "clarity": 3}', judge_model_id="j"
-    )
+    verdict = parse_verdict('{"relevance": 5, "completeness": 4, "clarity": 3}', judge_model_id="j")
     assert verdict is not None
     assert verdict.score == pytest.approx(12 / 15)
     assert verdict.judge_model_id == "j"
@@ -81,10 +79,7 @@ def test_sampler_respects_the_status_and_length_gates() -> None:
 
 def test_sampler_respects_the_hourly_cap_and_the_rate() -> None:
     common = dict(status="ok", answer_chars=500, min_answer_chars=80)
-    assert (
-        should_judge(**common, rate=1.0, roll=0.0, judged_this_hour=60, max_per_hour=60)
-        is False
-    )
+    assert should_judge(**common, rate=1.0, roll=0.0, judged_this_hour=60, max_per_hour=60) is False
     assert should_judge(**common, rate=0.2, roll=0.5, judged_this_hour=0, max_per_hour=60) is False
     assert should_judge(**common, rate=0.2, roll=0.1, judged_this_hour=0, max_per_hour=60) is True
 

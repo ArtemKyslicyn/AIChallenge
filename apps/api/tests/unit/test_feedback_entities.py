@@ -67,9 +67,7 @@ def test_aggregates_are_frozen_so_a_reader_cannot_rewrite_them() -> None:
 
 
 def test_export_row_defaults_to_no_content_and_no_attempts() -> None:
-    row = PreferenceRow(
-        message_id=UUID(int=2), model_id="m", feedback="down", created_at=CREATED
-    )
+    row = PreferenceRow(message_id=UUID(int=2), model_id="m", feedback="down", created_at=CREATED)
     assert row.attempts == []
     assert row.prompt is None
     assert row.answer is None

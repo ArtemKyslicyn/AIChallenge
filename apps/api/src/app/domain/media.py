@@ -43,8 +43,7 @@ MEDIA_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": IMAGE_TOOL_NAME,
             "description": (
-                "Generate an image from a text prompt via free Pollinations "
-                "(flux, sana, or turbo)."
+                "Generate an image from a text prompt via free Pollinations (flux, sana, or turbo)."
             ),
             "parameters": {
                 "type": "object",

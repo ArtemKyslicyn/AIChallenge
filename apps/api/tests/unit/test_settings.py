@@ -42,15 +42,11 @@ def test_fake_llm_enabled_when_key_missing() -> None:
     # Host decides which named key wins when both are present.
     both = dict(llm_api_key="", routerai_key="ra-key", openrouter_api_key="or-key")
     assert (
-        _settings(
-            **both, llm_base_url="https://routerai.ru/api/v1"
-        ).resolved_llm_api_key()
+        _settings(**both, llm_base_url="https://routerai.ru/api/v1").resolved_llm_api_key()
         == "ra-key"
     )
     assert (
-        _settings(
-            **both, llm_base_url="https://openrouter.ai/api/v1"
-        ).resolved_llm_api_key()
+        _settings(**both, llm_base_url="https://openrouter.ai/api/v1").resolved_llm_api_key()
         == "or-key"
     )
     assert (

@@ -122,9 +122,7 @@ async def test_router_still_works_without_a_collector() -> None:
 
 
 async def test_tiered_router_merges_both_tiers_into_one_journal() -> None:
-    tier_one = ModelRouter(
-        FlakyLLMProvider(fail_models={"model-a"}, fail_status=429), ["model-a"]
-    )
+    tier_one = ModelRouter(FlakyLLMProvider(fail_models={"model-a"}, fail_status=429), ["model-a"])
     tier_two = ModelRouter(FlakyLLMProvider(ok_text="hi"), ["model-b"])
     router = TieredModelRouter([tier_one, tier_two])
     attempts: list[AttemptRecord] = []

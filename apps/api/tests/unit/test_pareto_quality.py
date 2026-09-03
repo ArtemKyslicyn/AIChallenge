@@ -55,23 +55,19 @@ def judged(n: int, score: float) -> list[RunTrace]:
 
 
 def test_quantity_is_success_until_the_sample_is_big_enough() -> None:
-    assert ranking_quantity(
-        success_rate=1.0, avg_quality=0.4, judged_n=2, min_judged_runs=5
-    ) == 1.0
+    assert ranking_quantity(success_rate=1.0, avg_quality=0.4, judged_n=2, min_judged_runs=5) == 1.0
 
 
 def test_quantity_becomes_quality_once_the_sample_is_big_enough() -> None:
-    assert ranking_quantity(
-        success_rate=1.0, avg_quality=0.4, judged_n=5, min_judged_runs=5
-    ) == 0.4
+    assert ranking_quantity(success_rate=1.0, avg_quality=0.4, judged_n=5, min_judged_runs=5) == 0.4
 
 
 def test_quantity_stays_success_when_nothing_was_judged() -> None:
     # `judged_n >= 0` is true for every model on earth; the missing average is
     # what actually decides here, and it must not read as a zero.
-    assert ranking_quantity(
-        success_rate=0.9, avg_quality=None, judged_n=0, min_judged_runs=0
-    ) == 0.9
+    assert (
+        ranking_quantity(success_rate=0.9, avg_quality=None, judged_n=0, min_judged_runs=0) == 0.9
+    )
 
 
 def test_score_ignores_quality_until_there_are_enough_judged_runs() -> None:

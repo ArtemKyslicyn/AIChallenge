@@ -60,9 +60,7 @@ class StubRouter:
 
 
 def judge_for(router: Any, *, model_id: str = "judge-1", timeout: float = 5.0) -> LLMAnswerJudge:
-    return LLMAnswerJudge(
-        router=router, model_id=model_id, rubric=RUBRIC, timeout_seconds=timeout
-    )
+    return LLMAnswerJudge(router=router, model_id=model_id, rubric=RUBRIC, timeout_seconds=timeout)
 
 
 async def test_judge_returns_a_verdict_for_a_clean_answer() -> None:

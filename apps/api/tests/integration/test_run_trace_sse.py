@@ -73,9 +73,9 @@ async def test_traces_endpoint_returns_the_row_for_its_own_session(
     assert traces[0]["attempts"][0]["model_id"] == "fake-model"
 
     # Someone else's session token must not open this window.
-    other = await api.get(f"/api/v1/sessions/{session_id}/traces", headers={
-        "X-Session-Token": "not-the-token"
-    })
+    other = await api.get(
+        f"/api/v1/sessions/{session_id}/traces", headers={"X-Session-Token": "not-the-token"}
+    )
     assert other.status_code == 404
 
 

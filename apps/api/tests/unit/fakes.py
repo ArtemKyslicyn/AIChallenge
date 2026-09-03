@@ -153,9 +153,7 @@ class InMemoryRunTraceRepository:
         window = [t for t in self.saved if since <= t.created_at <= until]
         return aggregate_models(window)
 
-    async def cascade_summary(
-        self, *, since: datetime, until: datetime
-    ) -> CascadeSummary | None:
+    async def cascade_summary(self, *, since: datetime, until: datetime) -> CascadeSummary | None:
         stages = [t.cascade_stage for t in self.saved if since <= t.created_at <= until]
         return cascade_summary_from_counts(
             cheap=stages.count(CASCADE_CHEAP),

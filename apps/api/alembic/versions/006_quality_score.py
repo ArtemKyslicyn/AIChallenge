@@ -21,9 +21,7 @@ def upgrade() -> None:
     # no verdict, and backfilling 0.0 would tell the ranking that every answer
     # ever written was judged and found worthless.
     op.add_column("run_traces", sa.Column("quality_score", sa.Float(), nullable=True))
-    op.add_column(
-        "run_traces", sa.Column("quality_model_id", sa.String(length=128), nullable=True)
-    )
+    op.add_column("run_traces", sa.Column("quality_model_id", sa.String(length=128), nullable=True))
     # Индекса нет намеренно: оценки читаются только внутри окна агрегата,
     # которое и так идёт по ix_run_traces_created_at.
 

@@ -234,9 +234,7 @@ async def test_a_rejected_cheap_answer_escalates_and_the_reader_sees_only_the_st
 
 async def test_an_explicit_pin_disables_the_cascade() -> None:
     ctx = await make_ctx()
-    await ctx.events(
-        scorer=HeuristicAnswerScorer(), cascade=CASCADE_ON, preferred_model="model-b"
-    )
+    await ctx.events(scorer=HeuristicAnswerScorer(), cascade=CASCADE_ON, preferred_model="model-b")
 
     assert ctx.router.completed == []
     assert ctx.router.streamed == ["model-b"]

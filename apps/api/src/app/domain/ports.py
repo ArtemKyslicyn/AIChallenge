@@ -113,9 +113,7 @@ class RunTraceRepository(Protocol):
 
     #: Attach a judge's verdict to an already-written trace. False when there
     #: was no row to attach it to, which is a normal outcome, not a failure.
-    async def set_quality(
-        self, message_id: UUID, *, score: float, judge_model_id: str
-    ) -> bool: ...
+    async def set_quality(self, message_id: UUID, *, score: float, judge_model_id: str) -> bool: ...
 
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
 

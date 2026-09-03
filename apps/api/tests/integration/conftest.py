@@ -50,8 +50,7 @@ async def engine(migrated_database: str) -> AsyncIterator[AsyncEngine]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE message_feedback, run_traces, messages, sessions "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE message_feedback, run_traces, messages, sessions RESTART IDENTITY CASCADE"
             )
         )
     yield engine

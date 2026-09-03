@@ -28,9 +28,7 @@ class StubJudge:
         self.verdict = verdict
         self.calls = 0
 
-    async def judge(
-        self, question: str, answer: str, *, answered_by: str
-    ) -> QualityVerdict | None:
+    async def judge(self, question: str, answer: str, *, answered_by: str) -> QualityVerdict | None:
         self.calls += 1
         return self.verdict
 
