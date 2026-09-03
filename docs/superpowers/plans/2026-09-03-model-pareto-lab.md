@@ -187,11 +187,11 @@ def pareto_score(success_rate: float, p50_total_ms: float | None, avg_cost_proxy
 - Modify: `apps/api/src/app/core/deps.py`, `settings.py`
 - Test: unit with fake repos
 
-- [ ] After `MessageEndEvent` / abort / exhausted / provider error paths, if `run_trace_enabled`, `save(RunTrace(...))`
-- [ ] `cost_proxy` from settings map by `resolved_model_id`
-- [ ] `token_count_est = max(1, len(content) // 4)`
-- [ ] Failures saving trace must **log and not fail** the user SSE
-- [ ] Commit `feat(chat): persist RunTrace after completion`
+- [x] After `MessageEndEvent` / abort / exhausted / provider error paths, if `run_trace_enabled`, `save(RunTrace(...))`
+- [x] `cost_proxy` from settings map by `resolved_model_id`
+- [x] `token_count_est = max(1, len(content) // 4)`
+- [x] Failures saving trace must **log and not fail** the user SSE
+- [x] Commit `feat(chat): persist RunTrace after completion`
 
 ---
 

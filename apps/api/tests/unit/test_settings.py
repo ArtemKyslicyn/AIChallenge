@@ -84,3 +84,27 @@ def test_repo_root_is_found_by_marker_directory(tmp_path: Path) -> None:
 def test_repo_root_never_raises_without_a_marker(tmp_path: Path) -> None:
     # The container layout: /app/src/app/core/settings.py, no repo above it.
     assert _repo_root(tmp_path / "app" / "core" / "settings.py").is_absolute()
+
+
+def test_cost_proxy_is_empty_by_default() -> None:
+    assert _settings().model_cost_proxy() == {}
+
+
+def test_cost_proxy_parses_a_model_map() -> None:
+    s = _settings(model_cost_proxy_json='{"model-a": 1.5, "model-b": 3}')
+    assert s.model_cost_proxy() == {"model-a": 1.5, "model-b": 3.0}
+
+
+def test_broken_cost_proxy_json_does_not_take_the_api_down() -> None:
+    assert _settings(model_cost_proxy_json="{not json").model_cost_proxy() == {}
+    assert _settings(model_cost_proxy_json="[1, 2]").model_cost_proxy() == {}
+
+
+def test_cost_proxy_skips_entries_that_are_not_numbers() -> None:
+    s = _settings(model_cost_proxy_json='{"model-a": "cheap", "model-b": 2, "model-c": true}')
+    assert s.model_cost_proxy() == {"model-b": 2.0}
+
+
+def test_run_traces_are_on_by_default() -> None:
+    assert _settings().run_trace_enabled is True
+    assert _settings(run_trace_enabled=False).run_trace_enabled is False

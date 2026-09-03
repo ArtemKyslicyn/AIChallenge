@@ -11,8 +11,10 @@ frames. Three things this code is careful about:
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from collections.abc import AsyncIterator, Callable
+import time
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -45,9 +47,18 @@ from app.domain.ports import (
     MediaGenerator,
     MediaStore,
     MessageRepository,
+    RunTraceRepository,
     ScenarioRepository,
     SessionRepository,
     UnitOfWork,
+)
+from app.domain.tracing import (
+    STATUS_ABORTED,
+    STATUS_ERROR,
+    STATUS_EXHAUSTED,
+    STATUS_OK,
+    AttemptRecord,
+    RunTrace,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,6 +178,8 @@ async def send_user_message_and_stream(
     media_generator: MediaGenerator | None = None,
     media_store: MediaStore | None = None,
     media_limiter: SessionMediaRateLimiter | None = None,
+    traces: RunTraceRepository | None = None,
+    cost_proxy: Mapping[str, float] | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     session = await authorize_session(
@@ -219,7 +232,56 @@ async def send_user_message_and_stream(
     resolved_model: str | None = None
     persisted = False
 
-    async def finalize(model_id: str | None, *, marker: str = "") -> str:
+    # Measurement state. The clock starts before the first call to the router —
+    # including the media tool round — so total_ms is what the reader waited.
+    attempts: list[AttemptRecord] = []
+    started = time.monotonic()
+    first_token_at: float | None = None
+    tool_rounds = 0
+    tool_failures = 0
+
+    def _elapsed_ms(until: float) -> int:
+        return max(0, int((until - started) * 1000))
+
+    async def save_trace(model_id: str | None, answer: str, status: str) -> None:
+        """Record what the turn cost. Never allowed to break the stream.
+
+        A failed write leaves the transaction poisoned, so it is rolled back —
+        otherwise the next commit on this session would inherit the error.
+        """
+        if traces is None:
+            return
+        trace = RunTrace(
+            id=id_factory(),
+            session_id=session.id,
+            message_id=assistant.id,
+            visitor_hash=session.visitor_hash,
+            preferred_model=model,
+            resolved_model_id=model_id,
+            attempts=list(attempts),
+            ttft_ms=_elapsed_ms(first_token_at) if first_token_at is not None else None,
+            total_ms=_elapsed_ms(time.monotonic()),
+            token_count_est=max(1, len(answer) // 4) if answer else None,
+            cost_proxy=(cost_proxy or {}).get(model_id) if model_id else None,
+            tool_rounds=tool_rounds,
+            tool_ok=(tool_failures == 0) if tool_rounds else None,
+            status=status,
+            created_at=now(),
+        )
+        try:
+            await traces.save(trace)
+            await uow.commit()
+        except Exception:
+            logger.warning(
+                "run trace not saved session_id=%s message_id=%s",
+                session.id,
+                assistant.id,
+                exc_info=True,
+            )
+            with contextlib.suppress(Exception):
+                await uow.rollback()
+
+    async def finalize(model_id: str | None, *, marker: str = "", status: str = STATUS_OK) -> str:
         nonlocal persisted
         answer = "".join(accumulated) + marker
         if not persisted:
@@ -227,6 +289,9 @@ async def send_user_message_and_stream(
             await messages.update_content(assistant.id, answer, model_id)
             await uow.commit()
             draft.finished = True
+            # One save point for every ending — ok, aborted, exhausted, error.
+            # A reader who hangs up never reaches here, and writes no trace.
+            await save_trace(model_id, answer, status)
         return answer
 
     media_prefix = ""
@@ -251,6 +316,7 @@ async def send_user_message_and_stream(
                 calls = []
         blocks: list[str] = []
         for call in calls[:2]:
+            tool_rounds += 1
             yield ToolStartEvent(name=call.name, call_id=call.id)
             executed = await execute_media_tool(
                 call,
@@ -260,6 +326,7 @@ async def send_user_message_and_stream(
                 limiter=media_limiter,
             )
             if executed.error:
+                tool_failures += 1
                 yield ToolResultEvent(
                     name=call.name,
                     call_id=call.id,
@@ -279,16 +346,22 @@ async def send_user_message_and_stream(
         if blocks:
             media_prefix = "\n\n".join(blocks) + "\n\n"
             accumulated.append(media_prefix)
+            # Counts as the first token: it is the first thing the reader sees.
+            first_token_at = time.monotonic()
             yield TokenEvent(text=media_prefix)
 
     try:
         try:
-            async for chunk in router.stream_chat(turns, preferred_model=model):
+            async for chunk in router.stream_chat(
+                turns, preferred_model=model, attempts=attempts
+            ):
                 if chunk.model_id != resolved_model:
                     resolved_model = chunk.model_id
                     draft.model_id = resolved_model
                     yield ModelEvent(model_id=resolved_model)
                 accumulated.append(chunk.text)
+                if first_token_at is None:
+                    first_token_at = time.monotonic()
                 yield TokenEvent(text=chunk.text)
         except LLMStreamAbortedError as exc:
             draft.model_id = exc.model_id
@@ -299,12 +372,12 @@ async def send_user_message_and_stream(
                 assistant.id,
                 exc.model_id,
             )
-            await finalize(exc.model_id, marker=INTERRUPTED_MARKER)
+            await finalize(exc.model_id, marker=INTERRUPTED_MARKER, status=STATUS_ABORTED)
             yield ErrorEvent(message=ERROR_INTERRUPTED)
             return
         except LLMExhaustedError:
             logger.warning("model chain exhausted session_id=%s", session.id)
-            await finalize(None)
+            await finalize(None, status=STATUS_EXHAUSTED)
             yield ErrorEvent(message=ERROR_NO_MODEL)
             return
         except LLMProviderError as exc:
@@ -315,12 +388,12 @@ async def send_user_message_and_stream(
                 exc.kind,
                 exc.model_id,
             )
-            await finalize(resolved_model)
+            await finalize(resolved_model, status=STATUS_ERROR)
             yield ErrorEvent(message=ERROR_GENERIC)
             return
 
         if resolved_model is None and not media_prefix:
-            await finalize(None)
+            await finalize(None, status=STATUS_ERROR)
             yield ErrorEvent(message=ERROR_EMPTY)
             return
 

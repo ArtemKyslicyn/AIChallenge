@@ -23,6 +23,7 @@ from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
     SqlAlchemySessionRepository,
 )
+from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
 from app.application.chat import ReplyDraft, interrupted_answer, send_user_message_and_stream
 from app.application.sessions import create_session, list_visitor_sessions
 from app.core.deps import (
@@ -186,6 +187,12 @@ async def send_message(
                 media_generator=container.media_generator,
                 media_store=container.media_store,
                 media_limiter=container.media_limiter,
+                traces=(
+                    SqlAlchemyRunTraceRepository(db)
+                    if container.settings.run_trace_enabled
+                    else None
+                ),
+                cost_proxy=container.settings.model_cost_proxy(),
             )
             async for frame in to_sse_with_keepalive(events):
                 yield frame
