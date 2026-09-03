@@ -161,7 +161,7 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
   | ☐ D.B | RouteLLM threshold | prefs export → router threshold / weak|strong | `2026-XX-XX-routellm-threshold.md` |
   | ☐ D.C | Arena Bradley–Terry | compare «A/B лучше» → local leaderboard | `2026-XX-XX-arena-bt-leaderboard.md` |
 
-- [ ] **D.1** Написать design spec + implementation plan для выбранного пункта (writing-plans skill)
+- [x] **D.1** Design spec: [frugal-cascade-design](../specs/2026-09-03-frugal-cascade-design.md) · подплан P3: [frugal-cascade](./2026-09-03-frugal-cascade.md)
 
 - [ ] **D.2** Исполнить новый подплан P3 task-by-task
 
