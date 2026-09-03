@@ -148,11 +148,11 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 **Источник идей:** [research-product-fit.md](./2026-09-03-research-product-fit.md)  
 **Правило:** выбрать **ровно один** Tier A, написать подплан P3, потом исполнять. Не начинать D до exit Phase B.
 
-- [ ] **D.0** Выбор (отметить один):
+- [x] **D.0** Выбор сделан **2026-09-03: D.A — FrugalGPT cascade** (подтверждено человеком).
 
   | Выбор | Paper / тема | Зачем в продукте | Будущий подплан (создать) |
   |-------|----------------|------------------|---------------------------|
-  | ☐ D.A | FrugalGPT cascade | cheap → scorer → escalate; UI «эскалировали» | `2026-XX-XX-frugal-cascade.md` |
+  | ☑ **D.A** | FrugalGPT cascade | cheap → scorer → escalate; UI «эскалировали» | `2026-XX-XX-frugal-cascade.md` |
   | ☐ D.B | RouteLLM threshold | prefs export → router threshold / weak|strong | `2026-XX-XX-routellm-threshold.md` |
   | ☐ D.C | Arena Bradley–Terry | compare «A/B лучше» → local leaderboard | `2026-XX-XX-arena-bt-leaderboard.md` |
 
