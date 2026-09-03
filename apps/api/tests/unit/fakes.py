@@ -11,6 +11,7 @@ from app.application.pareto import aggregate_models
 from app.domain.cascade import (
     CASCADE_CHEAP,
     CASCADE_ESCALATED,
+    CASCADE_OFF,
     CascadeSummary,
     cascade_summary_from_counts,
 )
@@ -131,6 +132,13 @@ class InMemoryRunTraceRepository:
 
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]:
         return [t for t in self.saved if t.session_id == session_id]
+
+    async def stages_for_session(self, session_id: UUID) -> dict[UUID, str]:
+        return {
+            t.message_id: t.cascade_stage
+            for t in self.saved
+            if t.session_id == session_id and t.cascade_stage != CASCADE_OFF
+        }
 
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]:
         window = [t for t in self.saved if since <= t.created_at <= until]

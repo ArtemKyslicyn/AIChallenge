@@ -269,3 +269,31 @@ async def test_a_cheap_answer_the_stub_accepts_needs_no_heuristic() -> None:
 
     assert [e.text for e in events if isinstance(e, TokenEvent)] == ["что угодно"]
     assert ctx.only_trace().cheap_score == 0.9
+
+
+async def _end_stage(ctx: Ctx, **kwargs: Any) -> str:
+    events = await ctx.events(**kwargs)
+    end = events[-1]
+    assert isinstance(end, MessageEndEvent)
+    return end.cascade_stage
+
+
+async def test_message_end_tells_the_reader_which_stage_answered() -> None:
+    """The badge has to appear on a live answer, not only after a reload.
+
+    ``message_end`` is the first moment the stage is knowable and the moment
+    the rating strip already appears, so the two show up together.
+    """
+    cheap = await make_ctx()
+    assert (
+        await _end_stage(cheap, scorer=HeuristicAnswerScorer(), cascade=CASCADE_ON) == CASCADE_CHEAP
+    )
+
+    refused = await make_ctx(SpyRouter(cheap_text="Извините, я не могу ответить на этот вопрос."))
+    assert (
+        await _end_stage(refused, scorer=HeuristicAnswerScorer(), cascade=CASCADE_ON)
+        == CASCADE_ESCALATED
+    )
+
+    off = await make_ctx()
+    assert await _end_stage(off) == CASCADE_OFF

@@ -40,7 +40,21 @@ def test_message_end_frame_carries_canonical_attribution() -> None:
     event = MessageEndEvent(message_id=UUID(int=1), content="hi", model_id="m-1")
     name, data = _parse(event_to_frame(event))
     assert name == "message_end"
-    assert data == {"message_id": str(UUID(int=1)), "content": "hi", "model_id": "m-1"}
+    assert data == {
+        "message_id": str(UUID(int=1)),
+        "content": "hi",
+        "model_id": "m-1",
+        # Never absent and never null: "off" is the answer for every turn the
+        # cascade did not touch, which is all of them by default.
+        "cascade_stage": "off",
+    }
+
+
+def test_message_end_frame_reports_an_escalation() -> None:
+    event = MessageEndEvent(
+        message_id=UUID(int=2), content="hi", model_id="m-2", cascade_stage="escalated"
+    )
+    assert _parse(event_to_frame(event))[1]["cascade_stage"] == "escalated"
 
 
 def test_error_frame() -> None:

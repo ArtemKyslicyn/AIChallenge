@@ -131,6 +131,11 @@ class MessageEndEvent:
     message_id: UUID
     content: str
     model_id: str
+    #: off | cheap | escalated. Carried on the last frame because that is the
+    #: first moment the stage is known — and the moment the rating strip
+    #: appears, so the badge and the thumbs arrive together rather than the
+    #: badge popping in mid-stream.
+    cascade_stage: str = CASCADE_OFF
 
 
 @dataclass(slots=True)
@@ -412,7 +417,10 @@ async def send_user_message_and_stream(
                 first_token_at = time.monotonic()
             answer = await finalize(resolved_model)
             yield MessageEndEvent(
-                message_id=assistant.id, content=answer, model_id=resolved_model
+                message_id=assistant.id,
+                content=answer,
+                model_id=resolved_model,
+                cascade_stage=cascade_stage,
             )
             return
 
@@ -469,7 +477,12 @@ async def send_user_message_and_stream(
         if resolved_model is None:
             yield ModelEvent(model_id=end_model)
         answer = await finalize(end_model)
-        yield MessageEndEvent(message_id=assistant.id, content=answer, model_id=end_model)
+        yield MessageEndEvent(
+            message_id=assistant.id,
+            content=answer,
+            model_id=end_model,
+            cascade_stage=cascade_stage,
+        )
     finally:
         # Deliberately no database write here. On a client disconnect this code
         # runs inside a task that is already being cancelled, so the await would

@@ -51,6 +51,7 @@ from app.core.deps import (
     utcnow,
     visitor_id_header,
 )
+from app.domain.cascade import CASCADE_OFF
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
 from app.domain.feedback import FeedbackValue
 
@@ -111,7 +112,9 @@ async def _refresh_penalties(container: Container, db: AsyncSession) -> None:
 
 
 def _to_message_response(
-    message: Message, votes: Mapping[UUID, FeedbackValue] | None = None
+    message: Message,
+    votes: Mapping[UUID, FeedbackValue] | None = None,
+    stages: Mapping[UUID, str] | None = None,
 ) -> MessageResponse:
     return MessageResponse(
         id=message.id,
@@ -120,6 +123,9 @@ def _to_message_response(
         model_id=message.model_id,
         created_at=message.created_at,
         feedback=votes.get(message.id) if votes else None,
+        # Absent from the map means "the cascade did not touch this turn",
+        # which is what `off` says — user turns and pre-cascade answers alike.
+        cascade_stage=(stages or {}).get(message.id, CASCADE_OFF),
     )
 
 
@@ -181,13 +187,17 @@ async def get_session(session: AuthorizedSession) -> SessionResponse:
 async def list_messages(
     session: AuthorizedSession,
     db: DbSession,
+    traces: RunTraces,
 ) -> list[MessageResponse]:
     rows = await SqlAlchemyMessageRepository(db).list_for_session(session.id)
     # Carried with the history so a cast vote survives a reload: without it the
     # thumbs come back unpressed and the reader either re-votes or assumes the
     # vote was lost.
     votes = await SqlAlchemyFeedbackRepository(db).values_for_session(session.id)
-    return [_to_message_response(row, votes) for row in rows]
+    # Same bargain for the escalation badge, and the same shape: one query for
+    # the thread, not one per message.
+    stages = await traces.stages_for_session(session.id)
+    return [_to_message_response(row, votes, stages) for row in rows]
 
 
 @router.get("/{session_id}/traces", response_model=SessionTracesResponse)

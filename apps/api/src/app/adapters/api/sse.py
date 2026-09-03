@@ -50,6 +50,10 @@ def event_to_frame(event: ChatEvent) -> str:
                     "message_id": str(event.message_id),
                     "content": event.content,
                     "model_id": event.model_id,
+                    # Always present, never null: "off" is a real answer, and a
+                    # client that has to distinguish absent from off would be
+                    # guessing about a value the server always knows.
+                    "cascade_stage": event.cascade_stage,
                 },
             )
         case ErrorEvent():

@@ -49,6 +49,10 @@ class MessageResponse(BaseModel):
     #: The vote already stored for this message, so a reload shows what the
     #: reader cast. ``None`` when nobody has voted on it.
     feedback: FeedbackValue | None = None
+    #: off | cheap | escalated — carried for the same reason as ``feedback``:
+    #: a reload must not silently drop what the footer said about this answer.
+    #: Never null; ``off`` means the cascade did not take part.
+    cascade_stage: str = CASCADE_OFF
 
 
 class AttemptResponse(BaseModel):

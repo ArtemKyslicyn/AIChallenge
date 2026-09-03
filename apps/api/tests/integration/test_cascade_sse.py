@@ -1,7 +1,10 @@
 """A real SSE turn with the cascade on must write the stage it took."""
 
+import json
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -42,11 +45,28 @@ async def cascade_api(url: str, answer: str) -> AsyncIterator[AsyncClient]:
             yield client
 
 
-async def turn(api: AsyncClient) -> str:
+@dataclass(slots=True)
+class Turn:
+    session_id: str
+    headers: dict[str, str]
+    frames: list[str]
+
+    def message_end(self) -> dict[str, Any]:
+        payloads = [
+            json.loads(line[len("data: ") :])
+            for line in self.frames
+            if line.startswith("data: ") and '"content"' in line
+        ]
+        assert len(payloads) == 1
+        return payloads[0]
+
+
+async def turn(api: AsyncClient) -> Turn:
     created = await api.post("/api/v1/sessions", json={})
     assert created.status_code == 201
     body = created.json()
     headers = {"X-Session-Token": body["access_token"]}
+    frames: list[str] = []
     async with api.stream(
         "POST",
         f"/api/v1/sessions/{body['id']}/messages",
@@ -54,9 +74,9 @@ async def turn(api: AsyncClient) -> str:
         headers=headers,
     ) as response:
         assert response.status_code == 200
-        async for _ in response.aiter_lines():
-            pass
-    return str(body["id"])
+        async for line in response.aiter_lines():
+            frames.append(line)
+    return Turn(session_id=str(body["id"]), headers=headers, frames=frames)
 
 
 async def stage_row(engine: AsyncEngine, session_id: str) -> tuple[str, str | None, float | None]:
@@ -79,8 +99,8 @@ async def test_an_accepted_cheap_answer_is_stored_as_cheap(
     engine: AsyncEngine, migrated_database: str
 ) -> None:
     async for api in cascade_api(migrated_database, GOOD_ANSWER):
-        session_id = await turn(api)
-    stage, cheap_model, score = await stage_row(engine, session_id)
+        answered = await turn(api)
+    stage, cheap_model, score = await stage_row(engine, answered.session_id)
     assert stage == "cheap"
     assert cheap_model == CHEAP_MODEL
     assert score == 1.0
@@ -90,8 +110,8 @@ async def test_a_rejected_cheap_answer_is_stored_as_escalated(
     engine: AsyncEngine, migrated_database: str
 ) -> None:
     async for api in cascade_api(migrated_database, "нет"):
-        session_id = await turn(api)
-    stage, cheap_model, score = await stage_row(engine, session_id)
+        answered = await turn(api)
+    stage, cheap_model, score = await stage_row(engine, answered.session_id)
     assert stage == "escalated"
     assert cheap_model == CHEAP_MODEL
     assert score == 0.0
@@ -107,3 +127,40 @@ async def test_the_pareto_window_summarises_the_escalations(
         "escalated": 1,
         "escalation_rate": 1.0,
     }
+
+
+async def test_the_live_answer_carries_its_stage_in_message_end(
+    engine: AsyncEngine, migrated_database: str
+) -> None:
+    """The badge must not wait for a reload — the last frame already knows."""
+    async for api in cascade_api(migrated_database, "нет"):
+        answered = await turn(api)
+    assert answered.message_end()["cascade_stage"] == "escalated"
+
+
+async def test_the_stage_survives_a_reload(engine: AsyncEngine, migrated_database: str) -> None:
+    """History is what the reader comes back to; the badge has to be there too."""
+    async for api in cascade_api(migrated_database, "нет"):
+        answered = await turn(api)
+        history = (
+            await api.get(
+                f"/api/v1/sessions/{answered.session_id}/messages", headers=answered.headers
+            )
+        ).json()
+    stages = {m["role"]: m["cascade_stage"] for m in history}
+    # The user's own turn was never a candidate for the cascade.
+    assert stages == {"user": "off", "assistant": "escalated"}
+
+
+async def test_an_untouched_turn_reads_back_as_off(
+    engine: AsyncEngine, migrated_database: str
+) -> None:
+    async for api in cascade_api(migrated_database, GOOD_ANSWER):
+        answered = await turn(api)
+        history = (
+            await api.get(
+                f"/api/v1/sessions/{answered.session_id}/messages", headers=answered.headers
+            )
+        ).json()
+    # "cheap" is not "escalated": the UI draws nothing, but the value is honest.
+    assert [m["cascade_stage"] for m in history] == ["off", "cheap"]

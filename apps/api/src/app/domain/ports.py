@@ -113,6 +113,10 @@ class RunTraceRepository(Protocol):
 
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
 
+    #: message_id → cascade stage, for the messages of one chat that have one.
+    #: Absent means ``off``; see the implementation for why it is not returned.
+    async def stages_for_session(self, session_id: UUID) -> dict[UUID, str]: ...
+
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]: ...
 
     #: ``None`` when the cascade never ran in this window — the Lab draws the
