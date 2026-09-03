@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
 
 import { PROMPT_STRATEGIES } from "../strategies/definitions";
 import type { JudgeScorecard } from "../strategies/judge";
@@ -28,24 +28,43 @@ interface Props {
 export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab }: Props) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const fabRef = useRef<HTMLButtonElement>(null);
+  // Set only when the user closes the panel from inside it (Escape / «Свернуть»),
+  // so a mutex-driven collapse never yanks focus back to this FAB.
+  const restoreFocus = useRef(false);
+
+  const collapse = useCallback(() => {
+    restoreFocus.current = true;
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") collapse();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, collapse]);
+
+  useEffect(() => {
+    if (open || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    fabRef.current?.focus();
+  }, [open]);
 
   if (!payload) return null;
 
   if (!open) {
     return (
       <button
+        ref={fabRef}
         type="button"
         className="lab-results-fab"
+        id="lab-results-fab"
+        aria-expanded={false}
+        aria-controls="lab-results-float-panel"
         aria-label="Открыть результаты лаборатории"
         onClick={onExpand}
       >
@@ -59,6 +78,7 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
 
   return (
     <aside
+      id="lab-results-float-panel"
       className="lab-results-float"
       role="dialog"
       aria-modal="false"
@@ -81,7 +101,7 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
             ref={closeRef}
             type="button"
             className="ghost-button"
-            onClick={onClose}
+            onClick={collapse}
           >
             Свернуть
           </button>

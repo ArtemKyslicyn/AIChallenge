@@ -42,6 +42,9 @@ const SUGGESTIONS = [
 
 const STICK_THRESHOLD = 80;
 
+/** Panels sharing the float dock. Only one may be expanded at a time. */
+type FloatId = "debug" | "results" | "models";
+
 function toTurn(message: MessageDto): Turn {
   return {
     id: message.id,
@@ -66,20 +69,20 @@ export function Chat({
   const [error, setError] = useState<string | null>(null);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [status, setStatus] = useState("");
-  const [resultsOpen, setResultsOpen] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(false);
+  const [activeFloat, setActiveFloat] = useState<FloatId | null>(null);
   const [resultsPayload, setResultsPayload] = useState<LabResultsPayload | null>(null);
   const [labExpanded, setLabExpanded] = useState<Record<string, boolean>>({});
   const [activeMediaJob, setActiveMediaJob] = useState<MediaJobState | null>(null);
 
-  const openResults = useCallback(() => {
-    setDebugOpen(false);
-    setResultsOpen(true);
+  // Float mutex: at most one panel is expanded. A `false` from a panel only
+  // closes the dock when that panel is the one currently open, so a stale
+  // collapse never steals the slot from whichever panel just claimed it.
+  const setFloat = useCallback((id: FloatId, next: boolean) => {
+    setActiveFloat((current) => (next ? id : current === id ? null : current));
   }, []);
-  const openDebug = useCallback((next: boolean) => {
-    if (next) setResultsOpen(false);
-    setDebugOpen(next);
-  }, []);
+  const openResults = useCallback(() => setFloat("results", true), [setFloat]);
+  const closeResults = useCallback(() => setFloat("results", false), [setFloat]);
+  const openDebug = useCallback((next: boolean) => setFloat("debug", next), [setFloat]);
 
   const thread = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -519,8 +522,7 @@ export function Chat({
         })),
       };
       setResultsPayload(payload);
-      setDebugOpen(false);
-      setResultsOpen(true);
+      setActiveFloat("results");
       setStatus(
         failed
           ? `Лаборатория готова с частичными ошибками (${ok}/4). Смотрите «Результаты».`
@@ -683,11 +685,11 @@ export function Chat({
       />
 
       <div className="float-dock">
-        {/* Results above Debug; mutex via openResults / openDebug. */}
+        {/* Results above Debug; mutex via `setFloat` — only one panel expands. */}
         <LabResultsFloat
-          open={resultsOpen}
+          open={activeFloat === "results"}
           payload={resultsPayload}
-          onClose={() => setResultsOpen(false)}
+          onClose={closeResults}
           onExpand={openResults}
           onJumpToLab={
             latestLabId
@@ -700,7 +702,7 @@ export function Chat({
               : undefined
           }
         />
-        <DebugFloat open={debugOpen} onOpenChange={openDebug} />
+        <DebugFloat open={activeFloat === "debug"} onOpenChange={openDebug} />
       </div>
     </>
   );
