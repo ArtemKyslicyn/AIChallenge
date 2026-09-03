@@ -2115,6 +2115,121 @@ textarea {
   }
 }
 
+/* ---------- feedback stats panel (Models float → «Оценки») ---------- */
+/* Mirrors the ranking panel one-for-one: same density, same states, same
+   accent. The «Ниже в очереди» chip is informational, not a warning — the
+   router only reorders candidates, it never bans a model. */
+
+.feedback-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.feedback-stats-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.feedback-stats-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.feedback-stats-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.feedback-stats-table {
+  min-width: 100%;
+}
+
+.lab-results-table.feedback-stats-table th.feedback-num,
+.lab-results-table.feedback-stats-table td.feedback-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lab-results-table.feedback-stats-table td.feedback-model {
+  max-width: 18ch;
+}
+
+.feedback-model-id {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-chip {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.feedback-stats-empty,
+.feedback-stats-error-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.feedback-stats-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Skeleton rows live inside the real table so column widths do not jump. */
+.feedback-stats-skeleton {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    color-mix(in srgb, var(--border) 55%, var(--surface-2)) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: pareto-shimmer 1.4s ease-in-out infinite;
+}
+
+.feedback-stats-skeleton-row td:first-child .feedback-stats-skeleton {
+  width: 72px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-stats-skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .feedback-stats-error .ghost-button {
+    min-height: 44px;
+  }
+}
+
 /* ---------- lab results float ---------- */
 
 .lab-results-float {
