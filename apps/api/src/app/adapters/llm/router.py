@@ -16,6 +16,7 @@ from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, Token
 from app.domain.errors import LLMExhaustedError, LLMProviderError, LLMStreamAbortedError
 from app.domain.generation import GenerationParams
 from app.domain.ports import LLMProvider
+from app.domain.tracing import AttemptRecord
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,16 @@ DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS = 25.0
 
 def _is_retryable(exc: LLMProviderError) -> bool:
     return exc.status in RETRYABLE_STATUSES or exc.kind in RETRYABLE_KINDS
+
+
+def _journal(attempts: list[AttemptRecord] | None, record: AttemptRecord) -> None:
+    """Append to the caller's journal, if this caller asked for one.
+
+    The collector belongs to one request. A buffer on the router would be
+    shared by every concurrent stream in the process and interleave them.
+    """
+    if attempts is not None:
+        attempts.append(record)
 
 
 class ModelRouter:
@@ -127,6 +138,7 @@ class ModelRouter:
         *,
         generation: GenerationParams | None = None,
         tools: list[dict[str, object]] | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> CompletionResult:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -134,16 +146,41 @@ class ModelRouter:
 
         last_error: LLMProviderError | None = None
         for model in candidates:
+            started = self._now()
             try:
-                return await self._provider.complete_chat(
+                result = await self._provider.complete_chat(
                     messages, model, generation=generation, tools=tools
                 )
             except LLMProviderError as exc:
+                # A fatal error (a rejected credential) is deliberately not
+                # journalled: it says nothing about this model's quality, and
+                # recording it would skew the model's aggregates.
                 if not _is_retryable(exc):
                     raise
+                _journal(attempts, self._failed_attempt(model, exc))
                 self._mark_exhausted(model, reason=self._fail_reason(exc))
                 last_error = exc
+            else:
+                _journal(attempts, self._ok_attempt(model, started))
+                return result
         raise LLMExhaustedError("Ни одна модель из цепочки не смогла ответить.") from last_error
+
+    def _elapsed_ms(self, started: float) -> int:
+        return int((self._now() - started) * 1000)
+
+    def _ok_attempt(self, model: str, started: float) -> AttemptRecord:
+        return AttemptRecord(model_id=model, ok=True, ttft_ms=self._elapsed_ms(started))
+
+    def _failed_attempt(
+        self, model: str, exc: LLMProviderError, *, ttft_ms: int | None = None, reason: str = ""
+    ) -> AttemptRecord:
+        return AttemptRecord(
+            model_id=model,
+            ok=False,
+            reason=reason or self._fail_reason(exc),
+            ttft_ms=ttft_ms,
+            error_kind=exc.kind,
+        )
 
     async def stream_chat(
         self,
@@ -151,6 +188,7 @@ class ModelRouter:
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> AsyncIterator[TokenChunk]:
         candidates = self._candidates(preferred_model)
         if not candidates:
@@ -159,6 +197,8 @@ class ModelRouter:
         last_error: LLMProviderError | None = None
         for model in candidates:
             emitted: list[str] = []
+            started = self._now()
+            ttft_ms: int | None = None
             stream = self._provider.stream_chat(messages, model, generation=generation)
             try:
                 while True:
@@ -175,20 +215,30 @@ class ModelRouter:
                             kind="timeout",
                             model_id=model,
                         ) from exc
+                    if not emitted:
+                        ttft_ms = self._elapsed_ms(started)
                     emitted.append(chunk.text)
                     yield chunk
             except LLMProviderError as exc:
                 if emitted:
                     # Past the point of no return: hand the partial answer back
-                    # so the caller can persist it, and stop.
+                    # so the caller can persist it, and stop. The attempt is
+                    # journalled once, as the failure it turned out to be.
+                    _journal(
+                        attempts,
+                        self._failed_attempt(model, exc, ttft_ms=ttft_ms, reason="aborted"),
+                    )
                     raise LLMStreamAbortedError(
                         model_id=model, partial_text="".join(emitted)
                     ) from exc
                 if not _is_retryable(exc):
                     raise
+                _journal(attempts, self._failed_attempt(model, exc))
                 self._mark_exhausted(model, reason=self._fail_reason(exc))
                 last_error = exc
                 continue
+            else:
+                _journal(attempts, AttemptRecord(model_id=model, ok=True, ttft_ms=ttft_ms))
             finally:
                 # The port promises only an AsyncIterator, so closing is
                 # best-effort — but an async generator must be closed, or the
@@ -220,12 +270,17 @@ class TieredModelRouter:
         *,
         generation: GenerationParams | None = None,
         tools: list[dict[str, object]] | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> CompletionResult:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             try:
                 return await tier.complete_chat(
-                    messages, preferred_model, generation=generation, tools=tools
+                    messages,
+                    preferred_model,
+                    generation=generation,
+                    tools=tools,
+                    attempts=attempts,
                 )
             except LLMExhaustedError as exc:
                 logger.warning("llm tier exhausted tier_index=%s", index)
@@ -243,13 +298,16 @@ class TieredModelRouter:
         preferred_model: str = AUTO_MODEL,
         *,
         generation: GenerationParams | None = None,
+        attempts: list[AttemptRecord] | None = None,
     ) -> AsyncIterator[TokenChunk]:
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             emitted = False
             try:
+                # One journal spans every tier: the reader wants the whole walk
+                # in order, not one list per provider.
                 async for chunk in tier.stream_chat(
-                    messages, preferred_model, generation=generation
+                    messages, preferred_model, generation=generation, attempts=attempts
                 ):
                     emitted = True
                     yield chunk
