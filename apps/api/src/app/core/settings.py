@@ -158,6 +158,16 @@ class Settings(BaseSettings):
     feedback_export_enabled: bool = False
     feedback_export_include_content: bool = False
 
+    # FrugalGPT cascade: a cheap model answers first, a scorer decides whether
+    # that answer ships. Off by default because it changes what the chat does,
+    # and a cost knob must never turn itself on.
+    cascade_enabled: bool = False
+    cascade_cheap_models: str = ""  # csv; empty = first model of LLM_MODEL_CHAIN
+    cascade_score_threshold: float = 0.75
+    cascade_min_answer_chars: int = 40
+    cascade_max_cheap_chars: int = 1200
+    cascade_timeout_seconds: float = 12.0
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""
@@ -171,6 +181,18 @@ class Settings(BaseSettings):
     def model_cost_proxy(self) -> dict[str, float]:
         """Relative cost weight per model id. A model that is absent has none."""
         return _parse_cost_proxy(self.model_cost_proxy_json)
+
+    def cascade_cheap_models_list(self) -> list[str]:
+        """Who answers first. Falls back to the head of the main chain.
+
+        The chain is already ordered cheapest-first, so its first entry is the
+        cascade's natural candidate — and an operator who wants a different one
+        names it explicitly rather than reordering the whole chain.
+        """
+        explicit = _csv(self.cascade_cheap_models)
+        if explicit:
+            return explicit
+        return self.model_chain_list()[:1]
 
     def cors_origins_list(self) -> list[str]:
         return _csv(self.cors_allow_origins)

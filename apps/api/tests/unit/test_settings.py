@@ -108,3 +108,22 @@ def test_cost_proxy_skips_entries_that_are_not_numbers() -> None:
 def test_run_traces_are_on_by_default() -> None:
     assert _settings().run_trace_enabled is True
     assert _settings(run_trace_enabled=False).run_trace_enabled is False
+
+
+def test_the_cascade_is_off_until_someone_turns_it_on() -> None:
+    # A knob that spends less must never enable itself.
+    assert _settings().cascade_enabled is False
+
+
+def test_cheap_models_default_to_the_head_of_the_chain() -> None:
+    s = _settings(llm_model_chain="cheap-a, mid-b, strong-c")
+    assert s.cascade_cheap_models_list() == ["cheap-a"]
+
+
+def test_an_explicit_cheap_list_wins_over_the_chain() -> None:
+    s = _settings(llm_model_chain="cheap-a, strong-c", cascade_cheap_models=" tiny-x , tiny-y ")
+    assert s.cascade_cheap_models_list() == ["tiny-x", "tiny-y"]
+
+
+def test_no_chain_at_all_means_no_cheap_candidate() -> None:
+    assert _settings().cascade_cheap_models_list() == []

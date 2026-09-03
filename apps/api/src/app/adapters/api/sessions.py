@@ -30,7 +30,12 @@ from app.adapters.persistence.repositories import (
     SqlAlchemySessionRepository,
 )
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
-from app.application.chat import ReplyDraft, interrupted_answer, send_user_message_and_stream
+from app.application.chat import (
+    CascadeSettings,
+    ReplyDraft,
+    interrupted_answer,
+    send_user_message_and_stream,
+)
 from app.application.sessions import create_session, list_visitor_sessions
 from app.core.deps import (
     AuthorizedSession,
@@ -264,6 +269,13 @@ async def send_message(
                     else None
                 ),
                 cost_proxy=container.settings.model_cost_proxy(),
+                scorer=container.scorer,
+                cascade=CascadeSettings(
+                    enabled=container.settings.cascade_enabled,
+                    cheap_models=container.cascade_cheap_models,
+                    timeout_seconds=container.settings.cascade_timeout_seconds,
+                    max_question_chars=container.settings.cascade_max_cheap_chars,
+                ),
             )
             async for frame in to_sse_with_keepalive(events):
                 yield frame
