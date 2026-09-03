@@ -17,6 +17,7 @@ from app.domain.entities import (
     SessionSummary,
     TokenChunk,
 )
+from app.domain.feedback import MessageFeedback, ModelFeedbackStats, PreferenceRow
 from app.domain.generation import GenerationParams
 from app.domain.media import MediaArtifact, StoredMedia
 from app.domain.tracing import AttemptRecord, ModelAggregate, RunTrace
@@ -112,6 +113,22 @@ class RunTraceRepository(Protocol):
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
 
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]: ...
+
+
+class FeedbackRepository(Protocol):
+    """Persistence for votes, plus the two read models built on top of them."""
+
+    async def upsert(self, feedback: MessageFeedback) -> MessageFeedback: ...
+
+    async def get_for_message(self, message_id: UUID) -> MessageFeedback | None: ...
+
+    async def stats_by_model(self, *, since: datetime) -> list[ModelFeedbackStats]: ...
+
+    #: Declared as a plain ``def`` for the same reason as ``stream_chat``: an
+    #: ``async def`` generator satisfies this, an async method would not.
+    def export_rows(
+        self, *, since: datetime, until: datetime, include_content: bool = False
+    ) -> AsyncIterator[PreferenceRow]: ...
 
 
 class MediaGenerator(Protocol):
