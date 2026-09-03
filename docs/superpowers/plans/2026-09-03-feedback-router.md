@@ -73,7 +73,7 @@ class ModelFeedbackStats:
         return 0.0 if n == 0 else self.downs / n
 ```
 
-- [ ] Tests + commit `feat(domain): message feedback entities`
+- [x] Tests + commit `feat(domain): message feedback entities`
 
 ---
 
@@ -91,8 +91,8 @@ def should_penalize(stats: ModelFeedbackStats, *, min_votes: int, down_rate_thre
     return stats.down_rate >= down_rate_threshold
 ```
 
-- [ ] Table-driven tests (0 votes, 4 downs of 4, 3/10, etc.)
-- [ ] Commit `feat(llm): feedback penalty predicate`
+- [x] Table-driven tests (0 votes, 4 downs of 4, 3/10, etc.)
+- [x] Commit `feat(llm): feedback penalty predicate`
 
 ---
 
@@ -103,7 +103,7 @@ def should_penalize(stats: ModelFeedbackStats, *, min_votes: int, down_rate_thre
 - Alembic migration
 - `SqlAlchemyFeedbackRepository.upsert`, `stats_by_model(since)`, `export_rows` joining `messages.model_id` + optional `run_traces`
 
-- [ ] Commit `feat(db): message_feedback table`
+- [x] Commit `feat(db): message_feedback table`
 
 ---
 
@@ -121,7 +121,7 @@ Body: {"value":"up"}
 → 200 {"message_id","value"}
 ```
 
-- [ ] Commit `feat(api): message feedback endpoint`
+- [x] Commit `feat(api): message feedback endpoint`
 
 ---
 
@@ -133,8 +133,8 @@ Body: {"value":"up"}
 - Penalized models: skip in auto mode **unless** explicitly pinned as `preferred_model`
 - Cache stats 60s in process to avoid DB hit every token request
 
-- [ ] Unit test with FakeLLM two-model chain: penalize first → second used
-- [ ] Commit `feat(llm): soft-penalize models from feedback rates`
+- [x] Unit test with FakeLLM two-model chain: penalize first → second used
+- [x] Commit `feat(llm): soft-penalize models from feedback rates`
 
 ---
 
@@ -151,7 +151,7 @@ Content-Type: application/x-ndjson
 
 Each line = `PreferenceRow` dict; include trace attempts when present; content only if settings flag true.
 
-- [ ] Commit `feat(api): feedback stats and preference export`
+- [x] Commit `feat(api): feedback stats and preference export`
 
 ---
 
