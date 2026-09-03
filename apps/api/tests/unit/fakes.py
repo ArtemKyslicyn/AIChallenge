@@ -8,6 +8,7 @@ from uuid import UUID
 from app.application.pareto import aggregate_models
 from app.domain.entities import Message, Scenario, Session, SessionSummary
 from app.domain.errors import MessageNotFoundError, ScenarioNotFoundError
+from app.domain.feedback import MessageFeedback, ModelFeedbackStats
 from app.domain.tracing import ModelAggregate, RunTrace
 
 FIXED_NOW = datetime(2026, 8, 31, 12, 0, 0, tzinfo=UTC)
@@ -126,6 +127,50 @@ class InMemoryRunTraceRepository:
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]:
         window = [t for t in self.saved if since <= t.created_at <= until]
         return aggregate_models(window)
+
+
+class StubFeedbackStats:
+    """Feedback repository double that answers with canned aggregates.
+
+    Records every call so a test can prove the cache skipped a read, and can
+    be told to fail so the callers' "a broken read must not block chat"
+    guarantees have something to break.
+    """
+
+    def __init__(self, *rows: ModelFeedbackStats, fail: bool = False) -> None:
+        self.rows = list(rows)
+        self.fail = fail
+        self.calls = 0
+        self.last_since: datetime | None = None
+
+    async def stats_by_model(self, *, since: datetime) -> list[ModelFeedbackStats]:
+        self.calls += 1
+        self.last_since = since
+        if self.fail:
+            raise RuntimeError("stats_by_model failed")
+        return list(self.rows)
+
+
+class InMemoryFeedbackRepository(StubFeedbackStats):
+    """Adds the write side, for the use-case tests."""
+
+    def __init__(self, *rows: ModelFeedbackStats, fail: bool = False) -> None:
+        super().__init__(*rows, fail=fail)
+        self.votes: dict[UUID, MessageFeedback] = {}
+
+    async def upsert(self, feedback: MessageFeedback) -> MessageFeedback:
+        existing = self.votes.get(feedback.message_id)
+        if existing is not None:
+            # Same "one row per message, last write wins" rule as the SQL repo.
+            existing.value = feedback.value
+            existing.visitor_hash = feedback.visitor_hash
+            existing.created_at = feedback.created_at
+            return existing
+        self.votes[feedback.message_id] = feedback
+        return feedback
+
+    async def get_for_message(self, message_id: UUID) -> MessageFeedback | None:
+        return self.votes.get(message_id)
 
 
 class RecordingUnitOfWork:
