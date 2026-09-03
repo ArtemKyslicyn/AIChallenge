@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from app.domain.entities import (
 )
 from app.domain.generation import GenerationParams
 from app.domain.media import MediaArtifact, StoredMedia
+from app.domain.tracing import ModelAggregate, RunTrace
 
 
 class SessionRepository(Protocol):
@@ -95,6 +97,16 @@ class ChatRouter(Protocol):
         generation: GenerationParams | None = None,
         tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult: ...
+
+
+class RunTraceRepository(Protocol):
+    """Persistence for run traces, plus the one read model the Lab needs."""
+
+    async def save(self, trace: RunTrace) -> None: ...
+
+    async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
+
+    async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]: ...
 
 
 class MediaGenerator(Protocol):
