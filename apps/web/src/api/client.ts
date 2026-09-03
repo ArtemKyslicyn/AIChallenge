@@ -555,3 +555,61 @@ export function getLabPareto(hours: number, signal?: AbortSignal): Promise<LabPa
     signal,
   });
 }
+
+/**
+ * `POST /api/v1/messages/{id}/feedback` — one thumb per assistant message.
+ *
+ * Prep D9 body/response shape; prep D6 auth: the message's own session token
+ * plus the visitor header `request` already attaches. A wrong token, a missing
+ * message and a foreign session all answer 404, so the UI shows one error.
+ */
+export type FeedbackValue = "up" | "down";
+
+export interface MessageFeedbackDto {
+  message_id: string;
+  value: FeedbackValue;
+}
+
+export function postMessageFeedback(
+  session: SessionCredentials,
+  messageId: string,
+  value: FeedbackValue,
+  signal?: AbortSignal,
+): Promise<MessageFeedbackDto> {
+  return request<MessageFeedbackDto>(`/messages/${encodeURIComponent(messageId)}/feedback`, {
+    method: "POST",
+    headers: { "X-Session-Token": session.access_token },
+    body: JSON.stringify({ value }),
+    signal,
+  });
+}
+
+/**
+ * `GET /api/v1/lab/feedback-stats` — thumbs aggregated per `model_id`.
+ *
+ * `penalized` means the router temporarily pushes the model down the candidate
+ * list (prep D7 — a reorder, never a ban).
+ */
+export interface LabFeedbackModelDto {
+  model_id: string;
+  ups: number;
+  downs: number;
+  down_rate: number;
+  penalized: boolean;
+}
+
+export interface LabFeedbackStatsDto {
+  hours: number;
+  models: LabFeedbackModelDto[];
+}
+
+/** Open endpoint (prep D5) — no session token, visitor header as everywhere else. */
+export function getLabFeedbackStats(
+  hours: number,
+  signal?: AbortSignal,
+): Promise<LabFeedbackStatsDto> {
+  return request<LabFeedbackStatsDto>(
+    `/lab/feedback-stats?hours=${encodeURIComponent(String(hours))}`,
+    { signal },
+  );
+}

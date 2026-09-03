@@ -20,6 +20,12 @@ export interface Turn {
   failed?: boolean;
   /** Live media generation job (image / video) for in-bubble loader. */
   mediaJob?: MediaJobState | null;
+  /**
+   * Server message id (prep D10). History turns carry it from the start; a live
+   * reply only gets one at `message_end`, so its absence is exactly «no rating
+   * mid-stream» — `FeedbackStrip` mounts only once this is set.
+   */
+  messageId?: string | null;
 }
 
 export interface ProbeSlotState {
