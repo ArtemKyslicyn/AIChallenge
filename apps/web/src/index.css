@@ -2218,6 +2218,13 @@ textarea {
   }
 }
 
+/* Quality is a ranking axis; N is sample size. When both cannot fit beside the
+   model id, N folds into the model cell's title at every width — the row count
+   is context for the numbers, not one of them. */
+.lab-results-table.pareto-table .pareto-col-n--folded {
+  display: none;
+}
+
 @media (max-width: 480px) {
   /* 44px targets without touching `display: list-item` — the disclosure
      triangle must survive. */

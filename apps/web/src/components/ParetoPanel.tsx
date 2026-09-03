@@ -20,6 +20,7 @@ const COPY = {
   colScore: "Score",
   hintN: "Сколько раз модель завершила ответ в окне",
   hintOk: "Доля успешных ответов",
+  hintNFolded: (n: number) => `Прогонов в окне: ${n}`,
   hintQuality: "Оценка ответов судьёй, 0–100%. В скобках — сколько прогонов оценено",
   hintP50: "Медиана времени ответа",
   hintCost: "Относительная стоимость (proxy)",
@@ -193,6 +194,12 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
   // Narrow screens can hold one rate, not two, and «Качество» is the one that
   // answers the question «Успех» only looks like it answers.
   const okClass = hasQuality ? "pareto-num pareto-col-ok" : "pareto-num";
+  // Seven columns do not fit beside a model id in a 360px float. N is the one
+  // that is metadata rather than a ranking axis, so it folds into the model
+  // cell's title once quality — which is a ranking axis — needs the space.
+  const nClass = hasQuality
+    ? "pareto-num pareto-col-n pareto-col-n--folded"
+    : "pareto-num pareto-col-n";
 
   return (
     <section className="pareto" aria-labelledby={titleId}>
@@ -222,7 +229,7 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
             <thead>
               <tr>
                 <th scope="col">{COPY.colModel}</th>
-                <th scope="col" className="pareto-num pareto-col-n" title={COPY.hintN}>
+                <th scope="col" className={nClass} title={COPY.hintN}>
                   {COPY.colN}
                 </th>
                 <th scope="col" className={okClass} title={COPY.hintOk}>
@@ -259,10 +266,14 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
                     // Server sorts by score desc, so the first row is the pick.
                     // `data-winner` is the Lab results table's own idiom.
                     <tr key={model.model_id} data-winner={index === 0 ? "true" : undefined}>
-                      <th scope="row" className="pareto-model">
+                      <th
+                        scope="row"
+                        className="pareto-model"
+                        title={hasQuality ? COPY.hintNFolded(model.n) : undefined}
+                      >
                         {model.model_id}
                       </th>
-                      <td className="pareto-num pareto-col-n">{formatCount(model.n)}</td>
+                      <td className={nClass}>{formatCount(model.n)}</td>
                       <td className={okClass}>{formatPercent(model.success_rate)}</td>
                       {hasQuality && (
                         <td
