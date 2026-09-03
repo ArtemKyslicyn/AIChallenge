@@ -126,14 +126,20 @@ export function ModelsFloat({
   }, [open, collapse]);
 
   // The FAB unmounts when the panel expands, so focus would otherwise fall to
-  // <body>. Move it onto the selected tab once per open — the one-shot flag
+  // <body>. Move it onto the panel container once per open — the one-shot flag
   // keeps a later tab switch from re-stealing focus.
+  //
+  // The container, not the selected tab: «Период» and «Свернуть» sit above the
+  // tablist in the DOM, so starting on a tab meant a forward Tab walk skipped
+  // them for good and only Shift+Tab could reach them. From the `<aside>` Tab
+  // goes header → tabs → content, in visual order. `LabResultsFloat` focuses
+  // its own container for the same reason — the two panels now match.
   const focusOnOpen = useRef(false);
   useEffect(() => {
     if (!open || !focusOnOpen.current) return;
     focusOnOpen.current = false;
-    queueMicrotask(() => tabRefs.current[tab]?.focus());
-  }, [open, tab]);
+    queueMicrotask(() => panelRef.current?.focus());
+  }, [open]);
 
   const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const index = TAB_ORDER.indexOf(tab);
@@ -181,6 +187,7 @@ export function ModelsFloat({
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
+      tabIndex={-1}
     >
       <header className="models-float-head">
         <h2 id={titleId} className="models-float-title">
