@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useDebugLog, type DebugKind } from "../debug/DebugContext";
 
@@ -32,23 +32,44 @@ export function DebugFloat({ open: openProp, onOpenChange }: DebugFloatProps = {
     onOpenChange?.(next);
   };
   const [copied, setCopied] = useState(false);
+  const titleId = useId();
   const logRef = useRef<HTMLDivElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  // The FAB unmounts when the panel expands, so focus would otherwise fall to
+  // <body>. One shot, set on the FAB click, so a programmatic open stays
+  // focus-neutral — same guard as `ModelsFloat`.
+  const focusOnOpen = useRef(false);
 
   useEffect(() => {
     if (open) markSeen();
   }, [open, markSeen, events.length]);
 
+  // `owned` is false when Escape arrives from the composer: the panel is not
+  // modal, so it closes silently and the caret stays where the reader put it.
+  const collapse = useCallback(
+    (owned: boolean) => {
+      if (!controlled) setUncontrolledOpen(false);
+      onOpenChange?.(false);
+      if (owned) queueMicrotask(() => fabRef.current?.focus());
+    },
+    [controlled, onOpenChange],
+  );
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        queueMicrotask(() => fabRef.current?.focus());
-      }
+      if (e.key !== "Escape") return;
+      collapse(panelRef.current?.contains(document.activeElement) ?? false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [open, collapse]);
+
+  useEffect(() => {
+    if (!open || !focusOnOpen.current) return;
+    focusOnOpen.current = false;
+    queueMicrotask(() => panelRef.current?.focus());
   }, [open]);
 
   // Context stores newest-first; reverse for chronological log + stick to bottom.
@@ -82,12 +103,15 @@ export function DebugFloat({ open: openProp, onOpenChange }: DebugFloatProps = {
           type="button"
           className="debug-float-fab"
           id="debug-float-fab"
-          aria-expanded={false}
-          aria-controls="debug-float-panel"
+          /* No `aria-expanded`/`aria-controls`: the FAB and the panel replace
+             each other, so the pair would name an element that never coexists. */
           aria-label={
             unreadErrors > 0 ? `Отладка, ошибок: ${unreadErrors}` : "Отладка"
           }
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            focusOnOpen.current = true;
+            setOpen(true);
+          }}
         >
           Debug
           {unreadErrors > 0 && (
@@ -100,12 +124,19 @@ export function DebugFloat({ open: openProp, onOpenChange }: DebugFloatProps = {
 
       {open && (
         <aside
+          ref={panelRef}
           id="debug-float-panel"
           className="debug-float"
-          aria-label="Журнал отладки"
+          /* Same shape as the other two floats, so a screen reader announces
+             all three the same way. Focus lands here, not on «Свернуть», so
+             the title and the log read in order. */
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby={titleId}
+          tabIndex={-1}
         >
           <header className="debug-float-head">
-            <h2 className="debug-float-title">
+            <h2 id={titleId} className="debug-float-title">
               Журнал
               <span className="debug-float-live" aria-hidden="true" />
             </h2>
@@ -120,10 +151,7 @@ export function DebugFloat({ open: openProp, onOpenChange }: DebugFloatProps = {
                 type="button"
                 className="ghost-button"
                 aria-label="Свернуть журнал отладки"
-                onClick={() => {
-                  setOpen(false);
-                  queueMicrotask(() => fabRef.current?.focus());
-                }}
+                onClick={() => collapse(true)}
               >
                 Свернуть
               </button>

@@ -81,6 +81,7 @@ export function ModelsFloat({
 }: ModelsFloatProps) {
   const titleId = useId();
   const fabRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<Partial<Record<ModelsTab, HTMLButtonElement | null>>>({});
 
   const [uncontrolledTab, setUncontrolledTab] = useState<ModelsTab>("ranking");
@@ -103,15 +104,21 @@ export function ModelsFloat({
     [hoursProp, onHoursChange],
   );
 
-  const collapse = useCallback(() => {
-    onOpenChange(false);
-    queueMicrotask(() => fabRef.current?.focus());
-  }, [onOpenChange]);
+  // `owned` is false when Escape arrives from the composer: the panel is not
+  // modal, so it closes silently and the caret stays where the reader put it.
+  const collapse = useCallback(
+    (owned: boolean) => {
+      onOpenChange(false);
+      if (owned) queueMicrotask(() => fabRef.current?.focus());
+    },
+    [onOpenChange],
+  );
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") collapse();
+      if (e.key !== "Escape") return;
+      collapse(panelRef.current?.contains(document.activeElement) ?? false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -153,8 +160,8 @@ export function ModelsFloat({
         type="button"
         className="models-float-fab"
         id="models-float-fab"
-        aria-expanded={false}
-        aria-controls="models-float-panel"
+        /* No `aria-expanded`/`aria-controls`: the FAB and the panel replace
+           each other, so the pair would name an element that never coexists. */
         onClick={() => {
           focusOnOpen.current = true;
           onOpenChange(true);
@@ -167,6 +174,7 @@ export function ModelsFloat({
 
   return (
     <aside
+      ref={panelRef}
       id="models-float-panel"
       className="models-float"
       role="dialog"
@@ -180,7 +188,7 @@ export function ModelsFloat({
         <div className="models-float-actions">
           <select
             className="models-float-window"
-            aria-label="Окно"
+            aria-label="Период"
             value={hours}
             onChange={(e) => selectHours(Number(e.target.value) as ModelsWindowHours)}
           >
@@ -194,7 +202,7 @@ export function ModelsFloat({
             type="button"
             className="ghost-button"
             aria-label="Свернуть панель «Модели»"
-            onClick={collapse}
+            onClick={() => collapse(true)}
           >
             Свернуть
           </button>

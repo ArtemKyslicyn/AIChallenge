@@ -27,11 +27,15 @@ interface Props {
 
 export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab }: Props) {
   const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   // Set only when the user closes the panel from inside it (Escape / «Свернуть»),
   // so a mutex-driven collapse never yanks focus back to this FAB.
   const restoreFocus = useRef(false);
+  // The mirror of the above for opening: a lab finishing in the background
+  // opens this panel too, and that path must leave the caret alone (WCAG
+  // 3.2.1/3.2.2). The status announcement already says the results are ready.
+  const focusOnOpen = useRef(false);
 
   const collapse = useCallback(() => {
     restoreFocus.current = true;
@@ -40,13 +44,24 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
 
   useEffect(() => {
     if (!open) return;
-    closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") collapse();
+      if (e.key !== "Escape") return;
+      // Not modal: Escape from the composer closes the panel but must not pull
+      // the caret out of it.
+      if (panelRef.current?.contains(document.activeElement)) collapse();
+      else onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, collapse]);
+  }, [open, collapse, onClose]);
+
+  useEffect(() => {
+    if (!open || !focusOnOpen.current) return;
+    focusOnOpen.current = false;
+    // The panel itself, not «Свернуть»: a reader who opened it wants the
+    // verdict, not the first control.
+    queueMicrotask(() => panelRef.current?.focus());
+  }, [open]);
 
   useEffect(() => {
     if (open || !restoreFocus.current) return;
@@ -63,10 +78,13 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
         type="button"
         className="lab-results-fab"
         id="lab-results-fab"
-        aria-expanded={false}
-        aria-controls="lab-results-float-panel"
+        /* No `aria-expanded`/`aria-controls`: the FAB and the panel replace
+           each other, so the pair would name an element that never coexists. */
         aria-label="Открыть результаты лаборатории"
-        onClick={onExpand}
+        onClick={() => {
+          focusOnOpen.current = true;
+          onExpand();
+        }}
       >
         Результаты
       </button>
@@ -78,11 +96,13 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
 
   return (
     <aside
+      ref={panelRef}
       id="lab-results-float-panel"
       className="lab-results-float"
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
+      tabIndex={-1}
     >
       <header className="lab-results-float-head">
         <div>
@@ -98,9 +118,9 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
             </button>
           )}
           <button
-            ref={closeRef}
             type="button"
             className="ghost-button"
+            aria-label="Свернуть результаты лаборатории"
             onClick={collapse}
           >
             Свернуть
@@ -127,13 +147,13 @@ export function LabResultsFloat({ open, payload, onClose, onExpand, onJumpToLab 
       </div>
 
       <div className="lab-results-table-wrap">
-        <table className="lab-results-table">
+        <table className="lab-results-table" aria-labelledby={titleId}>
           <thead>
             <tr>
-              <th>Стратегия</th>
-              <th>Балл</th>
-              <th>Модель</th>
-              <th>Заметки</th>
+              <th scope="col">Стратегия</th>
+              <th scope="col">Балл</th>
+              <th scope="col">Модель</th>
+              <th scope="col">Заметки</th>
             </tr>
           </thead>
           <tbody>
