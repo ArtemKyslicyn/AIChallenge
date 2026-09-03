@@ -109,10 +109,10 @@ type ModelsTab = "ranking" | "feedback";
 - Create: `apps/web/src/components/FeedbackStrip.tsx`
 - Modify: `Turn.tsx`, `client.ts` — `postMessageFeedback(messageId, value)`
 
-- [ ] **Step 1: Render only when** `role===assistant` && `messageId` && not streaming
-- [ ] **Step 2: Optimistic `aria-pressed`**; rollback on API error + inline error text
-- [ ] **Step 3: Hit targets 44px; keyboard activatable**
-- [ ] **Step 4: Commit** `feat(web): helpful/not-helpful strip on assistant turns`
+- [x] **Step 1: Render only when** `role===assistant` && `messageId` && not streaming
+- [x] **Step 2: Optimistic `aria-pressed`**; rollback on API error + inline error text
+- [x] **Step 3: Hit targets 44px; keyboard activatable**
+- [x] **Step 4: Commit** `feat(web): helpful/not-helpful strip on assistant turns`
 
 ---
 

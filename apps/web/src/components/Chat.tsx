@@ -53,6 +53,7 @@ function toTurn(message: MessageDto): Turn {
     role: message.role === "assistant" ? "assistant" : "user",
     content: message.content,
     modelId: message.model_id,
+    messageId: message.id,
   };
 }
 
@@ -276,6 +277,9 @@ export function Chat({
                   content: event.content,
                   modelId: event.model_id,
                   mediaJob: null,
+                  // First moment the live turn has a real server id (prep D10):
+                  // the feedback strip appears only from here on.
+                  messageId: event.message_id,
                 });
                 setActiveMediaJob(null);
                 debug("info", `SSE готово · ${event.model_id}`);
@@ -654,7 +658,14 @@ export function Chat({
               }
               const streaming =
                 busy && index === items.length - 1 && item.role === "assistant";
-              return <TurnView key={item.id} turn={item} streaming={streaming} />;
+              return (
+                <TurnView
+                  key={item.id}
+                  turn={item}
+                  streaming={streaming}
+                  session={session}
+                />
+              );
             })}
           </div>
 

@@ -1,0 +1,127 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  postMessageFeedback,
+  type FeedbackValue,
+  type SessionCredentials,
+} from "../api/client";
+
+/**
+ * «Полезно» / «Не полезно» under a finished assistant turn.
+ *
+ * Mounted by `Turn.tsx` only for an assistant turn that already has a server
+ * `messageId` and is not streaming (prep D10) — that absence is the checklist's
+ * H5 «no feedback mid-stream», so no disabled placeholder is rendered either.
+ *
+ * All copy comes verbatim from
+ * `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`.
+ */
+const COPY = {
+  up: "Полезно",
+  down: "Не полезно",
+  thanks: "Спасибо",
+  error: "Не удалось сохранить оценку",
+} as const;
+
+/** Design spec §3: «Спасибо» is a 1.2s inline confirmation, not a toast. */
+const THANKS_MS = 1200;
+
+const VALUES: { value: FeedbackValue; icon: string; label: string }[] = [
+  { value: "up", icon: "👍", label: COPY.up },
+  { value: "down", icon: "👎", label: COPY.down },
+];
+
+export interface FeedbackStripProps {
+  /** Session that owns the message — its token authorises the vote (prep D6). */
+  session: SessionCredentials;
+  /** Real server message id; the strip is never rendered without one. */
+  messageId: string;
+}
+
+export function FeedbackStrip({ session, messageId }: FeedbackStripProps) {
+  const [value, setValue] = useState<FeedbackValue | null>(null);
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [thanks, setThanks] = useState(false);
+
+  /** Only the newest click may settle — a fast re-vote must not be overwritten. */
+  const ticket = useRef(0);
+  const thanksTimer = useRef<number | null>(null);
+  const live = useRef(true);
+
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+      if (thanksTimer.current !== null) window.clearTimeout(thanksTimer.current);
+      thanksTimer.current = null;
+    };
+  }, []);
+
+  const vote = useCallback(
+    (next: FeedbackValue) => {
+      const previous = value;
+      const mine = ++ticket.current;
+
+      // Optimistic: `aria-pressed` moves before the request, and rolls back below.
+      setValue(next);
+      setPending(true);
+      setFailed(false);
+      setThanks(false);
+      if (thanksTimer.current !== null) {
+        window.clearTimeout(thanksTimer.current);
+        thanksTimer.current = null;
+      }
+
+      postMessageFeedback(session, messageId, next)
+        .then(() => {
+          if (!live.current || mine !== ticket.current) return;
+          setPending(false);
+          setThanks(true);
+          thanksTimer.current = window.setTimeout(() => {
+            thanksTimer.current = null;
+            if (live.current) setThanks(false);
+          }, THANKS_MS);
+        })
+        .catch(() => {
+          if (!live.current || mine !== ticket.current) return;
+          // Feedback lives entirely inside this strip: a failing API rolls the
+          // toggle back and states it here, never touching the chat thread.
+          setPending(false);
+          setValue(previous);
+          setFailed(true);
+        });
+    },
+    [session, messageId, value],
+  );
+
+  return (
+    <div className="feedback-strip">
+      {VALUES.map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          className="feedback-strip-button"
+          data-value={item.value}
+          aria-pressed={value === item.value}
+          title={item.label}
+          disabled={pending}
+          onClick={() => vote(item.value)}
+        >
+          <span aria-hidden="true">{item.icon}</span>
+          <span className="sr-only">{item.label}</span>
+        </button>
+      ))}
+
+      {/* One polite region: «Спасибо» on success, the error text on failure. */}
+      <span className="feedback-strip-note" role="status" aria-live="polite">
+        {thanks ? COPY.thanks : ""}
+      </span>
+      {failed && (
+        <span className="feedback-strip-error" role="alert">
+          {COPY.error}
+        </span>
+      )}
+    </div>
+  );
+}

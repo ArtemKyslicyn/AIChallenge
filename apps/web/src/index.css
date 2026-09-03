@@ -427,6 +427,85 @@ textarea {
   color: var(--danger);
 }
 
+/* ---------- feedback strip (assistant turn footer) ---------- */
+/* Sits in the same `.meta` row as the model badge, so the rating reads as part
+   of the answer's footer rather than a second widget. No new accent. */
+
+.feedback-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.feedback-strip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 100ms ease;
+}
+
+.feedback-strip-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.feedback-strip-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.feedback-strip-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.feedback-strip-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.feedback-strip-note:not(:empty) {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.feedback-strip-error {
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Mobile: 44px thumbs (design spec §3), still inside the wrapping meta row. */
+@media (max-width: 480px) {
+  .feedback-strip-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-strip-button {
+    transition: none;
+  }
+
+  .feedback-strip-button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* The caret rides the last rendered block instead of being a DOM node, so
    Markdown can re-render on every token without the cursor jumping out. */
 .turn.streaming .md > :last-child::after {

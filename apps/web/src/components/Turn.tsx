@@ -1,14 +1,21 @@
+import type { SessionCredentials } from "../api/client";
 import type { Turn } from "../types";
+import { FeedbackStrip } from "./FeedbackStrip";
 import { Markdown } from "./Markdown";
 import { MediaJobCard } from "./MediaJobCard";
 
 interface Props {
   turn: Turn;
   streaming: boolean;
+  /** Owner session — required to vote; without it the strip stays hidden. */
+  session?: SessionCredentials;
 }
 
-export function TurnView({ turn, streaming }: Props) {
+export function TurnView({ turn, streaming, session }: Props) {
   const isAssistant = turn.role === "assistant";
+  // Prep D10: a live reply has no server id until `message_end`, so this is
+  // also the «no feedback mid-stream» guard the checklist (H5) asks for.
+  const feedbackId = isAssistant && !streaming && session ? turn.messageId : null;
   const showMediaJob =
     isAssistant && turn.mediaJob && (turn.mediaJob.phase === "running" || turn.mediaJob.phase === "error");
   const emptyBody = isAssistant && !turn.content.trim();
@@ -53,6 +60,9 @@ export function TurnView({ turn, streaming }: Props) {
             <span className="badge" data-tone="pending">
               выбираем модель…
             </span>
+          )}
+          {feedbackId && session && (
+            <FeedbackStrip key={feedbackId} session={session} messageId={feedbackId} />
           )}
         </div>
       )}
