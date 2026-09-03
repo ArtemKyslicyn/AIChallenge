@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -9,6 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.api.schemas import (
     AttemptResponse,
@@ -22,6 +24,7 @@ from app.adapters.api.schemas import (
     SessionTracesResponse,
 )
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
+from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
 from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
     SqlAlchemySessionRepository,
@@ -80,6 +83,25 @@ async def _rescue_unsaved(container: Container, draft: ReplyDraft) -> None:
         return
 
     await run_shielded(_write_interrupted(container, draft))
+
+
+async def _refresh_penalties(container: Container, db: AsyncSession) -> None:
+    """Update the router's feedback bias, at most once per refresh interval.
+
+    Called before the stream opens, because the bias only ever reorders
+    candidates and reordering after the first token would mean nothing.
+
+    Every failure is swallowed: a chat must never fail because an optional
+    ranking signal could not be read. The rollback matters as much as the
+    log — a failed statement leaves the transaction poisoned, and the very
+    next write in this session is the user's own message.
+    """
+    try:
+        await container.penalties.refresh(SqlAlchemyFeedbackRepository(db))
+    except Exception:
+        logger.warning("feedback penalty refresh failed", exc_info=True)
+        with contextlib.suppress(Exception):
+            await db.rollback()
 
 
 def _to_message_response(message: Message) -> MessageResponse:
@@ -209,6 +231,7 @@ async def send_message(
         # too, so the close has to be shielded like the rescue write.
         db = container.sessionmaker()
         try:
+            await _refresh_penalties(container, db)
             events = send_user_message_and_stream(
                 session_id=session.id,
                 access_token=token,

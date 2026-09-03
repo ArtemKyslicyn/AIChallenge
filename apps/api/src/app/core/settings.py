@@ -146,6 +146,14 @@ class Settings(BaseSettings):
     run_trace_enabled: bool = True
     model_cost_proxy_json: str = ""
 
+    # Feedback → routing bias. The window is what makes a penalty expire: votes
+    # older than the TTL stop counting, so a model recovers on its own. The
+    # refresh interval is only how stale one process's copy of the set may get.
+    feedback_down_rate_threshold: float = 0.6
+    feedback_min_votes: int = 5
+    feedback_penalty_ttl_seconds: int = 86400
+    feedback_penalty_refresh_seconds: int = 60
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""
