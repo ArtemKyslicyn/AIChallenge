@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+
+> ⚠️ **Read first:** [Prep decisions](./2026-09-03-observability-prep-decisions.md) — locked technical contract from a code-reading pass.
+> Where this plan and that file disagree, **the prep decisions win**.
+
 **Goal:** Persist per-completion `RunTrace`, expose Lab Pareto aggregates API, and show a ranked table in the web Lab UI.
 
 **Architecture:** Extend ModelRouter to record attempt history for one request; chat use-case saves a `RunTrace` via a new port after finalize; SQLAlchemy adapter + Alembic; FastAPI lab routes; web Lab float section reads `GET /lab/pareto`.

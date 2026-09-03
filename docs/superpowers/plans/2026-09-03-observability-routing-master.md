@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans.  
 > This file is the **single entrypoint**. Do **not** re-invent tasks here — execute the linked **подпланы** task-by-task. Checkboxes below track phase completion only.
 
+
+> ⚠️ **Read first:** [Prep decisions](./2026-09-03-observability-prep-decisions.md) — locked technical contract from a code-reading pass.
+> Where this plan and that file disagree, **the prep decisions win**.
+
 **Goal:** Сделать AIChallenge демо-платформой, которая **мерит** ответы моделей, собирает **prefs**, **рулит** цепочкой и (позже) замыкает research-loop (cascade / RouteLLM / Arena) — без фич «сбоку».
 
 **Product story:**  
