@@ -13,7 +13,7 @@ from statistics import median
 from app.domain.tracing import STATUS_OK, ModelAggregate, RunTrace
 
 #: Shown in the Lab UI beside the ranking, so the number is never a black box.
-PARETO_FORMULA = "score = успех ÷ время_ответа ÷ cost"
+PARETO_FORMULA = "score = качество (или успех, пока оценок мало) ÷ время_ответа ÷ cost"
 
 #: Below this, a latency number stops being a differentiator and starts being
 #: noise that would dominate the whole ranking.
