@@ -14,15 +14,19 @@ const COPY = {
   colModel: "Модель",
   colN: "N",
   colOk: "Успех",
+  colQuality: "Качество",
   colP50: "p50, с",
   colCost: "Cost",
   colScore: "Score",
   hintN: "Сколько раз модель завершила ответ в окне",
   hintOk: "Доля успешных ответов",
+  hintQuality: "Оценка ответов судьёй, 0–100%. В скобках — сколько прогонов оценено",
   hintP50: "Медиана времени ответа",
   hintCost: "Относительная стоимость (proxy)",
   hintScore: "Успех / время / cost — выше лучше",
-  formulaSummary: "Score = успех ÷ время_ответа ÷ cost. Нужен баланс качества, скорости и цены.",
+  formulaSummary:
+    "Score = качество (или успех, пока оценок мало) ÷ время_ответа ÷ cost. " +
+    "Нужен баланс качества, скорости и цены.",
   empty: "Пока нет замеров. Отправьте пару сообщений в чат.",
   error: "Не удалось загрузить рейтинг",
   retry: "Повторить",
@@ -84,6 +88,16 @@ function formatScore(score: number | null, precision: number): string {
   return value === null ? DASH : value.toFixed(precision);
 }
 
+/**
+ * What the cell says on hover: the same percentage plus the sample it came
+ * from. The count is the difference between a measurement and an impression,
+ * and `hint_quality` promises it in parentheses.
+ */
+function qualityTitle(quality: number | null, judged: number | null): string | undefined {
+  const value = num(quality);
+  return value === null ? undefined : `${formatPercent(value)} (${formatCount(judged)})`;
+}
+
 function formatCount(n: number | null): string {
   const value = num(n);
   return value === null ? DASH : String(value);
@@ -109,7 +123,11 @@ export interface ParetoPanelProps {
 }
 
 const SKELETON_ROWS = [0, 1, 2];
-/** Mirrors the real columns, so `.pareto-col-n` hides in both (see index.css). */
+/**
+ * Mirrors the real columns, so `.pareto-col-n` hides in both (see index.css).
+ * «Качество» is not among them: whether that column exists is a fact about the
+ * data, and while it is loading there is none to read.
+ */
 const SKELETON_CELLS = [
   "",
   "pareto-num pareto-col-n",
@@ -167,6 +185,14 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
   const rows = payload?.models ?? [];
   const cascade = payload?.cascade ?? null;
   const precision = scorePrecision(rows.map((model) => num(model.score)));
+  // The column exists only when something in the window was actually judged.
+  // With no `JUDGE_MODEL` configured nobody judges anything, and a column of
+  // dashes would read as a broken feature rather than an unused one — the
+  // table has to look exactly as it did before the judge existed.
+  const hasQuality = rows.some((model) => num(model.avg_quality) !== null);
+  // Narrow screens can hold one rate, not two, and «Качество» is the one that
+  // answers the question «Успех» only looks like it answers.
+  const okClass = hasQuality ? "pareto-num pareto-col-ok" : "pareto-num";
 
   return (
     <section className="pareto" aria-labelledby={titleId}>
@@ -199,9 +225,14 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
                 <th scope="col" className="pareto-num pareto-col-n" title={COPY.hintN}>
                   {COPY.colN}
                 </th>
-                <th scope="col" className="pareto-num" title={COPY.hintOk}>
+                <th scope="col" className={okClass} title={COPY.hintOk}>
                   {COPY.colOk}
                 </th>
+                {hasQuality && (
+                  <th scope="col" className="pareto-num" title={COPY.hintQuality}>
+                    {COPY.colQuality}
+                  </th>
+                )}
                 <th scope="col" className="pareto-num" title={COPY.hintP50}>
                   {COPY.colP50}
                 </th>
@@ -232,7 +263,15 @@ export function ParetoPanel({ hours, active = true, data }: ParetoPanelProps) {
                         {model.model_id}
                       </th>
                       <td className="pareto-num pareto-col-n">{formatCount(model.n)}</td>
-                      <td className="pareto-num">{formatPercent(model.success_rate)}</td>
+                      <td className={okClass}>{formatPercent(model.success_rate)}</td>
+                      {hasQuality && (
+                        <td
+                          className="pareto-num"
+                          title={qualityTitle(model.avg_quality, model.judged_n)}
+                        >
+                          {formatPercent(model.avg_quality)}
+                        </td>
+                      )}
                       <td className="pareto-num">{formatSeconds(model.p50_total_ms)}</td>
                       <td className="pareto-num">{formatCost(model.avg_cost_proxy)}</td>
                       <td className="pareto-num lab-results-score">

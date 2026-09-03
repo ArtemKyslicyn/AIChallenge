@@ -2235,6 +2235,14 @@ textarea {
   .lab-results-table.pareto-table .pareto-col-n {
     display: none;
   }
+
+  /* The same trade once more, one column later: «Успех» carries the class only
+     while «Качество» is on screen (see ParetoPanel). Two rates do not fit next
+     to the model name at this width, and the one worth the space is the one
+     about the answer rather than about the request finishing. */
+  .lab-results-table.pareto-table .pareto-col-ok {
+    display: none;
+  }
 }
 
 /* ---------- feedback stats panel (Models float → «Оценки») ---------- */
