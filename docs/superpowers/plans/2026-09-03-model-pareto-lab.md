@@ -54,7 +54,7 @@
 **Interfaces:**
 - Produces: `AttemptRecord`, `RunTrace`, `ModelAggregate`, `RunTraceRepository`
 
-- [ ] **Step 1: Write failing import test**
+- [x] **Step 1: Write failing import test**
 
 ```python
 from app.domain.tracing import AttemptRecord, RunTrace, ModelAggregate
@@ -65,11 +65,11 @@ def test_attempt_record_fields():
     assert a.ok is False
 ```
 
-- [ ] **Step 2: Run test — expect ImportError/fail**
+- [x] **Step 2: Run test — expect ImportError/fail**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_tracing_entities.py -v`
 
-- [ ] **Step 3: Implement entities + port method signatures**
+- [x] **Step 3: Implement entities + port method signatures**
 
 ```python
 # tracing.py — dataclasses / frozen where appropriate
@@ -119,9 +119,9 @@ class RunTraceRepository(Protocol):
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]: ...
 ```
 
-- [ ] **Step 4: Tests pass**
+- [x] **Step 4: Tests pass**
 
-- [ ] **Step 5: Commit** `feat(domain): add RunTrace entities and port`
+- [x] **Step 5: Commit** `feat(domain): add RunTrace entities and port`
 
 ---
 
