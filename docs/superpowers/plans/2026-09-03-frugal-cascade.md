@@ -783,7 +783,7 @@ def test_pareto_omits_the_summary_when_the_cascade_never_ran(...) -> None:
 - Modify: `apps/web/src/components/Chat.tsx`, `Turn.tsx`, `ParetoPanel.tsx`
 - Modify: `apps/web/src/index.css`
 
-- [ ] **Step 1: Завести строки в чеклисте**
+- [x] **Step 1: Завести строки в чеклисте**
 
 | Key | String |
 |-----|--------|
@@ -805,19 +805,38 @@ def test_pareto_omits_the_summary_when_the_cascade_never_ran(...) -> None:
 > не участвовал». Живой ответ до `message_end` стадии не имеет, и это правильно — бейдж
 > появляется вместе с оценкой, а не раньше.
 
-- [ ] **Step 2: Бейдж в футере** — `Turn.tsx`, рядом с бейджем модели, только при
+- [x] **Step 2: Бейдж в футере** — `Turn.tsx`, рядом с бейджем модели, только при
   `turn.cascadeStage === "escalated"`. Стиль: существующий `.badge`, без нового цвета.
   Источник значения — `message_end`? Нет: стадия известна только серверу, поэтому поле
   добавляется к `MessageDto` тем же способом, что и `feedback` (см. фазу B),
   и в `toTurn`. У живого ответа бейдж появляется после `message_end`, как и оценка.
 
-- [ ] **Step 3: Строка эскалаций** под таблицей в `ParetoPanel.tsx`, только когда
+- [x] **Step 3: Строка эскалаций** под таблицей в `ParetoPanel.tsx`, только когда
   `data.cascade !== null`. Одна строка `.pareto-meta`, без новой секции.
 
-- [ ] **Step 4: Проверить** `npx tsc -b --noEmit` и `npm run lint` (базовая линия — 7 warnings,
+- [x] **Step 4: Проверить** `npx tsc -b --noEmit` и `npm run lint` (базовая линия — 7 warnings,
   ни одного из новых файлов)
 
-- [ ] **Step 5: Commit** `feat(web): show when an answer was escalated`
+- [x] **Step 5: Commit** `feat(web): show when an answer was escalated`
+
+> **Сделано (2026-09-03).** Порядок: строки в чеклисте → бэкенд-предусловие
+> (`MessageEndEvent`/SSE-фрейм и `MessageResponse` получили `cascade_stage`,
+> история читает стадии одним запросом `stages_for_session`) → `client.ts`/`types.ts`
+> → бейдж в `Turn.tsx` → строка в `ParetoPanel.tsx`. `index.css` не понадобился:
+> `.badge` и `.pareto-meta` подошли как есть.
+>
+> Живая проверка на стенде (FakeLLM, `LLM_MODEL_CHAIN=strong-max`,
+> `CASCADE_CHEAP_MODELS=cheap-mini`): принятый дешёвый ответ — бейдж `cheap-mini`
+> и больше ничего; отвергнутый — `strong-max` + «эскалировали», подсказка на месте,
+> и то же самое после перезагрузки. Строка под таблицей: «Эскалации: 1 из 3 (33%)».
+> С выключенным каскадом на чистой БД — ни бейджа, ни строки.
+>
+> **Follow-up (severity 2, не чиню здесь).** На 390px футер последнего ответа с
+> бейджем «эскалировали» уезжает под FAB «Модели»: 👎 перекрывается на ~38px.
+> `elementFromPoint` на обеих кнопках всё равно возвращает сами кнопки, и ровно
+> так же сегодня ведёт себя длинный `model_id` (`m390-meta-longid.png` из
+> ревью фазы C). Это свойство дока над тредом, а не бейджа, — чинить его значит
+> трогать общий композер, что запрещает D14 §4.
 
 ---
 
