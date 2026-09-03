@@ -134,7 +134,7 @@ class AnswerJudge(Protocol):
 **Interfaces:**
 - Produces: `parse_verdict(raw: str, *, judge_model_id: str) -> QualityVerdict | None`, `should_judge(...) -> bool`
 
-- [ ] **Step 1: Падающие тесты**
+- [x] **Step 1: Падающие тесты**
 
 ```python
 import pytest
@@ -186,12 +186,12 @@ def test_sampler_respects_the_hourly_cap_and_the_rate() -> None:
     assert should_judge(**common, rate=0.2, roll=0.1, judged_this_hour=0, max_per_hour=60) is True
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
-- [ ] **Step 3: Реализовать.** `roll` передаётся снаружи (значение `random.random()`), чтобы функция осталась чистой и тестировалась без подмены модуля. Разбор: срезать ограждение кода, `json.loads`, проверить наличие **всех** `RUBRIC_CRITERIA`, что каждое — `int` в `0..CRITERION_MAX`, сложить и поделить на `len(RUBRIC_CRITERIA) * CRITERION_MAX`. Любое отклонение → `None` плюс `logger.info` с причиной.
+- [x] **Step 3: Реализовать.** `roll` передаётся снаружи (значение `random.random()`), чтобы функция осталась чистой и тестировалась без подмены модуля. Разбор: срезать ограждение кода, `json.loads`, проверить наличие **всех** `RUBRIC_CRITERIA`, что каждое — `int` в `0..CRITERION_MAX`, сложить и поделить на `len(RUBRIC_CRITERIA) * CRITERION_MAX`. Любое отклонение → `None` плюс `logger.info` с причиной.
 
-- [ ] **Step 4: Тесты зелёные**
-- [ ] **Step 5: Commit** `feat(application): parse judge verdicts and sample what to judge`
+- [x] **Step 4: Тесты зелёные**
+- [x] **Step 5: Commit** `feat(application): parse judge verdicts and sample what to judge`
 
 ---
 
