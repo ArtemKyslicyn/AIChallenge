@@ -72,10 +72,22 @@ class ModelAggregateResponse(BaseModel):
     score: float
 
 
+class CascadeSummaryResponse(BaseModel):
+    """How often the cheap stage was enough, over the same window as the table."""
+
+    total: int
+    cheap: int
+    escalated: int
+    escalation_rate: float
+
+
 class ParetoResponse(BaseModel):
     formula: str
     hours: int
     models: list[ModelAggregateResponse]
+    #: Null when the cascade never ran in this window — switched off, or simply
+    #: nothing to report. The panel draws the line only when it is present.
+    cascade: CascadeSummaryResponse | None = None
 
 
 @router.get("/pareto", response_model=ParetoResponse)
@@ -89,10 +101,22 @@ async def model_pareto(
     carries nothing about any visitor or conversation.
     """
     until = utcnow()
-    rows = await traces.aggregate(since=until - timedelta(hours=hours), until=until)
+    since = until - timedelta(hours=hours)
+    rows = await traces.aggregate(since=since, until=until)
+    summary = await traces.cascade_summary(since=since, until=until)
     return ParetoResponse(
         formula=PARETO_FORMULA,
         hours=hours,
+        cascade=(
+            CascadeSummaryResponse(
+                total=summary.total,
+                cheap=summary.cheap,
+                escalated=summary.escalated,
+                escalation_rate=summary.escalation_rate,
+            )
+            if summary is not None
+            else None
+        ),
         models=[
             ModelAggregateResponse(
                 model_id=row.model_id,

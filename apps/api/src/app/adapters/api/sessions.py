@@ -220,6 +220,9 @@ async def list_session_traces(
                     for a in row.attempts
                 ],
                 created_at=row.created_at,
+                cascade_stage=row.cascade_stage,
+                cheap_model_id=row.cheap_model_id,
+                cheap_score=row.cheap_score,
             )
             for row in rows
         ]
