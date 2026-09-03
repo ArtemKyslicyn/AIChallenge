@@ -163,7 +163,7 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 
 - [x] **D.1** Design spec: [frugal-cascade-design](../specs/2026-09-03-frugal-cascade-design.md) · подплан P3: [frugal-cascade](./2026-09-03-frugal-cascade.md)
 
-- [ ] **D.2** Исполнить новый подплан P3 task-by-task
+- [x] **D.2** Подплан P3 исполнен 2026-09-03 (Tasks 1–8), включая эвристический скорер, миграцию 005, сводку эскалаций в Рейтинге и бейдж «эскалировали»
 
 - [ ] **D.3** (Только после D.A/B/C) Опционально Tier B из research note: MoT / semantic cache / G-Eval→Pareto quality column — отдельные мини-планы
 
