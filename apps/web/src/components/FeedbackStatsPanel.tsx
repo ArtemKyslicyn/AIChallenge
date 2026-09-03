@@ -7,26 +7,26 @@ import { getLabFeedbackStats, type LabFeedbackStatsDto } from "../api/client";
  * `GET /api/v1/lab/feedback-stats`.
  *
  * Same four states and the same table density as `ParetoPanel` — the two tabs
- * must read as one component family. Copy comes verbatim from
- * `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`;
- * the load-failure line reuses that file's single error string, since the
- * checklist deliberately lists no separate one for this tab.
+ * must read as one component family. All copy comes verbatim from
+ * `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`.
  */
 const COPY = {
-  title: "Оценки",
+  /** `title_feedback`, not `tab_feedback`: the heading must not repeat the tab. */
+  title: "Оценки моделей",
   colModel: "Модель",
+  /** `col_down_rate` — the header row is Russian; `down%` was not. */
+  colDownRate: "Доля 👎",
   up: "Полезно",
   down: "Не полезно",
   empty: "Оценок пока нет — нажмите «Полезно» / «Не полезно» под ответом.",
-  error: "Не удалось загрузить рейтинг",
+  /** `err_feedback` — this tab no longer borrows the ranking's error. */
+  error: "Не удалось загрузить оценки",
   retry: "Повторить",
+  sortedBy: "Сортировка: доля 👎 ↓",
   penalized: "Ниже в очереди",
   penalizedHint:
     "Из‑за частых «Не полезно» модель временно реже выбирается автоматически",
 } as const;
-
-/** Header of the down-rate column — design spec §5 «модель | 👍 | 👎 | down%». */
-const COL_DOWN_RATE = "down%";
 
 /** Never render `NaN`: nulls and non-finite numbers become an em dash. */
 const DASH = "—";
@@ -40,9 +40,12 @@ function formatCount(n: number | null | undefined): string {
   return value === null ? DASH : String(value);
 }
 
+/** 100% only when the rate really is 1 — see `ParetoPanel.formatPercent`. */
 function formatPercent(rate: number | null | undefined): string {
   const value = num(rate);
-  return value === null ? DASH : `${Math.round(value * 100)}%`;
+  if (value === null) return DASH;
+  const rounded = Math.round(value * 100);
+  return `${rounded === 100 && value < 1 ? 99 : rounded}%`;
 }
 
 interface Loaded {
@@ -65,7 +68,8 @@ export interface FeedbackStatsPanelProps {
 }
 
 const SKELETON_ROWS = [0, 1, 2];
-const SKELETON_CELLS = [0, 1, 2, 3];
+/** Mirrors the real columns so the skeleton keeps their alignment. */
+const SKELETON_CELLS = ["", "feedback-num", "feedback-num", "feedback-num"];
 
 export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStatsPanelProps) {
   const titleId = useId();
@@ -120,6 +124,7 @@ export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStats
         <h3 id={titleId} className="feedback-stats-title">
           {COPY.title}
         </h3>
+        <p className="feedback-stats-meta">{COPY.sortedBy}</p>
       </div>
 
       {failed ? (
@@ -151,8 +156,8 @@ export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStats
                   <span aria-hidden="true">👎</span>
                   <span className="sr-only">{COPY.down}</span>
                 </th>
-                <th scope="col" className="feedback-num">
-                  {COL_DOWN_RATE}
+                <th scope="col" className="feedback-num" aria-sort="descending">
+                  {COPY.colDownRate}
                 </th>
               </tr>
             </thead>
@@ -160,8 +165,8 @@ export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStats
               {loading
                 ? SKELETON_ROWS.map((row) => (
                     <tr key={`skeleton-${row}`} className="feedback-stats-skeleton-row">
-                      {SKELETON_CELLS.map((cell) => (
-                        <td key={cell}>
+                      {SKELETON_CELLS.map((cell, column) => (
+                        <td key={column} className={cell || undefined}>
                           <span className="feedback-stats-skeleton" />
                         </td>
                       ))}
@@ -169,7 +174,7 @@ export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStats
                   ))
                 : rows.map((model) => (
                     <tr key={model.model_id}>
-                      <td className="feedback-model" title={model.model_id}>
+                      <th scope="row" className="feedback-model">
                         <span className="feedback-model-id">{model.model_id}</span>
                         {model.penalized && (
                           // Prep D7: a reorder, never a ban — the tone stays calm.
@@ -177,7 +182,7 @@ export function FeedbackStatsPanel({ hours, active = true, data }: FeedbackStats
                             {COPY.penalized}
                           </span>
                         )}
-                      </td>
+                      </th>
                       <td className="feedback-num">{formatCount(model.ups)}</td>
                       <td className="feedback-num">{formatCount(model.downs)}</td>
                       <td className="feedback-num">{formatPercent(model.down_rate)}</td>

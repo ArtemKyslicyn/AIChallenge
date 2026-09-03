@@ -1958,9 +1958,15 @@ textarea {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
+/* A flex column, so a tab's table can own its own scroller and keep the column
+   header sticky — exactly how `.lab-results-table-wrap` already works. When the
+   panel itself was the scroller the wrap grew to the table's full height, the
+   sticky containing block never scrolled, and `th { top: 0 }` never fired. */
 .models-float-panel {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   padding: var(--space-2) var(--space-3) var(--space-3);
 }
@@ -2000,6 +2006,8 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .pareto-head {
@@ -2022,9 +2030,12 @@ textarea {
   font-size: 11px;
 }
 
+/* The wrap is the scroller (same recipe as `.lab-results-table-wrap`), so the
+   column header actually sticks while the rows move under it. */
 .pareto-table-wrap {
-  overflow-x: auto;
-  min-width: 0;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .pareto-table {
@@ -2036,13 +2047,30 @@ textarea {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /* 4px instead of 8px reclaims 5 × 8px for the model name and the Score
+     column, which used to sit off-screen below ~370px. */
+  padding-inline: var(--space-1);
 }
 
-.lab-results-table.pareto-table td.pareto-model {
-  max-width: 12ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Wrap rather than truncate: the suffix is what tells `balanced-pro` from
+   `balanced-pro-2026-08`, and `title` is not recoverable on touch. Same width
+   as the Оценки tab — the two disagreed (12ch vs 18ch). */
+.lab-results-table.pareto-table .pareto-model,
+.lab-results-table.feedback-stats-table .feedback-model {
+  max-width: 22ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The model cell is a row header (`<th scope="row">`) so a screen reader
+   announces which model each number belongs to. It must not inherit the
+   column header's sticky positioning, fill or weight. */
+.lab-results-table th[scope="row"] {
+  position: static;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .pareto-empty,
@@ -2078,10 +2106,13 @@ textarea {
 }
 
 /* Skeleton: three placeholder rows inside the real table, so the header and
-   column widths do not jump when data lands. */
+   column widths do not jump when data lands. The margins make the row exactly
+   as tall as a one-line data row — without them the bottom-anchored float slid
+   9px per row when the data arrived. */
 .pareto-skeleton {
   display: block;
   height: 10px;
+  margin-block: calc((1.6em - 10px) / 2);
   border-radius: var(--radius-md);
   background: linear-gradient(
     90deg,
@@ -2124,6 +2155,12 @@ textarea {
     min-height: 44px;
     padding: 12px 0;
   }
+
+  /* Narrow screens keep the sort key (Score) on screen instead of N, whose
+     meaning lived only in a `title` — unreachable on touch anyway. */
+  .lab-results-table.pareto-table .pareto-col-n {
+    display: none;
+  }
 }
 
 /* ---------- feedback stats panel (Models float → «Оценки») ---------- */
@@ -2136,6 +2173,8 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .feedback-stats-head {
@@ -2152,9 +2191,18 @@ textarea {
   font-weight: 650;
 }
 
+/* Same sort indicator as the ranking tab. */
+.feedback-stats-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Scroller, so the column header sticks — see `.pareto-table-wrap`. */
 .feedback-stats-table-wrap {
-  overflow-x: auto;
-  min-width: 0;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .feedback-stats-table {
@@ -2166,17 +2214,13 @@ textarea {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  padding-inline: var(--space-1);
 }
 
-.lab-results-table.feedback-stats-table td.feedback-model {
-  max-width: 18ch;
-}
-
+/* Wraps like the chip below it instead of losing the model's suffix. */
 .feedback-model-id {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .feedback-chip {
@@ -2209,10 +2253,12 @@ textarea {
   flex-wrap: wrap;
 }
 
-/* Skeleton rows live inside the real table so column widths do not jump. */
+/* Skeleton rows live inside the real table so column widths do not jump, and
+   the margins make them exactly as tall as a one-line data row. */
 .feedback-stats-skeleton {
   display: block;
   height: 10px;
+  margin-block: calc((1.6em - 10px) / 2);
   border-radius: var(--radius-md);
   background: linear-gradient(
     90deg,
@@ -2352,7 +2398,8 @@ textarea {
   background: color-mix(in srgb, var(--accent-soft) 65%, transparent);
 }
 
-.lab-results-table tr[data-winner="true"] td:first-child {
+.lab-results-table tr[data-winner="true"] td:first-child,
+.lab-results-table tr[data-winner="true"] th:first-child {
   font-weight: 650;
   color: var(--accent);
 }
