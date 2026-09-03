@@ -169,10 +169,10 @@ Each line = `PreferenceRow` dict; include trace attempts when present; content o
 
 ### Task 8: Verification + ops note
 
-- [ ] Full pytest for new modules
-- [ ] Document in `docs/env-local.md` **names only**: `FEEDBACK_DOWN_RATE_THRESHOLD`, `FEEDBACK_MIN_VOTES`, `FEEDBACK_PENALTY_TTL_SECONDS`, `FEEDBACK_EXPORT_INCLUDE_CONTENT`
-- [ ] Add matching empty placeholders to `.env.example`
-- [ ] Commit `docs: feedback router env knobs`
+- [x] Full pytest for new modules
+- [x] Document in `docs/env-local.md` **names only**: `FEEDBACK_DOWN_RATE_THRESHOLD`, `FEEDBACK_MIN_VOTES`, `FEEDBACK_PENALTY_TTL_SECONDS`, `FEEDBACK_EXPORT_INCLUDE_CONTENT`
+- [x] Add matching empty placeholders to `.env.example`
+- [x] Commit `docs: feedback router env knobs`
 
 ## Self-review
 
