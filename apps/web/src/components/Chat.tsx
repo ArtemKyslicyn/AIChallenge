@@ -56,6 +56,7 @@ function toTurn(message: MessageDto): Turn {
     modelId: message.model_id,
     messageId: message.id,
     feedback: message.feedback ?? null,
+    cascadeStage: message.cascade_stage ?? "off",
   };
 }
 
@@ -282,6 +283,9 @@ export function Chat({
                   // First moment the live turn has a real server id (prep D10):
                   // the feedback strip appears only from here on.
                   messageId: event.message_id,
+                  // Same frame, same reason: the stage is knowable only once
+                  // the answer is whole. Absent (the probe stream) means «off».
+                  cascadeStage: event.cascade_stage ?? "off",
                 });
                 setActiveMediaJob(null);
                 debug("info", `SSE готово · ${event.model_id}`);

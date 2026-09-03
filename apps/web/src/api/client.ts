@@ -10,6 +10,16 @@ import { getVisitorId } from "../visitor";
 
 export type Role = "user" | "assistant" | "system";
 
+/**
+ * Which stage of the FrugalGPT cascade produced an answer.
+ *
+ * Never null on the wire: `"off"` is the honest answer for every turn the
+ * cascade did not take part in, which is all of them while it is switched off.
+ * Optional here only because the probe endpoint builds its own `message_end`
+ * frames and has no cascade to report.
+ */
+export type CascadeStage = "off" | "cheap" | "escalated";
+
 export interface MessageDto {
   id: string;
   role: Role;
@@ -18,6 +28,8 @@ export interface MessageDto {
   created_at: string;
   /** Vote already stored for this message; `null`/absent when nobody voted. */
   feedback?: FeedbackValue | null;
+  /** Carried with the history so the escalation badge survives a reload. */
+  cascade_stage?: CascadeStage;
 }
 
 export interface SessionCredentials {
@@ -39,7 +51,13 @@ export interface ChatHistoryItem extends SessionSummaryDto {
 export type ChatEvent =
   | { type: "model"; model_id: string }
   | { type: "token"; text: string }
-  | { type: "message_end"; message_id: string | null; content: string; model_id: string }
+  | {
+      type: "message_end";
+      message_id: string | null;
+      content: string;
+      model_id: string;
+      cascade_stage?: CascadeStage;
+    }
   | { type: "error"; message: string }
   | { type: "tool_start"; name: string; call_id: string }
   | {
@@ -545,10 +563,19 @@ export interface LabParetoModelDto {
   score: number;
 }
 
+/** One window of the cascade — `null` when it never ran, so nothing is drawn. */
+export interface LabCascadeDto {
+  total: number;
+  cheap: number;
+  escalated: number;
+  escalation_rate: number;
+}
+
 export interface LabParetoDto {
   formula: string;
   hours: number;
   models: LabParetoModelDto[];
+  cascade?: LabCascadeDto | null;
 }
 
 /** Open endpoint (prep D5) — no session token, visitor header as everywhere else. */

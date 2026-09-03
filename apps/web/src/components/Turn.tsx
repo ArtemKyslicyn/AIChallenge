@@ -4,6 +4,13 @@ import { FeedbackStrip } from "./FeedbackStrip";
 import { Markdown } from "./Markdown";
 import { MediaJobCard } from "./MediaJobCard";
 
+/**
+ * Checklist keys `escalated_badge` / `escalated_hint`
+ * (`docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`).
+ */
+const ESCALATED_BADGE = "эскалировали";
+const ESCALATED_HINT = "Дешёвая модель не справилась — ответила модель посильнее";
+
 interface Props {
   turn: Turn;
   streaming: boolean;
@@ -62,6 +69,14 @@ export function TurnView({ turn, streaming, session }: Props) {
           ) : (
             <span className="badge" data-tone="pending">
               выбираем модель…
+            </span>
+          )}
+          {/* Only on `escalated`. The cheap path deliberately gets nothing:
+              the absence of the badge is what «обошлись дешёвой» looks like,
+              and a badge on every answer would say nothing at all. */}
+          {!turn.failed && turn.cascadeStage === "escalated" && (
+            <span className="badge" title={ESCALATED_HINT}>
+              {ESCALATED_BADGE}
             </span>
           )}
           {feedbackId && session && (

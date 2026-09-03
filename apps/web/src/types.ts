@@ -1,3 +1,4 @@
+import type { CascadeStage } from "./api/client";
 import type { ExpertSlotResult } from "./strategies/runStrategy";
 import type { JudgeScorecard } from "./strategies/judge";
 import type { PromptStrategyId } from "./strategies/types";
@@ -28,6 +29,13 @@ export interface Turn {
   messageId?: string | null;
   /** Vote the server already holds for this message — seeds `FeedbackStrip`. */
   feedback?: "up" | "down" | null;
+  /**
+   * Which stage of the cascade answered. Set from history by `toTurn` and
+   * live at `message_end`, exactly like `messageId` — a streaming reply has
+   * no stage yet, and that is right: the badge lands with the answer, not
+   * halfway through it.
+   */
+  cascadeStage?: CascadeStage;
 }
 
 export interface ProbeSlotState {
