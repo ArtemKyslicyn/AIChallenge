@@ -60,10 +60,10 @@
 **Interfaces:**
 - Produces: `activeFloat: "debug" | "results" | "models" | null`
 
-- [ ] **Step 1: Refactor** existing Debug/Results open state into single `activeFloat`
-- [ ] **Step 2: Opening Models closes others** (and vice versa) — same pattern as current Debug↔Results
-- [ ] **Step 3: Verify Escape on each panel returns focus to its FAB**
-- [ ] **Step 4: Commit** `fix(web): unify float-dock mutex for three panels`
+- [x] **Step 1: Refactor** existing Debug/Results open state into single `activeFloat`
+- [x] **Step 2: Opening Models closes others** (and vice versa) — same pattern as current Debug↔Results
+- [x] **Step 3: Verify Escape on each panel returns focus to its FAB**
+- [x] **Step 4: Commit** `fix(web): unify float-dock mutex for three panels`
 
 ---
 
