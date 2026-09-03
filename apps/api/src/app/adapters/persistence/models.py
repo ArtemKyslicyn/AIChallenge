@@ -98,6 +98,12 @@ class RunTraceRow(Base):
     )
     cheap_model_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     cheap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: The judge's verdict, 0..1, written out of band some seconds after the
+    #: row itself. Nullable with no server default on purpose: "nobody judged
+    #: this turn" and "the judge scored it zero" are different facts, and a
+    #: default of 0.0 would erase the difference for every row ever written.
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    quality_model_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
         # The Lab reads a time window across all sessions; the debug view reads
