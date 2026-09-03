@@ -129,13 +129,18 @@ type ModelsTab = "ranking" | "feedback";
 
 ### Task 7: Heuristic review pass (mandatory before calling UX done)
 
+> **Выполнено 2026-09-03 отрядом из пяти ревьюеров по живому стенду** (фаза C.0 мастер-плана,
+> правила в [prep D14](./2026-09-03-observability-prep-decisions.md)). Итоги и evidence —
+> в разделе «Гейт пройден» файла
+> [ux-checklist](../specs/2026-09-03-lab-observability-ux-checklist.md).
+
 **Files:**
 - Update checklist boxes in `…-ux-checklist.md`
 
-- [ ] **Step 1: Walk Nielsen 1–10** against running UI (local or staging); note severity
-- [ ] **Step 2: Fix any severity ≥3** (blockers) in the same session
-- [ ] **Step 3: Mobile width ~390px** screenshot or manual: dock not overlapping composer send; thumbs usable
-- [ ] **Step 4: Commit** `docs: complete lab observability UX checklist` (+ any fix commits)
+- [x] **Step 1: Walk Nielsen 1–10** against running UI (local or staging); note severity
+- [x] **Step 2: Fix any severity ≥3** (blockers) in the same session
+- [x] **Step 3: Mobile width ~390px** screenshot or manual: dock not overlapping composer send; thumbs usable
+- [x] **Step 4: Commit** `docs: complete lab observability UX checklist` (+ any fix commits)
 
 ---
 
@@ -146,8 +151,8 @@ type ModelsTab = "ranking" | "feedback";
 - Modify: `docs/superpowers/plans/2026-09-03-feedback-router.md` Task 7 → «FeedbackStrip + FeedbackStatsPanel from UX plan»
 - Modify: `docs/superpowers/plans/2026-09-03-deferred-features.md` — add this plan as order 0 / parallel UX track
 
-- [ ] **Step 1: Edit cross-links**
-- [ ] **Step 2: Commit** `docs: wire UX plan into deferred feature index`
+- [x] **Step 1: Edit cross-links**
+- [x] **Step 2: Commit** `docs: wire UX plan into deferred feature index`
 
 ---
 

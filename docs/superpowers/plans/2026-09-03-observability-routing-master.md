@@ -85,21 +85,21 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 
 **Outcome:** каждый ответ пишет `RunTrace`; Lab → «Рейтинг» показывает Pareto; FAB «Модели» в float-dock.
 
-- [ ] **A.1** Выполнить подплан **P0** Tasks 1–3  
+- [x] **A.1** Выполнить подплан **P0** Tasks 1–3  
   → [lab-observability-ux.md](./2026-09-03-lab-observability-ux.md)  
   Spec: [ux-design](../specs/2026-09-03-lab-observability-ux-design.md), [checklist](../specs/2026-09-03-lab-observability-ux-checklist.md)  
   *Deliverable:* microcopy checklist + `activeFloat` mutex + `ModelsFloat` shell/tabs
 
-- [ ] **A.2** Выполнить подплан **P1** Tasks 1–6 (domain → router attempts → score → DB → chat save → API)  
+- [x] **A.2** Выполнить подплан **P1** Tasks 1–6 (domain → router attempts → score → DB → chat save → API)  
   → [model-pareto-lab.md](./2026-09-03-model-pareto-lab.md)  
   Spec: [pareto-lab-design](../specs/2026-09-03-model-pareto-lab-design.md)  
   *Deliverable:* `run_traces`, `GET /lab/pareto`, `GET /sessions/{id}/traces`
 
-- [ ] **A.3** Выполнить подплан **P0** Task 4 + **P1** Task 7 (wire)  
+- [x] **A.3** Выполнить подплан **P0** Task 4 + **P1** Task 7 (wire)  
   → UX [Task 4](./2026-09-03-lab-observability-ux.md) + Pareto [Task 7](./2026-09-03-model-pareto-lab.md)  
   *Deliverable:* живой ParetoPanel на API
 
-- [ ] **A.4** Выполнить подплан **P1** Task 8 (integration verify)  
+- [x] **A.4** Выполнить подплан **P1** Task 8 (integration verify)  
   → [model-pareto-lab.md](./2026-09-03-model-pareto-lab.md) Task 8
 
 **Phase A exit:** чат → строка в Pareto за 24h; `model_id` на бабле как раньше.
@@ -110,18 +110,18 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 
 **Outcome:** 👍/👎 на assistant; stats во вкладке «Оценки»; soft penalty в ModelRouter; JSONL export.
 
-- [ ] **B.1** Выполнить подплан **P2** Tasks 1–5 (domain → penalty fn → DB → API → router wire)  
+- [x] **B.1** Выполнить подплан **P2** Tasks 1–5 (domain → penalty fn → DB → API → router wire)  
   → [feedback-router.md](./2026-09-03-feedback-router.md)  
   Spec: [feedback-router-design](../specs/2026-09-03-feedback-router-design.md)
 
-- [ ] **B.2** Выполнить подплан **P2** Task 6 (lab stats + preference-export)  
+- [x] **B.2** Выполнить подплан **P2** Task 6 (lab stats + preference-export)  
   → [feedback-router.md](./2026-09-03-feedback-router.md) Task 6
 
-- [ ] **B.3** Выполнить подплан **P0** Tasks 5–6 + **P2** Task 7 (wire UI)  
+- [x] **B.3** Выполнить подплан **P0** Tasks 5–6 + **P2** Task 7 (wire UI)  
   → UX [Tasks 5–6](./2026-09-03-lab-observability-ux.md) + Feedback [Task 7](./2026-09-03-feedback-router.md)  
   *Deliverable:* FeedbackStrip + FeedbackStatsPanel
 
-- [ ] **B.4** Выполнить подплан **P0** Task 7 (heuristic gate) + **P2** Task 8 (env docs)  
+- [x] **B.4** Выполнить подплан **P0** Task 7 (heuristic gate) + **P2** Task 8 (env docs)  
   → UX [Task 7](./2026-09-03-lab-observability-ux.md), checklist boxes; Feedback [Task 8](./2026-09-03-feedback-router.md)
 
 **Phase B exit:** все пункты UX checklist отмечены; downvote rate двигает auto-chain; export JSONL без секретов.
@@ -132,17 +132,17 @@ Parallel allowed: **P0 Tasks 1–3** (checklist + mutex + ModelsFloat shell) **�
 
 **Outcome:** стабильный демо-сценарий для «крутого AI/DS инженера».
 
-- [ ] **C.0** **Экспертная UI/UX-валидация на живом стенде** (см. [prep D14](./2026-09-03-observability-prep-decisions.md))
+- [x] **C.0** **Экспертная UI/UX-валидация на живом стенде** (см. [prep D14](./2026-09-03-observability-prep-decisions.md))
   Поднять локальный стенд (throwaway Postgres + API на FakeLLM + Vite dev), прогнать отряд
   специализированных ревьюеров параллельно, свести находки по severity, починить блокеры.
   Правило: продукт можно править, но **аккуратно и в текущем вайбе** — не переверстывать чат.
 
-- [ ] **C.1** Скрипт/чеклист демо (ручной): 5 сообщений → Pareto не пустой → 2 thumbs → вкладка Оценки → (опц.) export  
+- [x] **C.1** Скрипт/чеклист демо (ручной): 5 сообщений → Pareto не пустой → 2 thumbs → вкладка Оценки → (опц.) export  
   Файл: создать `docs/superpowers/plans/2026-09-03-observability-demo-script.md` при исполнении (короткий)
 
-- [ ] **C.2** Прогнать `apps/api` unit+integration для новых модулей; починить редгрессии SSE/`model_id`
+- [x] **C.2** Прогнать `apps/api` unit+integration для новых модулей; починить редгрессии SSE/`model_id`
 
-- [ ] **C.3** Обновить индекс [deferred-features.md](./2026-09-03-deferred-features.md): статус Phase A/B → **done**
+- [x] **C.3** Обновить индекс [deferred-features.md](./2026-09-03-deferred-features.md): статус Phase A/B → **done**
 
 **Phase C exit:** можно показывать продукт без упоминания research papers.
 
