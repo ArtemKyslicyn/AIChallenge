@@ -111,6 +111,12 @@ class RunTraceRepository(Protocol):
 
     async def save(self, trace: RunTrace) -> None: ...
 
+    #: Attach a judge's verdict to an already-written trace. False when there
+    #: was no row to attach it to, which is a normal outcome, not a failure.
+    async def set_quality(
+        self, message_id: UUID, *, score: float, judge_model_id: str
+    ) -> bool: ...
+
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
 
     #: message_id → cascade stage, for the messages of one chat that have one.

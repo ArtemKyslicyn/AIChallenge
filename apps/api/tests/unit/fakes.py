@@ -130,6 +130,15 @@ class InMemoryRunTraceRepository:
             raise RuntimeError("run_traces insert failed")
         self.saved.append(trace)
 
+    async def set_quality(self, message_id: UUID, *, score: float, judge_model_id: str) -> bool:
+        found = False
+        for trace in self.saved:
+            if trace.message_id == message_id:
+                trace.quality_score = score
+                trace.quality_model_id = judge_model_id
+                found = True
+        return found
+
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]:
         return [t for t in self.saved if t.session_id == session_id]
 

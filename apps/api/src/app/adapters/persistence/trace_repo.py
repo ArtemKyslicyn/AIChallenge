@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.persistence.models import RunTraceRow
-from app.application.pareto import aggregate_models
+from app.application.pareto import DEFAULT_MIN_JUDGED_RUNS, aggregate_models
 from app.domain.cascade import (
     CASCADE_CHEAP,
     CASCADE_ESCALATED,
@@ -71,6 +71,8 @@ def to_row(trace: RunTrace) -> RunTraceRow:
         cascade_stage=trace.cascade_stage,
         cheap_model_id=trace.cheap_model_id,
         cheap_score=trace.cheap_score,
+        quality_score=trace.quality_score,
+        quality_model_id=trace.quality_model_id,
     )
 
 
@@ -96,16 +98,43 @@ def to_trace(row: RunTraceRow) -> RunTrace:
         cascade_stage=row.cascade_stage or CASCADE_OFF,
         cheap_model_id=row.cheap_model_id,
         cheap_score=row.cheap_score,
+        quality_score=row.quality_score,
+        quality_model_id=row.quality_model_id,
     )
 
 
 class SqlAlchemyRunTraceRepository:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(
+        self, db: AsyncSession, *, min_judged_runs: int = DEFAULT_MIN_JUDGED_RUNS
+    ) -> None:
         self._db = db
+        self._min_judged_runs = min_judged_runs
 
     async def save(self, trace: RunTrace) -> None:
         self._db.add(to_row(trace))
         await self._db.flush()
+
+    async def set_quality(
+        self, message_id: UUID, *, score: float, judge_model_id: str
+    ) -> bool:
+        """Attach a verdict to the trace of one message, long after the fact.
+
+        An UPDATE rather than a read-modify-write: the judge runs seconds after
+        the turn, on a session of its own, and re-saving a whole entity read at
+        that point would let it overwrite anything the chat wrote in between.
+
+        Returns whether a row was there to update. Nothing is wrong when there
+        wasn't — tracing can be off, or the turn may have ended without one.
+        """
+        stmt = (
+            update(RunTraceRow)
+            .where(RunTraceRow.message_id == message_id)
+            .values(quality_score=score, quality_model_id=judge_model_id)
+        )
+        # execute() is typed as returning a plain Result; only the cursor
+        # flavour carries rowcount, and an UPDATE always produces one.
+        result = cast("CursorResult[Any]", await self._db.execute(stmt))
+        return bool(result.rowcount)
 
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]:
         """Newest first — a debug panel asks "why this model *just now*"."""
@@ -149,7 +178,9 @@ class SqlAlchemyRunTraceRepository:
             .limit(AGGREGATE_ROW_LIMIT)
         )
         rows = (await self._db.execute(stmt)).scalars().all()
-        return aggregate_models(to_trace(row) for row in rows)
+        return aggregate_models(
+            (to_trace(row) for row in rows), min_judged_runs=self._min_judged_runs
+        )
 
     async def cascade_summary(
         self, *, since: datetime, until: datetime

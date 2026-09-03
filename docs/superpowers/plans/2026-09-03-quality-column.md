@@ -259,7 +259,7 @@ template: |
 - Modify: `apps/api/src/app/application/pareto.py`
 - Test: `apps/api/tests/unit/test_pareto_quality.py`
 
-- [ ] **Step 1: Падающий тест на ветвление формулы**
+- [x] **Step 1: Падающий тест на ветвление формулы**
 
 ```python
 def test_score_ignores_quality_until_there_are_enough_judged_runs() -> None:
@@ -273,12 +273,12 @@ def test_score_uses_quality_once_the_sample_is_big_enough() -> None:
     assert aggregates[0].score == pytest.approx(avg_quality / latency_s / cost)
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
-- [ ] **Step 3: Реализовать.** Две колонки (`quality_score` Float nullable, `quality_model_id` String(128) nullable), индекса не нужно — агрегат и так читает окно. `aggregate_models` получает `min_judged_runs` и считает `avg_quality` только по строкам с непустой оценкой; `judged_n` — их число. Ветвление ровно как в спеке.
+- [x] **Step 3: Реализовать.** Две колонки (`quality_score` Float nullable, `quality_model_id` String(128) nullable), индекса не нужно — агрегат и так читает окно. `aggregate_models` получает `min_judged_runs` и считает `avg_quality` только по строкам с непустой оценкой; `judged_n` — их число. Ветвление ровно как в спеке.
 
-- [ ] **Step 4: Тесты зелёные, включая существующий `test_pareto.py` без правок**
-- [ ] **Step 5: Commit** `feat(db): persist judge scores and rank by quality`
+- [x] **Step 4: Тесты зелёные, включая существующий `test_pareto.py` без правок**
+- [x] **Step 5: Commit** `feat(db): persist judge scores and rank by quality`
 
 ---
 

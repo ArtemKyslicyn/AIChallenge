@@ -61,3 +61,21 @@ def test_a_partial_attempt_row_still_reads_back() -> None:
 def test_aggregation_reads_a_bounded_number_of_rows() -> None:
     # Without a ceiling, a wide window would scan the whole table.
     assert AGGREGATE_ROW_LIMIT == 5000
+
+
+def test_a_judged_trace_carries_its_verdict_through_the_row() -> None:
+    trace = sample()
+    trace.quality_score = 0.8
+    trace.quality_model_id = "judge-1"
+    row = to_row(trace)
+    assert row.quality_score == 0.8
+    assert row.quality_model_id == "judge-1"
+    assert to_trace(row) == trace
+
+
+def test_an_unjudged_trace_reads_back_as_unjudged_not_as_zero() -> None:
+    # A row written before the judge existed has no verdict. Reading it as 0.0
+    # would say the judge found it bad, which nobody ever claimed.
+    row = to_row(sample())
+    assert row.quality_score is None
+    assert to_trace(row).quality_score is None
