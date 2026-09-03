@@ -12,6 +12,7 @@ import logging
 import time
 from collections.abc import AsyncIterator, Callable, Sequence
 
+from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMExhaustedError, LLMProviderError, LLMStreamAbortedError
 from app.domain.generation import GenerationParams
@@ -81,6 +82,7 @@ class ModelRouter:
         now: Callable[[], float] = time.monotonic,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         first_token_timeout_seconds: float = DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS,
+        penalties: FeedbackPenaltyCache | None = None,
     ) -> None:
         self._provider = provider
         self._chain = list(model_chain)
@@ -88,6 +90,7 @@ class ModelRouter:
         self._now = now
         self._max_attempts = max(1, max_attempts)
         self._first_token_timeout = first_token_timeout_seconds
+        self._penalties = penalties
         self._exhausted: dict[str, float] = {}
 
     def _mark_exhausted(self, model: str, *, reason: str = "") -> None:
@@ -108,15 +111,38 @@ class ModelRouter:
             return f"http_{exc.status}"
         return exc.kind or "unknown"
 
+    def _demote_penalized(self, models: list[str], pinned: str | None) -> list[str]:
+        """Move badly-rated models to the back of the queue, never out of it.
+
+        A ban would be the wrong shape: one bad day for a model could leave a
+        chat with no chain at all, and the votes that caused it are a quality
+        signal, not an availability one. Demotion says "try the others first"
+        while keeping the model as a last resort.
+
+        The pin is exempt. Someone who names a model has overridden routing on
+        purpose, and silently reordering around that would be a lie.
+        """
+        if self._penalties is None:
+            return models
+        keep = [m for m in models if m == pinned or not self._penalties.is_penalized(m)]
+        if len(keep) == len(models):
+            return models
+        demoted = [m for m in models if m not in keep]
+        return keep + demoted
+
     def _candidates(self, preferred_model: str = AUTO_MODEL) -> list[str]:
         """Chain order, with an explicit ``preferred_model`` pinned first.
 
         A pinned model that is exhausted or absent from the chain simply loses
         its priority — it does not disable the rest of the chain.
+
+        Stays synchronous: it runs on the path of every message, so the
+        feedback bias has to be a set lookup, never a query.
         """
+        pinned = preferred_model if preferred_model and preferred_model != AUTO_MODEL else None
         ordered: list[str] = []
-        if preferred_model and preferred_model != AUTO_MODEL:
-            ordered.append(preferred_model)
+        if pinned is not None:
+            ordered.append(pinned)
         ordered.extend(model for model in self._chain if model not in ordered)
 
         now = self._now()
@@ -128,6 +154,7 @@ class ModelRouter:
                     continue
                 del self._exhausted[model]
             available.append(model)
+        available = self._demote_penalized(available, pinned)
         # One request walks a bounded prefix of the chain, not all of it.
         return available[: self._max_attempts]
 

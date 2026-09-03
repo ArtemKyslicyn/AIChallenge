@@ -15,6 +15,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
+from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
 from app.adapters.llm.router import ModelRouter, TieredModelRouter
 from app.adapters.media.fake import FakeMediaGenerator
@@ -95,6 +96,8 @@ class Container:
     media_generator: MediaGenerator | None
     media_store: MediaStore | None
     media_limiter: SessionMediaRateLimiter | None
+    #: Shared by every router tier, refreshed once per chat request.
+    penalties: FeedbackPenaltyCache
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -128,7 +131,21 @@ def _openai_provider(
     )
 
 
-def _router_for(settings: Settings, provider: LLMProvider, chain: list[str]) -> ModelRouter:
+def _penalty_cache(settings: Settings) -> FeedbackPenaltyCache:
+    return FeedbackPenaltyCache(
+        min_votes=settings.feedback_min_votes,
+        down_rate_threshold=settings.feedback_down_rate_threshold,
+        window_seconds=settings.feedback_penalty_ttl_seconds,
+        refresh_seconds=settings.feedback_penalty_refresh_seconds,
+    )
+
+
+def _router_for(
+    settings: Settings,
+    provider: LLMProvider,
+    chain: list[str],
+    penalties: FeedbackPenaltyCache,
+) -> ModelRouter:
     """One place for the per-request limits, so no chain can escape them."""
     return ModelRouter(
         provider,
@@ -136,16 +153,22 @@ def _router_for(settings: Settings, provider: LLMProvider, chain: list[str]) -> 
         exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds,
         max_attempts=settings.llm_max_attempts,
         first_token_timeout_seconds=settings.llm_first_token_timeout_seconds,
+        penalties=penalties,
     )
 
 
 def build_container(settings: Settings) -> Container:
     provider: LLMProvider
     extra_providers: list[LLMProvider] = []
+    # One cache for every tier: a model's reputation does not change because a
+    # different provider happens to be serving it.
+    penalties = _penalty_cache(settings)
     if settings.fake_llm_enabled():
         provider = FakeLLMProvider()
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
-        router: ModelRouter | TieredModelRouter = _router_for(settings, provider, chain)
+        router: ModelRouter | TieredModelRouter = _router_for(
+            settings, provider, chain, penalties
+        )
         logger.info("using FakeLLMProvider (no provider key configured)")
     else:
         primary_proxy = settings.llm_http_proxy.strip() or None
@@ -162,7 +185,7 @@ def build_container(settings: Settings) -> Container:
             raise RuntimeError(
                 "LLM_MODEL_CHAIN must list at least one model id when LLM_API_KEY is set."
             )
-        primary_router = _router_for(settings, provider, chain)
+        primary_router = _router_for(settings, provider, chain, penalties)
         if settings.llm_fallback_enabled():
             fallback_proxy = settings.llm_fallback_http_proxy.strip() or None
             fallback_provider = _openai_provider(
@@ -173,7 +196,7 @@ def build_container(settings: Settings) -> Container:
             )
             extra_providers.append(fallback_provider)
             fallback_router = _router_for(
-                settings, fallback_provider, settings.fallback_chain_list()
+                settings, fallback_provider, settings.fallback_chain_list(), penalties
             )
             router = TieredModelRouter([primary_router, fallback_router])
             logger.info("LLM tiered router enabled (primary + fallback provider)")
@@ -220,6 +243,7 @@ def build_container(settings: Settings) -> Container:
         media_generator=media_generator,
         media_store=media_store,
         media_limiter=media_limiter,
+        penalties=penalties,
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )
