@@ -174,9 +174,9 @@ def pareto_score(success_rate: float, p50_total_ms: float | None, avg_cost_proxy
 - Wire: `deps.py` / session factory
 - Test: unit with in-memory or existing persistence test style; integration if Postgres profile available
 
-- [ ] Table `run_traces`: UUID PK, FKs, JSONB `attempts`, timings, status, indexes on `(created_at)`, `(session_id)`
-- [ ] `SqlAlchemyRunTraceRepository.aggregate` computes p50 in SQL or Python (Python OK for v1 if N small)
-- [ ] Commit `feat(db): add run_traces table and repository`
+- [x] Table `run_traces`: UUID PK, FKs, JSONB `attempts`, timings, status, indexes on `(created_at)`, `(session_id)`
+- [x] `SqlAlchemyRunTraceRepository.aggregate` computes p50 in SQL or Python (Python OK for v1 if N small)
+- [x] Commit `feat(db): add run_traces table and repository`
 
 ---
 
