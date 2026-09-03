@@ -344,7 +344,7 @@ class CascadeOutcome:
 async def try_cheap_first(...) -> CascadeOutcome: ...
 ```
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 ```python
 from app.application.cascade import try_cheap_first
@@ -440,11 +440,11 @@ async def test_a_timeout_falls_through_instead_of_raising() -> None:
     assert outcome.stage == CASCADE_OFF
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_cascade_use_case.py -v`
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 
 ```python
 """Try a cheap model first, and decide *before* the reader sees anything.
@@ -536,11 +536,11 @@ async def try_cheap_first(
     )
 ```
 
-- [ ] **Step 4: Тесты зелёные + слои целы**
+- [x] **Step 4: Тесты зелёные + слои целы**
 
 Run: `cd apps/api && uv run pytest tests/unit/test_cascade_use_case.py tests/unit/test_layering.py -v`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/app/application/cascade.py apps/api/tests/unit/test_cascade_use_case.py
