@@ -49,7 +49,7 @@
 **Interfaces:**
 - Produces: `QualityVerdict(score: float, sub_scores: dict[str, int], judge_model_id: str)`, порт `AnswerJudge`; поля `RunTrace.quality_score`, `.quality_model_id`; `ModelAggregate.avg_quality`, `.judged_n`
 
-- [ ] **Step 1: Падающий тест**
+- [x] **Step 1: Падающий тест**
 
 ```python
 from app.domain.quality import QualityVerdict
@@ -64,9 +64,9 @@ def test_verdict_keeps_the_sub_scores_it_was_built_from() -> None:
     assert verdict.sub_scores["relevance"] == 4
 ```
 
-- [ ] **Step 2: Прогнать — падает.** `cd apps/api && uv run pytest tests/unit/test_quality_entities.py -v`
+- [x] **Step 2: Прогнать — падает.** `cd apps/api && uv run pytest tests/unit/test_quality_entities.py -v`
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 
 ```python
 """Quality domain: what a judge thought of one answer.
@@ -120,8 +120,8 @@ class AnswerJudge(Protocol):
     judged_n: int = 0
 ```
 
-- [ ] **Step 4: Тесты зелёные.** `uv run pytest tests/unit/test_quality_entities.py tests/unit/test_layering.py -v`
-- [ ] **Step 5: Commit** `feat(domain): quality verdict and judge port`
+- [x] **Step 4: Тесты зелёные.** `uv run pytest tests/unit/test_quality_entities.py tests/unit/test_layering.py -v`
+- [x] **Step 5: Commit** `feat(domain): quality verdict and judge port`
 
 ---
 

@@ -69,6 +69,10 @@ class RunTrace:
     cheap_model_id: str | None = None
     #: Вердикт скорера 0..1. None, когда скорер не вызывался.
     cheap_score: float | None = None
+    #: Оценка судьи 0..1. None — не судили или разбор не удался.
+    quality_score: float | None = None
+    #: Кто судил. Нужен, чтобы агрегаты не смешивали двух разных судей молча.
+    quality_model_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,3 +91,9 @@ class ModelAggregate:
     p50_total_ms: float | None
     avg_cost_proxy: float | None
     score: float
+    # Defaulted, and therefore last: an aggregate built before the judge
+    # existed is one nobody judged, not one that scored zero.
+    #: Среднее судейской оценки 0..1 по прогонам, у которых она есть.
+    avg_quality: float | None = None
+    #: Сколько прогонов окна реально оценены. Без него среднее читается как факт.
+    judged_n: int = 0
