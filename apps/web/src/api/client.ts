@@ -16,6 +16,8 @@ export interface MessageDto {
   content: string;
   model_id: string | null;
   created_at: string;
+  /** Vote already stored for this message; `null`/absent when nobody voted. */
+  feedback?: FeedbackValue | null;
 }
 
 export interface SessionCredentials {

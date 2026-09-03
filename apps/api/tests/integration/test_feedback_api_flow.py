@@ -51,6 +51,31 @@ async def test_a_vote_survives_the_round_trip_into_the_lab_table(api: AsyncClien
     assert model["penalized"] is False  # one vote is under the floor
 
 
+async def test_history_carries_the_vote_so_a_reload_still_shows_it(api: AsyncClient) -> None:
+    """Without this the thumbs come back unpressed and a cast vote looks lost."""
+    created = (await api.post("/api/v1/sessions", json={})).json()
+    headers = {"X-Session-Token": created["access_token"]}
+    history = f"/api/v1/sessions/{created['id']}/messages"
+    async with api.stream("POST", history, json={"content": "привет"}, headers=headers) as reply:
+        assert reply.status_code == 200
+        async for _ in reply.aiter_lines():
+            pass
+
+    before = (await api.get(history, headers=headers)).json()
+    assert [m["feedback"] for m in before] == [None, None]
+    message_id = next(m["id"] for m in before if m["role"] == "assistant")
+
+    await api.post(
+        f"/api/v1/messages/{message_id}/feedback",
+        json={"value": "up"},
+        headers=headers | VISITOR,
+    )
+
+    after = {m["role"]: m["feedback"] for m in (await api.get(history, headers=headers)).json()}
+    assert after["assistant"] == "up"
+    assert after["user"] is None
+
+
 async def test_a_second_vote_replaces_rather_than_adds(api: AsyncClient) -> None:
     message_id, headers = await answer(api)
     for value in ("down", "up"):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Annotated
 from uuid import UUID
 
@@ -47,6 +47,7 @@ from app.core.deps import (
     visitor_id_header,
 )
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
+from app.domain.feedback import FeedbackValue
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +105,16 @@ async def _refresh_penalties(container: Container, db: AsyncSession) -> None:
             await db.rollback()
 
 
-def _to_message_response(message: Message) -> MessageResponse:
+def _to_message_response(
+    message: Message, votes: Mapping[UUID, FeedbackValue] | None = None
+) -> MessageResponse:
     return MessageResponse(
         id=message.id,
         role=str(message.role),
         content=message.content,
         model_id=message.model_id,
         created_at=message.created_at,
+        feedback=votes.get(message.id) if votes else None,
     )
 
 
@@ -174,7 +178,11 @@ async def list_messages(
     db: DbSession,
 ) -> list[MessageResponse]:
     rows = await SqlAlchemyMessageRepository(db).list_for_session(session.id)
-    return [_to_message_response(row) for row in rows]
+    # Carried with the history so a cast vote survives a reload: without it the
+    # thumbs come back unpressed and the reader either re-votes or assumes the
+    # vote was lost.
+    votes = await SqlAlchemyFeedbackRepository(db).values_for_session(session.id)
+    return [_to_message_response(row, votes) for row in rows]
 
 
 @router.get("/{session_id}/traces", response_model=SessionTracesResponse)

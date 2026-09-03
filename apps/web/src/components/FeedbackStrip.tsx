@@ -17,6 +17,7 @@ import {
  * `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`.
  */
 const COPY = {
+  group: "Оценка ответа",
   up: "Полезно",
   down: "Не полезно",
   thanks: "Спасибо",
@@ -36,10 +37,12 @@ export interface FeedbackStripProps {
   session: SessionCredentials;
   /** Real server message id; the strip is never rendered without one. */
   messageId: string;
+  /** Vote already stored on the server, so a reload shows what was cast. */
+  initialValue?: FeedbackValue | null;
 }
 
-export function FeedbackStrip({ session, messageId }: FeedbackStripProps) {
-  const [value, setValue] = useState<FeedbackValue | null>(null);
+export function FeedbackStrip({ session, messageId, initialValue = null }: FeedbackStripProps) {
+  const [value, setValue] = useState<FeedbackValue | null>(initialValue);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [thanks, setThanks] = useState(false);
@@ -60,6 +63,9 @@ export function FeedbackStrip({ session, messageId }: FeedbackStripProps) {
 
   const vote = useCallback(
     (next: FeedbackValue) => {
+      // Gate here rather than with `disabled`: disabling the button the user
+      // just pressed blurs it, and the browser hands focus to <body>.
+      if (pending) return;
       const previous = value;
       const mine = ++ticket.current;
 
@@ -92,11 +98,13 @@ export function FeedbackStrip({ session, messageId }: FeedbackStripProps) {
           setFailed(true);
         });
     },
-    [session, messageId, value],
+    [session, messageId, value, pending],
   );
 
   return (
-    <div className="feedback-strip">
+    // Named group: tabbing a long thread otherwise reads as an undifferentiated
+    // stream of «Полезно / Не полезно» with nothing to tie a pair to its answer.
+    <div className="feedback-strip" role="group" aria-label={COPY.group}>
       {VALUES.map((item) => (
         <button
           key={item.value}
@@ -104,8 +112,9 @@ export function FeedbackStrip({ session, messageId }: FeedbackStripProps) {
           className="feedback-strip-button"
           data-value={item.value}
           aria-pressed={value === item.value}
-          title={item.label}
-          disabled={pending}
+          /* `aria-disabled`, never `disabled` — it announces the in-flight
+             state without taking focus off the button that is in flight. */
+          aria-disabled={pending || undefined}
           onClick={() => vote(item.value)}
         >
           <span aria-hidden="true">{item.icon}</span>
