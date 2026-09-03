@@ -26,6 +26,8 @@ export interface Turn {
    * mid-stream» — `FeedbackStrip` mounts only once this is set.
    */
   messageId?: string | null;
+  /** Vote the server already holds for this message — seeds `FeedbackStrip`. */
+  feedback?: "up" | "down" | null;
 }
 
 export interface ProbeSlotState {

@@ -55,6 +55,7 @@ function toTurn(message: MessageDto): Turn {
     content: message.content,
     modelId: message.model_id,
     messageId: message.id,
+    feedback: message.feedback ?? null,
   };
 }
 

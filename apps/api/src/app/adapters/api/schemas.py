@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.domain.entities import AUTO_MODEL
+from app.domain.feedback import FeedbackValue
 
 #: Hard transport cap. The configurable limit (MAX_MESSAGE_CHARS) is enforced
 #: in the use case; this only stops absurd payloads before they are parsed.
@@ -44,6 +45,9 @@ class MessageResponse(BaseModel):
     content: str
     model_id: str | None
     created_at: datetime
+    #: The vote already stored for this message, so a reload shows what the
+    #: reader cast. ``None`` when nobody has voted on it.
+    feedback: FeedbackValue | None = None
 
 
 class AttemptResponse(BaseModel):

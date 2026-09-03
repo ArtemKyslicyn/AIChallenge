@@ -24,6 +24,7 @@ from app.adapters.persistence.models import MessageFeedbackRow, MessageRow, RunT
 from app.adapters.persistence.trace_repo import attempt_from_json
 from app.domain.entities import MessageRole
 from app.domain.feedback import (
+    FeedbackValue,
     MessageFeedback,
     ModelFeedbackStats,
     PreferenceRow,
@@ -87,6 +88,19 @@ class SqlAlchemyFeedbackRepository:
         existing.created_at = feedback.created_at
         await self._db.flush()
         return to_feedback(existing)
+
+    async def values_for_session(self, session_id: UUID) -> dict[UUID, FeedbackValue]:
+        """Every vote cast in one chat, keyed by message.
+
+        One query for the whole thread rather than one per message: history is
+        rendered in a single response, and ``session_id`` is denormalized onto
+        the vote precisely so this never has to walk through ``messages``.
+        """
+        stmt = select(MessageFeedbackRow.message_id, MessageFeedbackRow.value).where(
+            MessageFeedbackRow.session_id == session_id
+        )
+        rows = (await self._db.execute(stmt)).all()
+        return {message_id: parse_feedback_value(value) for message_id, value in rows}
 
     async def stats_by_model(self, *, since: datetime) -> list[ModelFeedbackStats]:
         """Up/down counts per answering model, over votes cast since ``since``.

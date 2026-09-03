@@ -13,12 +13,15 @@ interface Props {
 
 export function TurnView({ turn, streaming, session }: Props) {
   const isAssistant = turn.role === "assistant";
-  // Prep D10: a live reply has no server id until `message_end`, so this is
-  // also the «no feedback mid-stream» guard the checklist (H5) asks for.
-  const feedbackId = isAssistant && !streaming && session ? turn.messageId : null;
   const showMediaJob =
     isAssistant && turn.mediaJob && (turn.mediaJob.phase === "running" || turn.mediaJob.phase === "error");
   const emptyBody = isAssistant && !turn.content.trim();
+  // Prep D10: a live reply has no server id until `message_end`, so this is
+  // also the «no feedback mid-stream» guard the checklist (H5) asks for.
+  // A cut-off or empty answer is not rateable either: an abort that lands after
+  // `message_end` would otherwise show «прервано» next to a live rating strip.
+  const feedbackId =
+    isAssistant && !streaming && session && !turn.failed && !emptyBody ? turn.messageId : null;
 
   return (
     <article
@@ -62,7 +65,12 @@ export function TurnView({ turn, streaming, session }: Props) {
             </span>
           )}
           {feedbackId && session && (
-            <FeedbackStrip key={feedbackId} session={session} messageId={feedbackId} />
+            <FeedbackStrip
+              key={feedbackId}
+              session={session}
+              messageId={feedbackId}
+              initialValue={turn.feedback ?? null}
+            />
           )}
         </div>
       )}
