@@ -207,7 +207,7 @@ def test_sampler_respects_the_hourly_cap_and_the_rate() -> None:
 - Consumes: `ChatRouter.complete_chat`, `parse_verdict`
 - Produces: `LLMAnswerJudge(router, model_id, rubric, timeout_seconds)` реализующий `AnswerJudge`
 
-- [ ] **Step 1: Падающие тесты**
+- [x] **Step 1: Падающие тесты**
 
 ```python
 async def test_judge_returns_none_when_the_answer_was_written_by_the_judge() -> None:
@@ -222,9 +222,9 @@ async def test_judge_returns_none_on_timeout(...) -> None: ...
 async def test_judge_returns_a_verdict_for_a_clean_answer(...) -> None: ...
 ```
 
-- [ ] **Step 2: Прогнать — падает**
+- [x] **Step 2: Прогнать — падает**
 
-- [ ] **Step 3: Реализовать.** YAML держит `system` и `template` с плейсхолдерами `{question}` и `{answer}`; загрузчик повторяет стиль `adapters/lab/presets.py`. Адаптер оборачивает вызов в `asyncio.timeout` и глотает `LLMProviderError | LLMExhaustedError | TimeoutError` в `None` с `logger.info`. Никаких исключений наружу: у судьи нет права ничего сломать.
+- [x] **Step 3: Реализовать.** YAML держит `system` и `template` с плейсхолдерами `{question}` и `{answer}`; загрузчик повторяет стиль `adapters/lab/presets.py`. Адаптер оборачивает вызов в `asyncio.timeout` и глотает `LLMProviderError | LLMExhaustedError | TimeoutError` в `None` с `logger.info`. Никаких исключений наружу: у судьи нет права ничего сломать.
 
 ```yaml
 # configs/lab/judge_rubric.yaml
@@ -246,8 +246,8 @@ template: |
   Формат: {"relevance": N, "completeness": N, "clarity": N}
 ```
 
-- [ ] **Step 4: Тесты зелёные**
-- [ ] **Step 5: Commit** `feat(llm): rubric-driven answer judge`
+- [x] **Step 4: Тесты зелёные**
+- [x] **Step 5: Commit** `feat(llm): rubric-driven answer judge`
 
 ---
 
