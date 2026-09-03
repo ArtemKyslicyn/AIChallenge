@@ -11,11 +11,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.persistence.models import RunTraceRow
 from app.application.pareto import aggregate_models
+from app.domain.cascade import (
+    CASCADE_CHEAP,
+    CASCADE_ESCALATED,
+    CASCADE_OFF,
+    CascadeSummary,
+    cascade_summary_from_counts,
+)
 from app.domain.tracing import AttemptRecord, ModelAggregate, RunTrace
 
 #: Ceiling on one aggregation read. A window of "last 30 days" on a busy
@@ -61,6 +68,9 @@ def to_row(trace: RunTrace) -> RunTraceRow:
         tool_ok=trace.tool_ok,
         status=trace.status,
         created_at=trace.created_at,
+        cascade_stage=trace.cascade_stage,
+        cheap_model_id=trace.cheap_model_id,
+        cheap_score=trace.cheap_score,
     )
 
 
@@ -81,6 +91,11 @@ def to_trace(row: RunTraceRow) -> RunTrace:
         tool_ok=row.tool_ok,
         status=row.status,
         created_at=row.created_at,
+        # Tolerant like the attempts journal: a row written before migration
+        # 005 has no stage, and must read back as "the cascade did not run".
+        cascade_stage=row.cascade_stage or CASCADE_OFF,
+        cheap_model_id=row.cheap_model_id,
+        cheap_score=row.cheap_score,
     )
 
 
@@ -116,3 +131,27 @@ class SqlAlchemyRunTraceRepository:
         )
         rows = (await self._db.execute(stmt)).scalars().all()
         return aggregate_models(to_trace(row) for row in rows)
+
+    async def cascade_summary(
+        self, *, since: datetime, until: datetime
+    ) -> CascadeSummary | None:
+        """How often the cheap stage was enough, over one window.
+
+        Counted in SQL rather than over the aggregation slice: this is two
+        integers, and pulling rows for it would put the summary under the same
+        5000-row ceiling that exists for percentiles.
+        """
+        stmt = (
+            select(RunTraceRow.cascade_stage, func.count())
+            .where(
+                RunTraceRow.created_at >= since,
+                RunTraceRow.created_at <= until,
+                RunTraceRow.cascade_stage != CASCADE_OFF,
+            )
+            .group_by(RunTraceRow.cascade_stage)
+        )
+        counts = {stage: total for stage, total in (await self._db.execute(stmt)).all()}
+        return cascade_summary_from_counts(
+            cheap=counts.get(CASCADE_CHEAP, 0),
+            escalated=counts.get(CASCADE_ESCALATED, 0),
+        )

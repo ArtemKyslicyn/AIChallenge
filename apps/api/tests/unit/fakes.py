@@ -8,6 +8,12 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.pareto import aggregate_models
+from app.domain.cascade import (
+    CASCADE_CHEAP,
+    CASCADE_ESCALATED,
+    CascadeSummary,
+    cascade_summary_from_counts,
+)
 from app.domain.entities import Message, Scenario, Session, SessionSummary
 from app.domain.errors import MessageNotFoundError, ScenarioNotFoundError
 from app.domain.feedback import MessageFeedback, ModelFeedbackStats, PreferenceRow
@@ -129,6 +135,15 @@ class InMemoryRunTraceRepository:
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]:
         window = [t for t in self.saved if since <= t.created_at <= until]
         return aggregate_models(window)
+
+    async def cascade_summary(
+        self, *, since: datetime, until: datetime
+    ) -> CascadeSummary | None:
+        stages = [t.cascade_stage for t in self.saved if since <= t.created_at <= until]
+        return cascade_summary_from_counts(
+            cheap=stages.count(CASCADE_CHEAP),
+            escalated=stages.count(CASCADE_ESCALATED),
+        )
 
 
 class StubFeedbackStats:

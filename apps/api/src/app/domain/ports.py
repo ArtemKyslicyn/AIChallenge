@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.cascade import CascadeSummary
 from app.domain.entities import (
     AUTO_MODEL,
     ChatMessage,
@@ -113,6 +114,12 @@ class RunTraceRepository(Protocol):
     async def list_for_session(self, session_id: UUID) -> list[RunTrace]: ...
 
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]: ...
+
+    #: ``None`` when the cascade never ran in this window — the Lab draws the
+    #: escalation line only when there is something to draw.
+    async def cascade_summary(
+        self, *, since: datetime, until: datetime
+    ) -> CascadeSummary | None: ...
 
 
 class FeedbackRepository(Protocol):
