@@ -160,8 +160,8 @@ def pareto_score(success_rate: float, p50_total_ms: float | None, avg_cost_proxy
     return success_rate / latency_s / cost
 ```
 
-- [ ] Implement + unit tests for edge zeros
-- [ ] Commit `feat(application): pareto score helper`
+- [x] Implement + unit tests for edge zeros
+- [x] Commit `feat(application): pareto score helper`
 
 ---
 
