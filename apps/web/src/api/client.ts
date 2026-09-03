@@ -522,6 +522,6 @@ export function probeComplete(
       body: JSON.stringify({ prompt, stream: false, ...options }),
       signal,
     },
-    120_000,
+    240_000,
   );
 }

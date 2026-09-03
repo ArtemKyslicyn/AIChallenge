@@ -18,7 +18,7 @@ from app.adapters.api.schemas import (
     SessionResponse,
     SessionSummaryResponse,
 )
-from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse
+from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
 from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
     SqlAlchemySessionRepository,
@@ -187,7 +187,7 @@ async def send_message(
                 media_store=container.media_store,
                 media_limiter=container.media_limiter,
             )
-            async for frame in to_sse(events):
+            async for frame in to_sse_with_keepalive(events):
                 yield frame
         finally:
             await _rescue_unsaved(container, draft)

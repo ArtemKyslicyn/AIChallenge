@@ -77,3 +77,17 @@ async def test_to_sse_streams_every_event() -> None:
 
     frames = [f async for f in to_sse(events())]
     assert [_parse(f)[0] for f in frames] == ["model", "token"]
+
+
+async def test_to_sse_with_keepalive_emits_ping_while_waiting() -> None:
+    import asyncio
+
+    from app.adapters.api.sse import KEEPALIVE_FRAME, to_sse_with_keepalive
+
+    async def events():
+        await asyncio.sleep(0.05)
+        yield ModelEvent(model_id="m-1")
+
+    frames = [f async for f in to_sse_with_keepalive(events(), interval_seconds=0.02)]
+    assert KEEPALIVE_FRAME in frames
+    assert any(f.startswith("event: model") for f in frames)
