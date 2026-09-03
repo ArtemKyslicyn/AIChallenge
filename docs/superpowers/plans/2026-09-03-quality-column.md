@@ -334,11 +334,11 @@ async def test_no_judge_model_configured_means_no_call_at_all() -> None: ...
  "p50_ttft_ms": 800.0, "p50_total_ms": 4100.0, "avg_cost_proxy": 1.0, "score": 0.19}
 ```
 
-- [ ] **Step 3: Колонка** между «Успех» и «p50, с»: процент, `—` при `null`, `judged_n` в `title` ячейки. На ≤480px прятать «Успех», когда «Качество» заполнено, — тем же приёмом, которым уже прячется `N`.
+- [x] **Step 3: Колонка** между «Успех» и «p50, с»: процент, `—` при `null`, `judged_n` в `title` ячейки. На ≤480px прятать «Успех», когда «Качество» заполнено, — тем же приёмом, которым уже прячется `N`.
 
-- [ ] **Step 4: Проверить** `npx tsc -b --noEmit`, `npm run lint` (базовая линия — 7 warnings), и на живом стенде: без `JUDGE_MODEL` таблица выглядит ровно как сегодня.
+- [x] **Step 4: Проверить** `npx tsc -b --noEmit`, `npm run lint` (базовая линия — 7 warnings), и на живом стенде: без `JUDGE_MODEL` таблица выглядит ровно как сегодня.
 
-- [ ] **Step 5: Commit** `feat(web): quality column in the model ranking`
+- [x] **Step 5: Commit** `feat(web): quality column in the model ranking`
 
 ---
 

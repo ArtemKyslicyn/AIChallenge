@@ -574,6 +574,10 @@ export interface LabParetoModelDto {
   model_id: string;
   n: number;
   success_rate: number;
+  /** Mean judge verdict 0..1 — null when nothing was judged, never 0. */
+  avg_quality: number | null;
+  /** How many runs that mean is over. Shown beside it, never on its own. */
+  judged_n: number;
   p50_ttft_ms: number | null;
   p50_total_ms: number | null;
   avg_cost_proxy: number | null;
