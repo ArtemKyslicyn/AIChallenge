@@ -79,9 +79,7 @@ class LLMAnswerJudge:
         self._rubric = rubric
         self._timeout = timeout_seconds
 
-    async def judge(
-        self, question: str, answer: str, *, answered_by: str
-    ) -> QualityVerdict | None:
+    async def judge(self, question: str, answer: str, *, answered_by: str) -> QualityVerdict | None:
         if not self._model_id:
             return None
         if answered_by and answered_by == self._model_id:

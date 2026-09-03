@@ -97,9 +97,7 @@ class FeedbackPenaltyCache:
         penalized = frozenset(
             row.model_id
             for row in rows
-            if should_penalize(
-                row, min_votes=self._min_votes, down_rate_threshold=self._threshold
-            )
+            if should_penalize(row, min_votes=self._min_votes, down_rate_threshold=self._threshold)
         )
         if penalized != self._penalized:
             logger.info(

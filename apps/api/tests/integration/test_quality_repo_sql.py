@@ -87,9 +87,10 @@ async def test_a_verdict_written_from_another_session_lands_on_the_trace(
         await db.commit()
 
     async with maker() as db:
-        rows = {t.message_id: t for t in await SqlAlchemyRunTraceRepository(db).list_for_session(
-            SESSION_ID
-        )}
+        rows = {
+            t.message_id: t
+            for t in await SqlAlchemyRunTraceRepository(db).list_for_session(SESSION_ID)
+        }
         assert rows[judged].quality_score == 0.8
         assert rows[judged].quality_model_id == "judge-1"
         assert rows[untouched].quality_score is None

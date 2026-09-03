@@ -43,8 +43,7 @@ def test_rejects_an_unclosed_code_fence(scorer: HeuristicAnswerScorer) -> None:
 
 def test_rejects_a_language_switch(scorer: HeuristicAnswerScorer) -> None:
     answer = (
-        "A queue is a FIFO structure while a stack is LIFO, "
-        "which decides what comes out first."
+        "A queue is a FIFO structure while a stack is LIFO, which decides what comes out first."
     )
     assert scorer.score(Q, answer).reason == "language_mismatch"
 

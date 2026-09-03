@@ -91,9 +91,7 @@ async def test_the_export_dumps_the_vote_with_its_trace(
     api: AsyncClient, migrated_database: str, engine: AsyncEngine
 ) -> None:
     message_id, headers = await answer(api)
-    await api.post(
-        f"/api/v1/messages/{message_id}/feedback", json={"value": "up"}, headers=headers
-    )
+    await api.post(f"/api/v1/messages/{message_id}/feedback", json={"value": "up"}, headers=headers)
 
     # A second app, because the export is off in the default configuration.
     app = create_app(

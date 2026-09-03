@@ -41,9 +41,7 @@ class FakeJudge:
         self.started = asyncio.Event()
         self.seen: tuple[str, str, str] | None = None
 
-    async def judge(
-        self, question: str, answer: str, *, answered_by: str
-    ) -> QualityVerdict | None:
+    async def judge(self, question: str, answer: str, *, answered_by: str) -> QualityVerdict | None:
         self.calls += 1
         self.seen = (question, answer, answered_by)
         self.started.set()

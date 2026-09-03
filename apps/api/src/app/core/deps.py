@@ -189,9 +189,7 @@ def _router_for(
     )
 
 
-def _build_judge(
-    settings: Settings, router: ModelRouter | TieredModelRouter
-) -> AnswerJudge | None:
+def _build_judge(settings: Settings, router: ModelRouter | TieredModelRouter) -> AnswerJudge | None:
     """The judge, or nothing at all when nobody asked for one.
 
     Two ways to get nothing, and both are silent about it in the chat: an empty
@@ -230,9 +228,7 @@ def build_container(settings: Settings) -> Container:
     if settings.fake_llm_enabled():
         provider = FakeLLMProvider()
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
-        router: ModelRouter | TieredModelRouter = _router_for(
-            settings, provider, chain, penalties
-        )
+        router: ModelRouter | TieredModelRouter = _router_for(settings, provider, chain, penalties)
         logger.info("using FakeLLMProvider (no provider key configured)")
     else:
         primary_proxy = settings.llm_http_proxy.strip() or None

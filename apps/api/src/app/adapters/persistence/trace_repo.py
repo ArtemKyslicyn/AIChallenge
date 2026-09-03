@@ -104,9 +104,7 @@ def to_trace(row: RunTraceRow) -> RunTrace:
 
 
 class SqlAlchemyRunTraceRepository:
-    def __init__(
-        self, db: AsyncSession, *, min_judged_runs: int = DEFAULT_MIN_JUDGED_RUNS
-    ) -> None:
+    def __init__(self, db: AsyncSession, *, min_judged_runs: int = DEFAULT_MIN_JUDGED_RUNS) -> None:
         self._db = db
         self._min_judged_runs = min_judged_runs
 
@@ -114,9 +112,7 @@ class SqlAlchemyRunTraceRepository:
         self._db.add(to_row(trace))
         await self._db.flush()
 
-    async def set_quality(
-        self, message_id: UUID, *, score: float, judge_model_id: str
-    ) -> bool:
+    async def set_quality(self, message_id: UUID, *, score: float, judge_model_id: str) -> bool:
         """Attach a verdict to the trace of one message, long after the fact.
 
         An UPDATE rather than a read-modify-write: the judge runs seconds after
@@ -182,9 +178,7 @@ class SqlAlchemyRunTraceRepository:
             (to_trace(row) for row in rows), min_judged_runs=self._min_judged_runs
         )
 
-    async def cascade_summary(
-        self, *, since: datetime, until: datetime
-    ) -> CascadeSummary | None:
+    async def cascade_summary(self, *, since: datetime, until: datetime) -> CascadeSummary | None:
         """How often the cheap stage was enough, over one window.
 
         Counted in SQL rather than over the aggregation slice: this is two

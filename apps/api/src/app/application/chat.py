@@ -346,9 +346,7 @@ async def send_user_message_and_stream(
         calls = detect_media_intent(text)
         if not calls:
             try:
-                probe = await router.complete_chat(
-                    turns, preferred_model=model, tools=MEDIA_TOOLS
-                )
+                probe = await router.complete_chat(turns, preferred_model=model, tools=MEDIA_TOOLS)
                 calls = tool_calls_from_completion(probe.tool_calls)
                 if probe.model_id:
                     resolved_model = probe.model_id
@@ -432,9 +430,7 @@ async def send_user_message_and_stream(
 
     try:
         try:
-            async for chunk in router.stream_chat(
-                turns, preferred_model=model, attempts=attempts
-            ):
+            async for chunk in router.stream_chat(turns, preferred_model=model, attempts=attempts):
                 if chunk.model_id != resolved_model:
                     resolved_model = chunk.model_id
                     draft.model_id = resolved_model

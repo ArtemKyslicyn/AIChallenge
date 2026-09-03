@@ -61,9 +61,7 @@ class PixazoVideoClient:
         except httpx.HTTPError as exc:
             raise MediaGenerationError(f"Pixazo недоступен: {exc}") from exc
         if response.status_code >= 400:
-            raise MediaGenerationError(
-                response.text[:300] or f"Pixazo HTTP {response.status_code}"
-            )
+            raise MediaGenerationError(response.text[:300] or f"Pixazo HTTP {response.status_code}")
         try:
             payload: dict[str, Any] = response.json()
         except Exception as exc:
@@ -92,9 +90,7 @@ class PixazoVideoClient:
             if status in {"COMPLETED", "SUCCEEDED", "SUCCESS"}:
                 break
             if status in {"FAILED", "ERROR", "CANCELLED", "CANCELED"}:
-                raise MediaGenerationError(
-                    str(status_payload.get("error") or status_payload)[:300]
-                )
+                raise MediaGenerationError(str(status_payload.get("error") or status_payload)[:300])
             await asyncio.sleep(self._poll_seconds)
         else:
             raise MediaGenerationError("Генерация видео превысила время ожидания.")

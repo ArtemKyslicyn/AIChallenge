@@ -115,6 +115,8 @@ async def test_a_rejected_cheap_answer_is_stored_as_escalated(
     assert stage == "escalated"
     assert cheap_model == CHEAP_MODEL
     assert score == 0.0
+
+
 async def test_the_pareto_window_summarises_the_escalations(
     engine: AsyncEngine, migrated_database: str
 ) -> None:

@@ -44,8 +44,13 @@ def test_trace_survives_a_round_trip_through_the_row() -> None:
 def test_attempts_are_stored_as_plain_json_values() -> None:
     row = to_row(sample())
     assert row.attempts == [
-        {"model_id": "m1", "ok": False, "reason": "http_429", "ttft_ms": None,
-         "error_kind": "rate_limit"},
+        {
+            "model_id": "m1",
+            "ok": False,
+            "reason": "http_429",
+            "ttft_ms": None,
+            "error_kind": "rate_limit",
+        },
         {"model_id": "m2", "ok": True, "reason": "", "ttft_ms": 120, "error_kind": None},
     ]
 
