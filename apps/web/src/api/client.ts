@@ -147,11 +147,11 @@ function requestTimeoutSignal(timeoutMs: number): AbortSignal {
   return controller.signal;
 }
 
-async function request<T>(
+async function send(
   path: string,
   init: RequestInit = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<T> {
+): Promise<Response> {
   const timeoutSignal = requestTimeoutSignal(timeoutMs);
   const signal = mergeAbortSignals([init.signal, timeoutSignal].filter(Boolean) as AbortSignal[]);
 
@@ -165,7 +165,24 @@ async function request<T>(
     },
   });
   if (!response.ok) throw new ApiError(await readError(response), response.status);
-  return (await response.json()) as T;
+  return response;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return (await send(path, init, timeoutMs)).json() as Promise<T>;
+}
+
+/** Same request, for an endpoint that answers `204` — there is no body to parse. */
+async function requestNoContent(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<void> {
+  await send(path, init, timeoutMs);
 }
 
 function emptyStore(visitorId: string): SessionStore {
@@ -609,6 +626,27 @@ export function postMessageFeedback(
     method: "POST",
     headers: { "X-Session-Token": session.access_token },
     body: JSON.stringify({ value }),
+    signal,
+  });
+}
+
+/**
+ * `DELETE /api/v1/messages/{id}/feedback` — take the vote back.
+ *
+ * The way out of a mis-click, and what `aria-pressed` on the thumbs already
+ * promises. Same auth as the POST, and idempotent: retracting a vote that is
+ * not there answers `204` too, so the caller never has to know whether its own
+ * optimistic retraction had already landed. Resolves with nothing — after this
+ * the message simply has no vote.
+ */
+export function deleteMessageFeedback(
+  session: SessionCredentials,
+  messageId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return requestNoContent(`/messages/${encodeURIComponent(messageId)}/feedback`, {
+    method: "DELETE",
+    headers: { "X-Session-Token": session.access_token },
     signal,
   });
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  deleteMessageFeedback,
   postMessageFeedback,
   type FeedbackValue,
   type SessionCredentials,
@@ -12,6 +13,11 @@ import {
  * Mounted by `Turn.tsx` only for an assistant turn that already has a server
  * `messageId` and is not streaming (prep D10) — that absence is the checklist's
  * H5 «no feedback mid-stream», so no disabled placeholder is rendered either.
+ *
+ * Clicking the pressed thumb takes the vote back (design spec §3 «повторный
+ * клик переключает», resolved as retract) — that is what `aria-pressed`
+ * already tells assistive technology, so the behaviour matches the promise
+ * rather than the promise being weakened.
  *
  * All copy comes verbatim from
  * `docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`.
@@ -62,11 +68,15 @@ export function FeedbackStrip({ session, messageId, initialValue = null }: Feedb
   }, []);
 
   const vote = useCallback(
-    (next: FeedbackValue) => {
+    (clicked: FeedbackValue) => {
       // Gate here rather than with `disabled`: disabling the button the user
       // just pressed blurs it, and the browser hands focus to <body>.
       if (pending) return;
       const previous = value;
+      // Pressing the pressed thumb retracts; the other one still switches.
+      // `aria-pressed` says these buttons can be un-pressed, so they must be —
+      // otherwise a mis-click is permanent and the promise is a lie.
+      const next = previous === clicked ? null : clicked;
       const mine = ++ticket.current;
 
       // Optimistic: `aria-pressed` moves before the request, and rolls back below.
@@ -79,10 +89,19 @@ export function FeedbackStrip({ session, messageId, initialValue = null }: Feedb
         thanksTimer.current = null;
       }
 
-      postMessageFeedback(session, messageId, next)
+      const sent =
+        next === null
+          ? deleteMessageFeedback(session, messageId)
+          : postMessageFeedback(session, messageId, next);
+
+      sent
         .then(() => {
           if (!live.current || mine !== ticket.current) return;
           setPending(false);
+          // No «Спасибо» for a retraction — thanking someone for withdrawing
+          // their opinion reads as a shrug, and the empty thumbs are already
+          // the confirmation. The live region just goes quiet.
+          if (next === null) return;
           setThanks(true);
           thanksTimer.current = window.setTimeout(() => {
             thanksTimer.current = null;
