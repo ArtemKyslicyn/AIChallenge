@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.pareto import aggregate_models
 from app.domain.entities import Message, Scenario, Session, SessionSummary
 from app.domain.errors import MessageNotFoundError, ScenarioNotFoundError
-from app.domain.feedback import MessageFeedback, ModelFeedbackStats
+from app.domain.feedback import MessageFeedback, ModelFeedbackStats, PreferenceRow
 from app.domain.tracing import ModelAggregate, RunTrace
 
 FIXED_NOW = datetime(2026, 8, 31, 12, 0, 0, tzinfo=UTC)
@@ -157,6 +159,7 @@ class InMemoryFeedbackRepository(StubFeedbackStats):
     def __init__(self, *rows: ModelFeedbackStats, fail: bool = False) -> None:
         super().__init__(*rows, fail=fail)
         self.votes: dict[UUID, MessageFeedback] = {}
+        self.exportable: list[PreferenceRow] = []
 
     async def upsert(self, feedback: MessageFeedback) -> MessageFeedback:
         existing = self.votes.get(feedback.message_id)
@@ -171,6 +174,18 @@ class InMemoryFeedbackRepository(StubFeedbackStats):
 
     async def get_for_message(self, message_id: UUID) -> MessageFeedback | None:
         return self.votes.get(message_id)
+
+    async def export_rows(
+        self, *, since: datetime, until: datetime, include_content: bool = False
+    ) -> AsyncIterator[PreferenceRow]:
+        for row in self.exportable:
+            if not since <= row.created_at <= until:
+                continue
+            if include_content:
+                yield row
+            else:
+                # Same rule as the SQL repo: content is dropped at the source.
+                yield replace(row, prompt=None, answer=None)
 
 
 class RecordingUnitOfWork:
