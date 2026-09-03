@@ -350,6 +350,26 @@ textarea {
   gap: var(--space-5);
 }
 
+/* While the reading column runs edge to edge, the float dock — fixed above the
+   composer, pinned right — lies over the right end of every row, the last
+   answer's `.meta` included. Scrolled to the bottom the footer ended 48px
+   *inside* the collapsed dock's band, so «эскалировали» (or a long `model_id`)
+   pushed 👎 visually under a FAB. It was never click-blocked, but it read as
+   broken. Reserve the collapsed dock's own height at the end of the thread.
+
+   The reserve is the dock's own footprint: its height, the `--space-2` it
+   keeps above the composer, and one more `--space-2` so the footer clears the
+   top FAB instead of touching it.
+
+   Above 720px the column is capped at `--measure` and the dock stands beside
+   it, so the padding stays `--space-4`: extra air there would only shove the
+   last answer away from the composer and change how the conversation reads. */
+@media (max-width: 720px) {
+  .thread-inner {
+    padding-bottom: calc(var(--dock-collapsed-h) + var(--space-2) + var(--space-2));
+  }
+}
+
 .turn {
   display: flex;
   flex-direction: column;
@@ -1643,6 +1663,22 @@ textarea {
 /* Stacks above the composer. Only the visible surfaces take pointer events;
    the dock and its wrappers ignore them so the thread and the composer stay
    clickable underneath. Results first in Chat.tsx = higher. */
+
+/* Collapsed dock height: the two chat FABs (Debug + «Модели») and the gap
+   between them. Kept on `:root` because `.thread-inner` is not a descendant of
+   `.float-dock` and needs the same number to end the thread above it. 40px is
+   what the shared FAB rule below measures out to; the ≤480px touch-target rule
+   makes it 44px. The «Результаты» FAB is not counted: it only exists in ×4,
+   where turns carry no feedback strip to hide. */
+:root {
+  --dock-collapsed-h: calc(2 * 40px + var(--space-2));
+}
+
+@media (max-width: 480px) {
+  :root {
+    --dock-collapsed-h: calc(2 * 44px + var(--space-2));
+  }
+}
 
 .float-dock {
   position: fixed;
