@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -106,6 +107,28 @@ def test_cors_allows_the_configured_dev_origin() -> None:
         )
     assert response.headers["access-control-allow-origin"] == origin
     assert "x-session-token" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_cors_preflights_the_retraction_of_a_vote() -> None:
+    """A method missing from the list fails the preflight, not the request.
+
+    Which is exactly how it goes wrong: the DELETE never leaves the browser,
+    the strip only sees a rejected promise, and the thumb rolls back looking
+    like a server refusal.
+    """
+    origin = "http://localhost:5173"
+    with client(cors_allow_origins=origin) as api:
+        response = api.options(
+            f"/api/v1/messages/{uuid4()}/feedback",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "DELETE",
+                "Access-Control-Request-Headers": "X-Session-Token",
+            },
+        )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "delete" in response.headers["access-control-allow-methods"].lower()
 
 
 def test_real_provider_without_a_model_chain_fails_at_startup() -> None:
