@@ -117,6 +117,25 @@ class SqlAlchemyRunTraceRepository:
         rows = (await self._db.execute(stmt)).scalars().all()
         return [to_trace(row) for row in rows]
 
+    async def stages_for_session(self, session_id: UUID) -> dict[UUID, str]:
+        """Which stage answered each message of one chat.
+
+        One query for the whole thread rather than one per message, for the
+        same reason the votes are read this way: history is rendered in a
+        single response, and the badge must not cost it N round trips.
+
+        Only stages worth drawing come back. ``off`` is the default for every
+        message ever written — including user turns and answers from before
+        the cascade existed — so shipping those rows would be shipping the
+        absence of news.
+        """
+        stmt = select(RunTraceRow.message_id, RunTraceRow.cascade_stage).where(
+            RunTraceRow.session_id == session_id,
+            RunTraceRow.cascade_stage != CASCADE_OFF,
+        )
+        rows = (await self._db.execute(stmt)).all()
+        return {message_id: str(stage) for message_id, stage in rows}
+
     async def aggregate(self, *, since: datetime, until: datetime) -> list[ModelAggregate]:
         """Percentiles are computed in Python over a bounded, recent slice.
 
