@@ -49,6 +49,7 @@ export function loadGenerationPrefs(): GenerationPrefs {
     promptControlsOverride: null,
     customRulesOverride: null,
     sessionContext: "",
+    tempStudioTemps: [0, 0.7, 1.2],
   });
   return toLegacyPrefs(effective, global.responseTemplateId, global.promptControls, global.customRulesText);
 }

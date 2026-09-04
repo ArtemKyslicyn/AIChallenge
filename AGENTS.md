@@ -7,6 +7,7 @@
 3. Keep code **domain-agnostic** (no patient/doctor/medical naming in code or default configs).
 4. Every assistant answer must attribute **`model_id`** (DB + SSE + UI).
 5. **No deploy to the server** (SSH/SCP/Actions Deploy) without an **explicit** user request in that turn. Default: local work and local commits only; push to GitHub only when asked.
+6. **VLESS / Reality safety:** public `:443` is xray → nginx `:8443` → web `:18080`. App deploys must not touch xray, must not `compose down`, and must verify both `:443` and `:8443` after changes (see `.cursor/rules/deploy-vless-safe.mdc`).
 
 ## Project skills (`.cursor/skills/`)
 

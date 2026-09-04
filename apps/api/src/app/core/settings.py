@@ -146,6 +146,12 @@ class Settings(BaseSettings):
     run_trace_enabled: bool = True
     model_cost_proxy_json: str = ""
 
+    # Optional product analytics → private ops-console capture API.
+    # Empty URL or key keeps a no-op sink (chat never depends on analytics).
+    analytics_capture_url: str = ""
+    analytics_ingest_key: str = ""
+    analytics_product_id: str = "aichallenge"
+
     # Feedback → routing bias. The window is what makes a penalty expire: votes
     # older than the TTL stop counting, so a model recovers on its own. The
     # refresh interval is only how stale one process's copy of the set may get.

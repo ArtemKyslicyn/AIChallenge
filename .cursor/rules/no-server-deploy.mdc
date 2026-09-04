@@ -10,3 +10,4 @@ alwaysApply: true
 - **Allowed by default:** local edits, local commits, local tests, `git push` to GitHub **only if the user asked to push/commit to remote**. Prefer **local commits only** when the user did not ask to push.
 - If deploy seems useful, **ask first** — do not “just do it”.
 - Never print or commit server IPs, SSH host aliases, deploy paths, or private keys.
+- When deploying: follow `.cursor/rules/deploy-vless-safe.mdc` (no xray edits, no `compose down`, verify `:443` and `:8443`).

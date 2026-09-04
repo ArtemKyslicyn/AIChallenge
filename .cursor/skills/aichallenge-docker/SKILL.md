@@ -35,6 +35,10 @@ Do not invent alternate one-off compose stacks unless asked; extend the root `do
 
 ## Prod
 
-- `docker-compose.prod.yml`: web published on loopback only; host nginx terminates TLS.
-- Deploy: `scripts/deploy.sh` — `git reset --hard origin/main` then `compose up --build -d` (**no** `down`; avoids 502 while web is stopped).
-- Public URL and `:8443` vs `:443` notes live in README / `docs/env-local.md` — do not put host IPs in skills.
+- `docker-compose.prod.yml`: web published on loopback only; host nginx terminates TLS on `:8443`.
+- Public `:443` is **xray VLESS Reality** with fallthrough to `127.0.0.1:8443` — not Docker.
+- Deploy: `scripts/deploy.sh` — runs `assert-edge-safe.sh`, rolling `compose up --build -d` (**no** `down`; **no** casual xray edits).
+- Host fuses: `/usr/local/sbin/assert-edge-safe.sh`, `reality-guard.timer` (auto-restart xray if fallthrough dies while nginx lives).
+- After deploy verify local Reality fallthrough (`STRICT_HOST=1 ./scripts/assert-edge-safe.sh`) and public `https://aichallenge.arcilite.ru/`.
+- See always-on rule `.cursor/rules/deploy-vless-safe.mdc`.
+- Public URL notes live in README / `docs/env-local.md` — do not put host IPs in skills.

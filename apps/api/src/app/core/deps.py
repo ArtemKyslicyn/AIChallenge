@@ -14,6 +14,7 @@ from uuid import UUID
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.adapters.analytics.http_capture import HttpAnalyticsCapture, NoOpAnalyticsCapture
 from app.adapters.lab.rubric import load_judge_rubric
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
@@ -37,6 +38,7 @@ from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
 from app.core.visitor import client_ip_from_headers, hash_ip, normalize_visitor_id, visitor_hash
+from app.domain.analytics import AnalyticsCapture
 from app.domain.cascade import AnswerScorer
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
@@ -130,6 +132,8 @@ class Container:
     #: In-process like the penalty cache, and asked the same way: the answer
     #: has to already be in memory when a finishing request asks for it.
     judge_budget: HourlyJudgeBudget
+    #: Fail-open product analytics. Always present; may be a no-op sink.
+    analytics: AnalyticsCapture
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -186,6 +190,24 @@ def _router_for(
         max_attempts=settings.llm_max_attempts,
         first_token_timeout_seconds=settings.llm_first_token_timeout_seconds,
         penalties=penalties,
+    )
+
+
+def _build_analytics(settings: Settings) -> AnalyticsCapture:
+    """Capture client, or a silent no-op when URL/key are unset.
+
+    Chat must keep working if the private ops console is down or never wired.
+    """
+    url = settings.analytics_capture_url.strip()
+    key = settings.analytics_ingest_key.strip()
+    product_id = settings.analytics_product_id.strip() or "aichallenge"
+    if not url or not key:
+        return NoOpAnalyticsCapture()
+    logger.info("analytics capture enabled product_id=%s", product_id)
+    return HttpAnalyticsCapture(
+        capture_url=url,
+        ingest_key=key,
+        product_id=product_id,
     )
 
 
@@ -296,6 +318,9 @@ def build_container(settings: Settings) -> Container:
     if settings.cascade_enabled:
         logger.info("cascade enabled cheap_models=%s", ",".join(cheap_models) or "<none>")
 
+    analytics = _build_analytics(settings)
+    extra_closers.append(analytics)
+
     engine = create_engine(settings.database_url)
     return Container(
         settings=settings,
@@ -315,6 +340,7 @@ def build_container(settings: Settings) -> Container:
         cascade_cheap_models=cheap_models,
         judge=_build_judge(settings, router),
         judge_budget=HourlyJudgeBudget(),
+        analytics=analytics,
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )

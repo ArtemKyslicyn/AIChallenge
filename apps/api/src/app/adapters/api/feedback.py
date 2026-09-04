@@ -20,10 +20,13 @@ from app.core.deps import (
     Sessions,
     SessionToken,
     Uow,
+    get_container,
     resolve_visitor_identity,
+    spawn_detached,
     utcnow,
     visitor_id_header,
 )
+from app.domain.analytics import AnalyticsEvent
 from app.domain.feedback import FeedbackValue
 
 router = APIRouter(prefix="/messages", tags=["feedback"])
@@ -75,6 +78,22 @@ async def rate_message(
         feedback=feedback,
         uow=uow,
         now=utcnow,
+    )
+    distinct = (identity[0] if identity else "") or "anonymous"
+    container = get_container(request)
+    spawn_detached(
+        container.analytics.capture(
+            [
+                AnalyticsEvent(
+                    name="feedback_set",
+                    distinct_id=distinct,
+                    properties={
+                        "message_id": str(stored.message_id),
+                        "value": stored.value,
+                    },
+                )
+            ]
+        )
     )
     return FeedbackResponse(message_id=stored.message_id, value=stored.value)
 

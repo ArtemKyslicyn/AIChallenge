@@ -1,4 +1,6 @@
-# Production stack — only port 80 is published (web/nginx).
+# Production stack — web on loopback only.
+# NEVER publish host :443 or :8443 here (xray Reality + host nginx).
+# Guard: scripts/assert-edge-safe.sh
 # Usage: docker compose -f docker-compose.prod.yml up --build -d
 
 services:

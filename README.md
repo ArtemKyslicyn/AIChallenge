@@ -192,11 +192,12 @@ Auth/роли, админка сценариев, Redis для роутера, �
 
 ## Production / CI/CD
 
-- **Live (предпочтительно):** https://aichallenge.arcilite.ru:8443/  
-  На части сетей обычный HTTPS `:443` к этому хосту зависает на TLS (на том же IP слушает VPN/SNI). HTTP `:80` редиректит на `:8443`. Health: `/api/v1/health`.
-- **CI:** `.github/workflows/ci.yml` — lint, mypy, unit + integration (FakeLLM), web build
-- **CD:** `.github/workflows/deploy.yml` → на сервере `scripts/deploy.sh` (без `compose down`, rolling recreate)
-- **Compose prod:** `docker-compose.prod.yml` (web на `127.0.0.1:18080`, снаружи — host nginx)
+- **Live (предпочтительно):** https://aichallenge.arcilite.ru/ (`:443` через Reality)  
+  Если TLS на `:443` зависает с твоей сети — запасной URL: https://aichallenge.arcilite.ru:8443/  
+  Health: `/api/v1/health`.
+- **CD:** `.github/workflows/deploy.yml` → на сервере `scripts/deploy.sh`  
+  Протокол: **rolling** recreate, **без** `compose down`, **без** рестарта xray; после деплоя проверка и `:443`, и `:8443` (см. `.cursor/rules/deploy-vless-safe.mdc`).
+- **Compose prod:** `docker-compose.prod.yml` (web на `127.0.0.1:18080`, снаружи — host nginx на `:8443`, xray на `:443`)
 - Секреты и `.env` только на хосте деплоя, **не** в git
 - Деплой на VPS агентом — только по **явному** запросу («задеплой» и т.п.)
 

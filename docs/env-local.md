@@ -87,7 +87,15 @@ ROUTERAI_KEY=...   # fallback: дешёвые RouterAI после OpenRouter
 
 После смены только `LLM_*` достаточно `docker compose -f docker-compose.prod.yml up -d api --force-recreate` — **не** сноси volume Postgres (иначе браузерные сессии станут «призраками»).
 
-Для полного редеплоя кода на сервере: `scripts/deploy.sh` (не вызывает `compose down`). Браузер: **https://aichallenge.arcilite.ru:8443/** — если обычный `:443` зависает на TLS с твоей сети.
+Для полного редеплоя кода на сервере: `scripts/deploy.sh` (не вызывает `compose down`, не трогает ключи Reality).
+
+Протокол (кратко):
+
+1. Preflight: `./scripts/assert-edge-safe.sh` (на VPS ещё `STRICT_HOST=1`).
+2. Rolling `docker compose -f docker-compose.prod.yml up --build -d` только для app-сервисов.
+3. Не останавливать host nginx / xray; не занимать `:443` / `:8443` контейнерами.
+4. Reality camouflage: `:443` → `127.0.0.1:8443` (nginx) → `:18080`. На хосте крутится `reality-guard.timer` — если fallthrough умер, а nginx жив, xray перезапустятся с лимитом.
+5. Проверка: `STRICT_HOST=1 ./scripts/assert-edge-safe.sh` и браузер **https://aichallenge.arcilite.ru/**.
 
 Media tools (картинки/видео в чате): в `.env` на сервере `MEDIA_TOOLS_ENABLED=true`, опционально `POLLINATIONS_API_KEY`, для видео `PIXAZO_API_KEY`. Затем recreate `api`.
 

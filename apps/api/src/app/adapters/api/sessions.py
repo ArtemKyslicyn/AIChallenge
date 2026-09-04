@@ -55,6 +55,7 @@ from app.core.deps import (
     utcnow,
     visitor_id_header,
 )
+from app.domain.analytics import AnalyticsEvent
 from app.domain.cascade import CASCADE_OFF
 from app.domain.entities import Message, MessageRole, Session, SessionStatus
 from app.domain.feedback import FeedbackValue
@@ -64,6 +65,62 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
+
+async def _emit_turn_analytics(
+    container: Container,
+    *,
+    distinct_id: str,
+    session_id: UUID,
+    draft: ReplyDraft,
+) -> None:
+    """Beacon one chat turn. Never raises into the stream path."""
+    try:
+        events = [
+            AnalyticsEvent(
+                name="message_sent",
+                distinct_id=distinct_id,
+                properties={"session_id": str(session_id)},
+            )
+        ]
+        if draft.finished and draft.message_id is not None:
+            status = draft.status or "unknown"
+            answer_chars = len(draft.text)
+            props: dict[str, object] = {
+                "session_id": str(session_id),
+                "message_id": str(draft.message_id),
+                "status": status,
+                "answer_chars": answer_chars,
+            }
+            if draft.model_id:
+                props["model_id"] = draft.model_id
+            # Failures are a separate growth event so reliability dashboards
+            # can filter without scanning every completion status.
+            failed = status in {"error", "exhausted"}
+            events.append(
+                AnalyticsEvent(
+                    name="assistant_failed" if failed else "assistant_completed",
+                    distinct_id=distinct_id,
+                    properties=props,
+                )
+            )
+        await container.analytics.capture(events)
+    except Exception:
+        logger.warning("turn analytics emit failed session_id=%s", session_id, exc_info=True)
+
+
+def schedule_turn_analytics(
+    container: Container, session: Session, draft: ReplyDraft
+) -> asyncio.Task[None] | None:
+    """Fire-and-forget capture after the SSE body is done."""
+    distinct = (session.visitor_hash or "").strip() or "anonymous"
+    return spawn_detached(
+        _emit_turn_analytics(
+            container,
+            distinct_id=distinct,
+            session_id=session.id,
+            draft=draft,
+        )
+    )
 
 async def _write_interrupted(container: Container, draft: ReplyDraft) -> None:
     """Save a cut-off answer using a session of its own.
@@ -390,6 +447,7 @@ async def send_message(
             # After the answer is delivered and durable, never before: the
             # judge measures this turn and has no right to be part of it.
             schedule_judgement(container, payload.content, draft)
+            schedule_turn_analytics(container, session, draft)
             await close_quietly(db)
 
     return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
