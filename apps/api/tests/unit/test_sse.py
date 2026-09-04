@@ -90,11 +90,13 @@ def test_comic_frames() -> None:
                 title="Metro",
                 panel_count=3,
                 characters=[{"id": "a", "name": "Cat", "look": "tabby"}],
+                layout="single_page",
             )
         )
     )
     assert start[0] == "comic_start"
     assert start[1]["panel_count"] == 3
+    assert start[1]["layout"] == "single_page"
     panel = _parse(
         event_to_frame(
             ComicPanelEvent(

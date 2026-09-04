@@ -71,6 +71,40 @@ def test_panel_prompt_forbids_text() -> None:
     assert panel_seed(board, board.panels[0]) != panel_seed(board, board.panels[1])
 
 
+def test_comic_page_prompt_is_one_image() -> None:
+    from app.application.comic import build_comic_page_prompt, page_layout_instruction
+
+    board = parse_storyboard_json(
+        {
+            "title": "Metro",
+            "style": "bold ink comic",
+            "seed": 3,
+            "characters": [
+                {
+                    "id": "a",
+                    "name": "Cat",
+                    "look": (
+                        "orange tabby cat with blue scarf, green eyes, small backpack, "
+                        "expressive whiskers, bipedal cartoon stance"
+                    ),
+                }
+            ],
+            "panels": [
+                {"visual": "cat waves on platform", "dialogue": "Эй!"},
+                {"visual": "robot arrives", "dialogue": "Привет"},
+                {"visual": "both board train", "dialogue": "Поехали"},
+                {"visual": "window view", "caption": "Конец"},
+            ],
+        }
+    )
+    prompt = build_comic_page_prompt(board)
+    assert "2x2" in page_layout_instruction(4) or "2x2" in prompt
+    assert "Panel 1:" in prompt and "Panel 4:" in prompt
+    assert "orange tabby" in prompt
+    assert "no speech bubbles" in prompt
+    assert "Character bible" in prompt
+
+
 def test_dialogue_alias_and_empty_fill() -> None:
     board = parse_storyboard_json(
         {

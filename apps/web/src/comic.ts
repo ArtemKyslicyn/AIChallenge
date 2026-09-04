@@ -27,6 +27,8 @@ export interface ComicStripState {
   characters: ComicCharacter[];
   panels: ComicPanelState[];
   done?: boolean;
+  layout?: "single_page" | "per_panel";
+  page_image_url?: string | null;
 }
 
 const FENCE_RE = /```comic\+json\s*([\s\S]*?)```/i;
@@ -46,9 +48,16 @@ export function extractComicFromContent(content: string): ComicStripState | null
       panels?: Array<Record<string, unknown>>;
     };
     const panelsRaw = Array.isArray(data.panels) ? data.panels : [];
+    const pageUrl =
+      typeof (data as { page_image_url?: unknown }).page_image_url === "string"
+        ? (data as { page_image_url: string }).page_image_url
+        : null;
+    const layoutRaw = String((data as { layout?: unknown }).layout || "single_page");
+    const layout = layoutRaw === "per_panel" ? "per_panel" : "single_page";
     const panels: ComicPanelState[] = panelsRaw.map((p, i) => {
       const statusRaw = String(p.status || "");
-      const image_url = typeof p.image_url === "string" ? p.image_url : null;
+      const image_url =
+        (typeof p.image_url === "string" ? p.image_url : null) || pageUrl;
       const status: ComicPanelState["status"] =
         statusRaw === "ok" || statusRaw === "error" || statusRaw === "pending"
           ? statusRaw
@@ -75,6 +84,8 @@ export function extractComicFromContent(content: string): ComicStripState | null
       characters: Array.isArray(data.characters) ? data.characters : [],
       panels,
       done: true,
+      layout,
+      page_image_url: pageUrl || panels.find((p) => p.image_url)?.image_url || null,
     };
   } catch {
     return null;

@@ -3,7 +3,7 @@
 **Date:** 2026-09-04  
 **Status:** Implemented (v1)  
 **Depends on:** chat SSE, media tools (`MEDIA_TOOLS_ENABLED`), Pollinations image adapter, media store  
-**Approach:** single chat tool `generate_comic` + server-side storyboard + HTML text overlay (not baked into images)
+**Approach:** single chat tool `generate_comic` + server-side storyboard + **one Pollinations page image** (all panels inside) + HTML dialogue overlays (not baked into the image)
 
 ## Goal
 

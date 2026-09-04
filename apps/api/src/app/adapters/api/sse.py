@@ -86,6 +86,7 @@ def event_to_frame(event: ChatEvent) -> str:
                     "title": event.title,
                     "panel_count": event.panel_count,
                     "characters": event.characters,
+                    "layout": event.layout,
                 },
             )
         case ComicPanelEvent():
