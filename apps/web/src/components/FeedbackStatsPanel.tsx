@@ -22,7 +22,7 @@ const COPY = {
       and `LabTurnView` render no strip, so «под ответом» alone was a lie for
       anyone who opened this tab from ×2 or ×4. */
   empty:
-    "Оценок пока нет. Кнопки «Полезно» / «Не полезно» есть под ответом в режиме «Один».",
+    "Оценок пока нет. Кнопки «Полезно» / «Не полезно» есть под ответом в режиме «Один» (не в ×2 / ×T / ×4).",
   /** `err_feedback` — this tab no longer borrows the ranking's error. */
   error: "Не удалось загрузить оценки",
   retry: "Повторить",

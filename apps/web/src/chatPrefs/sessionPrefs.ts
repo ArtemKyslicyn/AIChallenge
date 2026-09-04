@@ -3,6 +3,7 @@ import {
   type SessionChatPrefs,
 } from "./types";
 import type { PromptControlFlags, ResponseTemplateId } from "../promptControls";
+import { normalizeTempTriple } from "../strategies/tempStudio";
 
 const KEY_PREFIX = "aichallenge.session_prefs.";
 
@@ -18,7 +19,10 @@ export function loadSessionChatPrefs(sessionId: string): SessionChatPrefs {
     }
     const parsed = JSON.parse(raw) as Partial<SessionChatPrefs>;
     const chatMode =
-      parsed.chatMode === "compare" || parsed.chatMode === "lab" || parsed.chatMode === "single"
+      parsed.chatMode === "compare" ||
+      parsed.chatMode === "lab" ||
+      parsed.chatMode === "temp_studio" ||
+      parsed.chatMode === "single"
         ? parsed.chatMode
         : DEFAULT_SESSION_CHAT_PREFS.chatMode;
 
@@ -54,6 +58,7 @@ export function loadSessionChatPrefs(sessionId: string): SessionChatPrefs {
       customRulesOverride:
         typeof parsed.customRulesOverride === "string" ? parsed.customRulesOverride : null,
       sessionContext: typeof parsed.sessionContext === "string" ? parsed.sessionContext : "",
+      tempStudioTemps: normalizeTempTriple(parsed.tempStudioTemps),
     };
   } catch {
     return { ...DEFAULT_SESSION_CHAT_PREFS, promptControlsOverride: null };

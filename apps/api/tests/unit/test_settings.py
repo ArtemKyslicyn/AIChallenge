@@ -106,6 +106,13 @@ def test_run_traces_are_on_by_default() -> None:
     assert _settings(run_trace_enabled=False).run_trace_enabled is False
 
 
+def test_analytics_defaults_are_off() -> None:
+    s = _settings()
+    assert s.analytics_capture_url == ""
+    assert s.analytics_ingest_key == ""
+    assert s.analytics_product_id == "aichallenge"
+
+
 def test_the_cascade_is_off_until_someone_turns_it_on() -> None:
     # A knob that spends less must never enable itself.
     assert _settings().cascade_enabled is False

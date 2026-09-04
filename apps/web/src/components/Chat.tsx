@@ -24,6 +24,7 @@ import {
   EMPTY_PROBE_SLOT,
   isCompareTurn,
   isLabTurn,
+  isTempStudioTurn,
   isTurn,
 } from "../types";
 import { compareTemplateLabel, CompareTurnView } from "./CompareTurnView";
@@ -34,13 +35,29 @@ import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
 import { FeedbackStatsPanel } from "./FeedbackStatsPanel";
 import { ModelsFloat } from "./ModelsFloat";
 import { ParetoPanel } from "./ParetoPanel";
+import { PerformanceStudioPanel } from "./PerformanceStudioPanel";
 import { MediaJobCard } from "./MediaJobCard";
+import { emptyTempStudioSlots, TempStudioTurnView } from "./TempStudioTurnView";
 import { TurnView } from "./Turn";
+import { runTempStudioJudge } from "../strategies/tempJudge";
+import {
+  TEMP_SLOT_IDS,
+  normalizeTempTriple,
+  slotDefsFromTemps,
+  tempsRecord,
+  type TempSlotId,
+} from "../strategies/tempStudio";
 
 const SUGGESTIONS = [
   "С чем ты можешь помочь?",
   "Сформулируй это тремя пунктами",
   "Задавай мне по одному вопросу за раз",
+];
+
+const TEMP_STUDIO_SUGGESTIONS = [
+  "Придумай слоган для приложения утренних привычек",
+  "Объясни, что такое HTTP, простыми словами",
+  "Напиши короткую басню про лису и API",
 ];
 
 const STICK_THRESHOLD = 80;
@@ -174,6 +191,41 @@ export function Chat({
       ),
     );
   }, []);
+
+  const patchTempSlot = useCallback(
+    (studioId: string, slotId: TempSlotId, patch: Partial<typeof EMPTY_PROBE_SLOT>) => {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (!isTempStudioTurn(item) || item.id !== studioId) return item;
+          return {
+            ...item,
+            slots: {
+              ...item.slots,
+              [slotId]: { ...item.slots[slotId], ...patch },
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const patchTempJudge = useCallback(
+    (
+      studioId: string,
+      patch: {
+        judge?: TempStudioJudge;
+        judgeLoading?: boolean;
+      },
+    ) => {
+      setItems((prev) =>
+        prev.map((item) =>
+          isTempStudioTurn(item) && item.id === studioId ? { ...item, ...patch } : item,
+        ),
+      );
+    },
+    [],
+  );
 
   const sendSingle = useCallback(
     async (
@@ -393,6 +445,136 @@ export function Chat({
     [patchCompareSide, onFirstMessage, debug],
   );
 
+  const sendTempStudio = useCallback(
+    async (
+      { display, effective, tempStudioTemps }: OutgoingMessage,
+      controller: AbortController,
+      hadTurns: boolean,
+    ) => {
+      const temps = normalizeTempTriple(tempStudioTemps);
+      const defs = slotDefsFromTemps(temps);
+      const studioId = `temp-${Date.now()}`;
+      debug("lab", `Temp studio ×T start t=${temps.join("/")}`);
+      setItems((prev) => [
+        ...prev,
+        { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
+        {
+          kind: "temp_studio",
+          id: studioId,
+          taskDisplay: display,
+          temps: tempsRecord(temps),
+          slots: emptyTempStudioSlots(temps),
+          judge: null,
+          judgeLoading: false,
+        },
+      ]);
+      if (!hadTurns) onFirstMessage?.(display);
+      setStatus(`Студия температуры: t=${temps.join(" · ")} (до ~4 мин)…`);
+
+      const collected: Partial<
+        Record<TempSlotId, { content: string; modelId: string | null; temperature: number }>
+      > = {};
+
+      await Promise.all(
+        defs.map(async (def) => {
+          const t0 = performance.now();
+          try {
+            const result = await probeComplete(
+              display,
+              {
+                model: effective.modelId,
+                temperature: def.temperature,
+                // DeepSeek thinking ignores temperature — force it off for ×T.
+                reasoning: false,
+                prompt_format: false,
+                prompt_length: false,
+                prompt_stop: false,
+              },
+              controller.signal,
+            );
+            debug("model", `×T ${def.label}: ${result.model_id}`);
+            collected[def.id] = {
+              content: result.content,
+              modelId: result.model_id,
+              temperature: def.temperature,
+            };
+            patchTempSlot(studioId, def.id, {
+              loading: false,
+              error: null,
+              content: result.content,
+              modelId: result.model_id,
+              latencyMs: Math.round(performance.now() - t0),
+            });
+          } catch (e) {
+            if (controller.signal.aborted) {
+              patchTempSlot(studioId, def.id, {
+                loading: false,
+                error: null,
+                content: "",
+                modelId: null,
+                aborted: true,
+              });
+              return;
+            }
+            const msg = e instanceof Error ? e.message : String(e);
+            const timedOut =
+              (e instanceof DOMException && e.name === "TimeoutError") ||
+              /timeout/i.test(msg);
+            debug("error", `×T ${def.label}: ${msg}`);
+            patchTempSlot(studioId, def.id, {
+              loading: false,
+              error: timedOut
+                ? "Таймаут ожидания модели — попробуйте ещё раз."
+                : msg,
+              content: "",
+              modelId: null,
+              latencyMs: Math.round(performance.now() - t0),
+            });
+          }
+        }),
+      );
+
+      if (controller.signal.aborted) {
+        setStatus("Остановлено.");
+        return;
+      }
+
+      const answers = TEMP_SLOT_IDS.filter((id) => (collected[id]?.content ?? "").trim()).map(
+        (id) => ({
+          id,
+          content: collected[id]!.content,
+          temperature: collected[id]!.temperature,
+        }),
+      );
+
+      if (answers.length < 2) {
+        setStatus("Студия температуры: мало ответов для автооценки.");
+        return;
+      }
+
+      patchTempJudge(studioId, { judgeLoading: true });
+      setStatus("Студия температуры: автооценка…");
+      const judge = await runTempStudioJudge({
+        task: display,
+        answers,
+        model: effective.modelId,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) {
+        patchTempJudge(studioId, { judgeLoading: false });
+        setStatus("Остановлено.");
+        return;
+      }
+      patchTempJudge(studioId, { judge, judgeLoading: false });
+      setStatus(
+        judge.error && !judge.heuristic
+          ? "Студия готова; автооценка с ошибкой."
+          : "Студия температуры готова — смотрите выводы.",
+      );
+    },
+    [patchTempSlot, patchTempJudge, onFirstMessage, debug],
+  );
+
   const sendLab = useCallback(
     async (
       { display, effective, labMeta }: OutgoingMessage,
@@ -560,6 +742,8 @@ export function Chat({
       try {
         if (message.chatMode === "lab") {
           await sendLab(message, controller, hadTurns);
+        } else if (message.chatMode === "temp_studio") {
+          await sendTempStudio(message, controller, hadTurns);
         } else if (message.chatMode === "compare") {
           await sendCompare(message, controller, hadTurns);
         } else {
@@ -581,7 +765,7 @@ export function Chat({
         setActiveMediaJob(null);
       }
     },
-    [items.length, onStaleSession, sendCompare, sendLab, sendSingle, debug],
+    [items.length, onStaleSession, sendCompare, sendLab, sendTempStudio, sendSingle, debug],
   );
 
   const empty = !loading && items.length === 0;
@@ -609,8 +793,8 @@ export function Chat({
               <h2>О чём поговорим?</h2>
               <p>
                 Режим <strong>Один</strong> — чат. <strong>×2</strong> — шаблоны.{" "}
-                <strong>×4</strong> — лаборатория стратегий с судьёй. Пресеты задач — в настройках
-                чата. Отладка — плавающая кнопка Debug.
+                <strong>×T</strong> — температуры 0 / 0.7 / 1.2 с автооценкой.{" "}
+                <strong>×4</strong> — лаборатория стратегий. Отладка — плавающая кнопка Debug.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (
@@ -618,6 +802,19 @@ export function Chat({
                     key={text}
                     type="button"
                     className="chip"
+                    onClick={() => setSeed({ text, nonce: Date.now() })}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              <p className="empty-lab-lead">Для студии температуры (×T)</p>
+              <div className="suggestions suggestions-lab">
+                {TEMP_STUDIO_SUGGESTIONS.map((text) => (
+                  <button
+                    key={text}
+                    type="button"
+                    className="chip chip-lab"
                     onClick={() => setSeed({ text, nonce: Date.now() })}
                   >
                     {text}
@@ -661,6 +858,9 @@ export function Chat({
               }
               if (isCompareTurn(item)) {
                 return <CompareTurnView key={item.id} turn={item} />;
+              }
+              if (isTempStudioTurn(item)) {
+                return <TempStudioTurnView key={item.id} turn={item} />;
               }
               const streaming =
                 busy && index === items.length - 1 && item.role === "assistant";
@@ -729,6 +929,7 @@ export function Chat({
           /* Function form: the panel refetches when the window changes and
              stays idle while the tab is hidden. Lab API failures stay inside
              the panel and never reach the chat thread. */
+          studio={({ active }) => <PerformanceStudioPanel active={active} />}
           ranking={({ hours, active }) => <ParetoPanel hours={hours} active={active} />}
           feedback={({ hours, active }) => (
             <FeedbackStatsPanel hours={hours} active={active} />
@@ -740,3 +941,4 @@ export function Chat({
 }
 
 type LabTurnJudge = NonNullable<import("../types").LabTurn["judge"]>;
+type TempStudioJudge = NonNullable<import("../types").TempStudioTurn["judge"]>;

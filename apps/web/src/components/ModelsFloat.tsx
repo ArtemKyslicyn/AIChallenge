@@ -9,7 +9,7 @@ import {
 } from "react";
 
 /** Tabs inside the «Модели» float. */
-export type ModelsTab = "ranking" | "feedback";
+export type ModelsTab = "ranking" | "feedback" | "studio";
 
 /** Observation window in hours — passed straight to the Lab API `hours` query. */
 export type ModelsWindowHours = 24 | 168;
@@ -21,15 +21,17 @@ const WINDOW_LABEL: Record<ModelsWindowHours, string> = {
   168: "7 дней",
 };
 
-const TAB_ORDER: ModelsTab[] = ["ranking", "feedback"];
+const TAB_ORDER: ModelsTab[] = ["studio", "ranking", "feedback"];
 
 const TAB_LABEL: Record<ModelsTab, string> = {
+  studio: "Студия",
   ranking: "Рейтинг",
   feedback: "Оценки",
 };
 
 /** Honest empty states while the real panels are not mounted yet (no «Скоро»). */
 const TAB_EMPTY: Record<ModelsTab, string> = {
+  studio: "Задайте запрос и сравните слабую, среднюю и сильную модели.",
   ranking: "Пока нет замеров. Отправьте пару сообщений в чат.",
   feedback:
     "Оценок пока нет. Кнопки «Полезно» / «Не полезно» есть под ответом в режиме «Один».",
@@ -56,9 +58,11 @@ interface ModelsFloatProps {
   /** Controlled window; omit to let the float own it (defaults to 24). */
   hours?: ModelsWindowHours;
   onHoursChange?: (hours: ModelsWindowHours) => void;
-  /** Controlled tab; omit to let the float own it (defaults to "ranking"). */
+  /** Controlled tab; omit to let the float own it (defaults to "studio"). */
   tab?: ModelsTab;
   onTabChange?: (tab: ModelsTab) => void;
+  /** Content of the «Студия» tab — Performance Studio. */
+  studio?: ModelsTabContent;
   /** Content of the «Рейтинг» tab — ParetoPanel lands here. */
   ranking?: ModelsTabContent;
   /** Content of the «Оценки» tab — FeedbackStatsPanel lands here. */
@@ -70,6 +74,15 @@ function renderTab(content: ModelsTabContent | undefined, ctx: ModelsTabContext)
   return typeof content === "function" ? content(ctx) : content;
 }
 
+function tabContent(
+  id: ModelsTab,
+  props: Pick<ModelsFloatProps, "studio" | "ranking" | "feedback">,
+): ModelsTabContent | undefined {
+  if (id === "studio") return props.studio;
+  if (id === "ranking") return props.ranking;
+  return props.feedback;
+}
+
 export function ModelsFloat({
   open,
   onOpenChange,
@@ -77,6 +90,7 @@ export function ModelsFloat({
   onHoursChange,
   tab: tabProp,
   onTabChange,
+  studio,
   ranking,
   feedback,
 }: ModelsFloatProps) {
@@ -85,7 +99,7 @@ export function ModelsFloat({
   const panelRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<Partial<Record<ModelsTab, HTMLButtonElement | null>>>({});
 
-  const [uncontrolledTab, setUncontrolledTab] = useState<ModelsTab>("ranking");
+  const [uncontrolledTab, setUncontrolledTab] = useState<ModelsTab>("studio");
   const tab = tabProp ?? uncontrolledTab;
   const selectTab = useCallback(
     (next: ModelsTab) => {
@@ -105,8 +119,6 @@ export function ModelsFloat({
     [hoursProp, onHoursChange],
   );
 
-  // `owned` is false when Escape arrives from the composer: the panel is not
-  // modal, so it closes silently and the caret stays where the reader put it.
   const collapse = useCallback(
     (owned: boolean) => {
       onOpenChange(false);
@@ -125,15 +137,6 @@ export function ModelsFloat({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, collapse]);
 
-  // The FAB unmounts when the panel expands, so focus would otherwise fall to
-  // <body>. Move it onto the panel container once per open — the one-shot flag
-  // keeps a later tab switch from re-stealing focus.
-  //
-  // The container, not the selected tab: «Период» and «Свернуть» sit above the
-  // tablist in the DOM, so starting on a tab meant a forward Tab walk skipped
-  // them for good and only Shift+Tab could reach them. From the `<aside>` Tab
-  // goes header → tabs → content, in visual order. `LabResultsFloat` focuses
-  // its own container for the same reason — the two panels now match.
   const focusOnOpen = useRef(false);
   useEffect(() => {
     if (!open || !focusOnOpen.current) return;
@@ -167,8 +170,6 @@ export function ModelsFloat({
         type="button"
         className="models-float-fab"
         id="models-float-fab"
-        /* No `aria-expanded`/`aria-controls`: the FAB and the panel replace
-           each other, so the pair would name an element that never coexists. */
         onClick={() => {
           focusOnOpen.current = true;
           onOpenChange(true);
@@ -179,11 +180,13 @@ export function ModelsFloat({
     );
   }
 
+  const studioMode = tab === "studio";
+
   return (
     <aside
       ref={panelRef}
       id="models-float-panel"
-      className="models-float"
+      className={`models-float${studioMode ? " models-float--studio" : ""}`}
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
@@ -191,21 +194,23 @@ export function ModelsFloat({
     >
       <header className="models-float-head">
         <h2 id={titleId} className="models-float-title">
-          Модели
+          {studioMode ? "Performance Studio" : "Модели"}
         </h2>
         <div className="models-float-actions">
-          <select
-            className="models-float-window"
-            aria-label="Период"
-            value={hours}
-            onChange={(e) => selectHours(Number(e.target.value) as ModelsWindowHours)}
-          >
-            {WINDOWS.map((w) => (
-              <option key={w} value={w}>
-                {WINDOW_LABEL[w]}
-              </option>
-            ))}
-          </select>
+          {!studioMode && (
+            <select
+              className="models-float-window"
+              aria-label="Период"
+              value={hours}
+              onChange={(e) => selectHours(Number(e.target.value) as ModelsWindowHours)}
+            >
+              {WINDOWS.map((w) => (
+                <option key={w} value={w}>
+                  {WINDOW_LABEL[w]}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             className="ghost-button"
@@ -245,13 +250,16 @@ export function ModelsFloat({
 
       {TAB_ORDER.map((id) => {
         const active = tab === id;
-        const content = renderTab(id === "ranking" ? ranking : feedback, { hours, active });
+        const content = renderTab(tabContent(id, { studio, ranking, feedback }), {
+          hours,
+          active,
+        });
         return (
           <div
             key={id}
             role="tabpanel"
             id={`models-panel-${id}`}
-            className="models-float-panel"
+            className={`models-float-panel${id === "studio" ? " models-float-panel--studio" : ""}`}
             aria-labelledby={`models-tab-${id}`}
             tabIndex={0}
             hidden={!active}

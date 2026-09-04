@@ -100,3 +100,31 @@ async def test_blank_completion_is_a_retryable_empty_answer() -> None:
     with pytest.raises(LLMProviderError) as exc:
         await provider.complete_chat(USER_TURN, "model-a")
     assert exc.value.kind == "empty"
+
+
+def test_payload_disables_thinking_when_reasoning_off() -> None:
+    # DeepSeek ignores temperature while thinking is on (often the default).
+    from app.domain.generation import GenerationParams
+
+    body = OpenAICompatibleProvider._payload(
+        USER_TURN,
+        "deepseek/deepseek-v3.2",
+        stream=False,
+        generation=GenerationParams(temperature=0.0, reasoning=False),
+    )
+    assert body["temperature"] == 0.0
+    assert body["reasoning"] == {"enabled": False}
+    assert body["thinking"] == {"type": "disabled"}
+
+
+def test_payload_enables_reasoning_when_requested() -> None:
+    from app.domain.generation import GenerationParams
+
+    body = OpenAICompatibleProvider._payload(
+        USER_TURN,
+        "deepseek/deepseek-v3.2",
+        stream=False,
+        generation=GenerationParams(temperature=0.7, reasoning=True),
+    )
+    assert body["reasoning"] == {"enabled": True}
+    assert "thinking" not in body

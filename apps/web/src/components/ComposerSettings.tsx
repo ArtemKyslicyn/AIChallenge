@@ -104,6 +104,7 @@ export function ComposerSettings({
             >
               <option value="single">Один ответ</option>
               <option value="compare">Два рядом</option>
+              <option value="temp_studio">Студия температуры ×T</option>
               <option value="lab">Лаборатория ×4</option>
             </select>
           </label>
@@ -195,11 +196,14 @@ export function ComposerSettings({
             >
               <option value="single">Один ответ (SSE, сохраняется)</option>
               <option value="compare">Два рядом (probe)</option>
+              <option value="temp_studio">Студия температуры ×T (probe)</option>
               <option value="lab">Лаборатория ×4 (probe)</option>
             </select>
             <span className="composer-field-hint">
               {chatMode === "single" && "Обычный диалог с сохранением в истории."}
               {chatMode === "compare" && "Два probe-ответа: без шаблона и с шаблоном."}
+              {chatMode === "temp_studio" &&
+                "Три probe при выбранных temperature + автооценка. Значения — в панели над полем ввода."}
               {chatMode === "lab" &&
                 "Четыре стратегии промпта: прямой, пошагово, meta-prompt, эксперты."}
             </span>

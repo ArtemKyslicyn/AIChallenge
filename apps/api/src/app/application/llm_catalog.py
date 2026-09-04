@@ -15,6 +15,12 @@ _MODEL_CAPABILITIES: dict[str, dict[str, bool]] = {
         "stop": True,
         "reasoning": True,
     },
+    "deepseek/deepseek-v3.2": {
+        "temperature": True,
+        "max_tokens": True,
+        "stop": True,
+        "reasoning": True,
+    },
     "nvidia/nemotron-3-super-120b-a12b:free": {
         "temperature": True,
         "max_tokens": True,

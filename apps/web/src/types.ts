@@ -1,6 +1,8 @@
 import type { CascadeStage } from "./api/client";
 import type { ExpertSlotResult } from "./strategies/runStrategy";
 import type { JudgeScorecard } from "./strategies/judge";
+import type { TempJudgeScorecard } from "./strategies/tempJudge";
+import type { TempSlotId } from "./strategies/tempStudio";
 import type { PromptStrategyId } from "./strategies/types";
 
 export type MediaJobKind = "image" | "video";
@@ -70,7 +72,19 @@ export interface LabTurn {
   compact?: boolean;
 }
 
-export type ThreadItem = Turn | CompareTurn | LabTurn;
+/** Temperature studio: same prompt at three temperatures + auto scorecard. */
+export interface TempStudioTurn {
+  kind: "temp_studio";
+  id: string;
+  taskDisplay: string;
+  /** Temperatures used for this run (slot id → t). */
+  temps: Record<TempSlotId, number>;
+  slots: Record<TempSlotId, ProbeSlotState>;
+  judge?: TempJudgeScorecard | null;
+  judgeLoading?: boolean;
+}
+
+export type ThreadItem = Turn | CompareTurn | LabTurn | TempStudioTurn;
 
 export function isCompareTurn(item: ThreadItem): item is CompareTurn {
   return "kind" in item && item.kind === "compare";
@@ -80,8 +94,12 @@ export function isLabTurn(item: ThreadItem): item is LabTurn {
   return "kind" in item && item.kind === "lab";
 }
 
+export function isTempStudioTurn(item: ThreadItem): item is TempStudioTurn {
+  return "kind" in item && item.kind === "temp_studio";
+}
+
 export function isTurn(item: ThreadItem): item is Turn {
-  return !isCompareTurn(item) && !isLabTurn(item);
+  return !isCompareTurn(item) && !isLabTurn(item) && !isTempStudioTurn(item);
 }
 
 export const EMPTY_PROBE_SLOT: ProbeSlotState = {

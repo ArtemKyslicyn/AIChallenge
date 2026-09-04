@@ -82,6 +82,7 @@ export function loadGlobalChatPrefs(): GlobalChatPrefs {
       const defaultChatMode: ChatMode =
         parsed.defaultChatMode === "compare" ||
         parsed.defaultChatMode === "lab" ||
+        parsed.defaultChatMode === "temp_studio" ||
         parsed.defaultChatMode === "single"
           ? parsed.defaultChatMode
           : DEFAULT_GLOBAL_CHAT_PREFS.defaultChatMode;

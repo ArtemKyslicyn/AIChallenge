@@ -15,6 +15,13 @@ import {
 import { buildOutgoingMessage } from "../chatPrefs/outgoing";
 import { activeTemplateSummary } from "../generationPrefs";
 import { hasResponseRules } from "../promptControls";
+import {
+  TEMP_STUDIO_PRESETS,
+  clampTemp,
+  formatTemp,
+  matchPresetId,
+  normalizeTempTriple,
+} from "../strategies/tempStudio";
 import { ComposerSettings } from "./ComposerSettings";
 
 export interface OutgoingMessage {
@@ -24,6 +31,8 @@ export interface OutgoingMessage {
   chatMode: ChatMode;
   effective: EffectiveChatPrefs;
   labMeta?: { goldenAnswer?: string; rubric?: string; presetId?: string };
+  /** Three temperatures for ×T (ignored in other modes). */
+  tempStudioTemps?: [number, number, number];
 }
 
 interface Props {
@@ -169,25 +178,42 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
               presetId: preset?.id,
             }
           : undefined,
+      tempStudioTemps:
+        effective.chatMode === "temp_studio"
+          ? normalizeTempTriple(session.tempStudioTemps)
+          : undefined,
     });
     setValue("");
+  }
+
+  const studioTemps = normalizeTempTriple(session.tempStudioTemps);
+  const studioPreset = matchPresetId(studioTemps);
+
+  function setStudioTempAt(index: 0 | 1 | 2, value: number) {
+    const next: [number, number, number] = [...studioTemps];
+    next[index] = clampTemp(value);
+    patchSession({ tempStudioTemps: next });
   }
 
   const modeHint =
     effective.chatMode === "lab"
       ? "Четыре стратегии промпта параллельно"
-      : effective.chatMode === "compare"
-        ? "Два ответа: без шаблона и с шаблоном"
-        : templateSummary
-          ? `Шаблон: ${templateSummary}`
-          : null;
+      : effective.chatMode === "temp_studio"
+        ? `Один запрос при t = ${studioTemps.map(formatTemp).join(" · ")} + автооценка. Размышление выкл. (иначе t не влияет на DeepSeek).`
+        : effective.chatMode === "compare"
+          ? "Два ответа: без шаблона и с шаблоном"
+          : templateSummary
+            ? `Шаблон: ${templateSummary}`
+            : null;
 
   const placeholder =
     effective.chatMode === "lab"
       ? "Задача для лаборатории (логика, расчёт, анализ)…"
-      : effective.chatMode === "compare"
-        ? "Сообщение для сравнения двух ответов…"
-        : "Напишите сообщение…";
+      : effective.chatMode === "temp_studio"
+        ? "Запрос для сравнения температур (один текст → три ответа)…"
+        : effective.chatMode === "compare"
+          ? "Сообщение для сравнения двух ответов…"
+          : "Напишите сообщение…";
 
   return (
     <div className="composer-wrap" ref={wrap}>
@@ -225,28 +251,43 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
           <div className="composer-mode-toggle" role="group" aria-label="Режим ответа">
             <button
               type="button"
-              className="mode-chip"
+              className="mode-chip mode-chip-stack"
               aria-pressed={effective.chatMode === "single"}
               onClick={() => setChatMode("single")}
+              title="Обычный чат — один ответ"
             >
-              Один
+              <span className="mode-chip-kicker">Чат</span>
+              <span className="mode-chip-label">Один</span>
             </button>
             <button
               type="button"
-              className="mode-chip"
+              className="mode-chip mode-chip-stack"
               aria-pressed={effective.chatMode === "compare"}
               onClick={() => setChatMode("compare")}
+              title="Сравнение: без шаблона и с шаблоном"
             >
-              ×2
+              <span className="mode-chip-kicker">Шаблоны</span>
+              <span className="mode-chip-label">×2</span>
             </button>
             <button
               type="button"
-              className="mode-chip mode-chip-lab"
+              className="mode-chip mode-chip-stack mode-chip-temp"
+              aria-pressed={effective.chatMode === "temp_studio"}
+              onClick={() => setChatMode("temp_studio")}
+              title="Студия temperature: три значения + автооценка"
+            >
+              <span className="mode-chip-kicker">Темп.</span>
+              <span className="mode-chip-label">×T</span>
+            </button>
+            <button
+              type="button"
+              className="mode-chip mode-chip-stack mode-chip-lab"
               aria-pressed={effective.chatMode === "lab"}
               onClick={() => setChatMode("lab")}
               title="Лаборатория: 4 стратегии промпта"
             >
-              ×4
+              <span className="mode-chip-kicker">Лаб</span>
+              <span className="mode-chip-label">×4</span>
             </button>
           </div>
 
@@ -293,6 +334,50 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             {settingsOpen ? "Скрыть" : "Настройки"}
           </button>
         </div>
+
+        {effective.chatMode === "temp_studio" && (
+          <div className="composer-temp-bar" aria-label="Температуры студии ×T">
+            <label className="composer-model-picker composer-temp-preset">
+              <span className="composer-options-label">Пресет t</span>
+              <select
+                className="composer-model-select"
+                value={studioPreset}
+                aria-label="Пресет температур"
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const preset = TEMP_STUDIO_PRESETS.find((p) => p.id === id);
+                  if (preset) patchSession({ tempStudioTemps: [...preset.temps] });
+                }}
+              >
+                {TEMP_STUDIO_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+                <option value="custom" disabled={studioPreset !== "custom"}>
+                  Свои значения
+                </option>
+              </select>
+            </label>
+            {([0, 1, 2] as const).map((i) => (
+              <label key={i} className="composer-temp-field">
+                <span className="composer-options-label">
+                  {i === 0 ? "Низкая" : i === 1 ? "Средняя" : "Высокая"}
+                </span>
+                <input
+                  type="number"
+                  className="composer-temp-input"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={studioTemps[i]}
+                  aria-label={`Temperature ${i + 1}`}
+                  onChange={(e) => setStudioTempAt(i, Number(e.target.value))}
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         {(modeHint || rulesMissing || effective.sessionContext) && (
           <p className={`composer-options-hint${rulesMissing ? " composer-options-warn" : ""}`}>
@@ -379,7 +464,9 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
       <p className="hint">
         <kbd>Enter</kbd> — отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка
-        {effective.chatMode === "lab" ? " · ×4 не сохраняется в истории сервера" : ""}
+        {effective.chatMode === "lab" || effective.chatMode === "temp_studio"
+          ? ` · ${effective.chatMode === "lab" ? "×4" : "×T"} не сохраняется в истории сервера`
+          : ""}
       </p>
     </div>
   );

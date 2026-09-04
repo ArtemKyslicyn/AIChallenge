@@ -2,7 +2,7 @@
 
 import type { PromptControlFlags, ResponseTemplateId } from "../promptControls";
 
-export type ChatMode = "single" | "compare" | "lab";
+export type ChatMode = "single" | "compare" | "lab" | "temp_studio";
 
 export type LanguageHint = "ru" | "en" | "";
 
@@ -32,6 +32,8 @@ export interface SessionChatPrefs {
   customRulesOverride: string | null;
   /** Extra instructions for every message in this chat (shown in settings preview). */
   sessionContext: string;
+  /** Three temperatures for ×T studio (low / mid / high). */
+  tempStudioTemps: [number, number, number];
 }
 
 /** Merged view used by Composer and outgoing message builder. */
@@ -66,4 +68,5 @@ export const DEFAULT_SESSION_CHAT_PREFS: SessionChatPrefs = {
   promptControlsOverride: null,
   customRulesOverride: null,
   sessionContext: "",
+  tempStudioTemps: [0, 0.7, 1.2],
 };

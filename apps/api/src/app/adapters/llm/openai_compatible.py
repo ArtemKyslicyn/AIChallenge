@@ -94,10 +94,15 @@ class OpenAICompatibleProvider:
             body["max_tokens"] = max_tokens
         if generation.stop:
             body["stop"] = list(generation.stop)
+        # DeepSeek V3.2 / V4 (and some OpenRouter mirrors) enable thinking by
+        # default. In thinking mode temperature / top_p are accepted but ignored.
+        # Always send an explicit on/off so sampling knobs actually apply when
+        # the UI asks for non-reasoning answers.
         if generation.reasoning:
-            # OpenRouter / reasoning models: ask for reasoning without surfacing it
-            # as the answer (adapter still filters reasoning deltas on stream).
             body["reasoning"] = {"enabled": True}
+        else:
+            body["reasoning"] = {"enabled": False}
+            body["thinking"] = {"type": "disabled"}
         return body
 
     @staticmethod
