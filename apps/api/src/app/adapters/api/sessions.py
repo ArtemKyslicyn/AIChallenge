@@ -117,6 +117,15 @@ async def _emit_turn_analytics(
                 props["cost_proxy"] = draft.cost_proxy
             if draft.chat_mode:
                 props["chat_mode"] = draft.chat_mode
+            if draft.media_jobs:
+                props["media_jobs"] = draft.media_jobs
+                props["media_image_ok"] = sum(
+                    1 for j in draft.media_jobs if j.get("kind") == "image" and j.get("ok")
+                )
+                props["media_video_ok"] = sum(
+                    1 for j in draft.media_jobs if j.get("kind") == "video" and j.get("ok")
+                )
+                props["media_failed"] = sum(1 for j in draft.media_jobs if not j.get("ok"))
             # Failures are a separate growth event so reliability dashboards
             # can filter without scanning every completion status.
             failed = status in {"error", "exhausted"}
@@ -127,6 +136,23 @@ async def _emit_turn_analytics(
                     properties=props,
                 )
             )
+            for job in draft.media_jobs:
+                if not job.get("ok"):
+                    continue
+                kind = str(job.get("kind") or "image")
+                events.append(
+                    AnalyticsEvent(
+                        name="media_video_generated" if kind == "video" else "media_image_generated",
+                        distinct_id=distinct_id,
+                        properties={
+                            "session_id": str(session_id),
+                            "message_id": str(draft.message_id),
+                            "ok": True,
+                            "provider": job.get("provider") or "",
+                            "tool": job.get("tool") or "",
+                        },
+                    )
+                )
         await container.analytics.capture(events)
     except Exception:
         logger.warning("turn analytics emit failed session_id=%s", session_id, exc_info=True)

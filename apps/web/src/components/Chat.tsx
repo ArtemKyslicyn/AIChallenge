@@ -54,6 +54,12 @@ const SUGGESTIONS = [
   "Задавай мне по одному вопросу за раз",
 ];
 
+const MEDIA_SUGGESTIONS = [
+  "Нарисуй закат над морем в стиле акварели",
+  "Сгенерируй картинку: робот читает книгу в библиотеке",
+  "Сделай короткое видео: кот бежит по лужайке",
+];
+
 const TEMP_STUDIO_SUGGESTIONS = [
   "Придумай слоган для приложения утренних привычек",
   "Объясни, что такое HTTP, простыми словами",
@@ -792,9 +798,10 @@ export function Chat({
             <div className="empty">
               <h2>О чём поговорим?</h2>
               <p>
-                Режим <strong>Один</strong> — чат. <strong>×2</strong> — шаблоны.{" "}
-                <strong>×T</strong> — температуры 0 / 0.7 / 1.2 с автооценкой.{" "}
-                <strong>×4</strong> — лаборатория стратегий. Отладка — плавающая кнопка Debug.
+                Режим <strong>Один</strong> — чат. Можно попросить нарисовать картинку или
+                короткое видео. <strong>×2</strong> — шаблоны. <strong>×T</strong> — температуры
+                0 / 0.7 / 1.2 с автооценкой. <strong>×4</strong> — лаборатория стратегий. Отладка —
+                плавающая кнопка Debug.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (
@@ -802,6 +809,19 @@ export function Chat({
                     key={text}
                     type="button"
                     className="chip"
+                    onClick={() => setSeed({ text, nonce: Date.now() })}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              <p className="empty-lab-lead">Картинка или видео</p>
+              <div className="suggestions suggestions-lab">
+                {MEDIA_SUGGESTIONS.map((text) => (
+                  <button
+                    key={text}
+                    type="button"
+                    className="chip chip-lab"
                     onClick={() => setSeed({ text, nonce: Date.now() })}
                   >
                     {text}
