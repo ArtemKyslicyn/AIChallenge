@@ -831,6 +831,7 @@ textarea {
 .composer-wrap {
   position: sticky;
   bottom: 0;
+  z-index: 50; /* Above float-dock (40) so model select stays usable under studio sheet */
   padding: var(--space-3) var(--space-4) var(--space-4);
   background: linear-gradient(to top, var(--bg) 62%, transparent);
 }
@@ -882,7 +883,9 @@ textarea {
   border-radius: var(--radius-md);
   padding: 2px var(--space-2);
   background: var(--surface);
-  max-width: 14rem;
+  color: var(--text);
+  min-width: 8rem;
+  max-width: min(18rem, 52vw);
 }
 
 .composer-options-chips {
@@ -939,6 +942,25 @@ textarea {
   font-weight: 650;
   line-height: 1.15;
   color: inherit;
+}
+
+/* Narrow: one-line chips so the model <select> stays on the first row. */
+@media (max-width: 720px) {
+  .mode-chip-stack {
+    flex-direction: row;
+    gap: 4px;
+    min-width: 0;
+    border-radius: var(--radius-full);
+    padding: 5px 10px;
+  }
+
+  .mode-chip-kicker {
+    font-size: 10px;
+  }
+
+  .mode-chip-label {
+    font-size: 12px;
+  }
 }
 
 .mode-chip-stack[aria-pressed="true"] .mode-chip-kicker {
@@ -2249,9 +2271,15 @@ textarea {
   transition: width 180ms ease;
 }
 
-/* Performance Studio needs a wide sheet — expand only while that panel is open. */
+/* Performance Studio: widen only on large screens; never cover the composer on phone. */
 .float-dock:has(.models-float--studio) {
-  width: min(960px, calc(100vw - var(--space-4)));
+  width: min(560px, calc(100vw - var(--space-4)));
+}
+
+@media (min-width: 900px) {
+  .float-dock:has(.models-float--studio) {
+    width: min(720px, calc(100vw - var(--space-4)));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2285,6 +2313,11 @@ textarea {
     /* Never `stretch`: it turned each FAB — and the invisible
        `.debug-float-root` wrapper — into a full-bleed bar over the composer. */
     align-items: flex-end;
+  }
+
+  /* Studio :has() is more specific — force full-bleed width auto with left/right. */
+  .float-dock:has(.models-float--studio) {
+    width: auto;
   }
 }
 
@@ -2510,7 +2543,9 @@ textarea {
 
 .models-float {
   width: min(360px, 100%);
-  max-height: 42vh;
+  /* Definite height so nested flex scrollers (pareto / feedback) get a real box. */
+  height: min(42vh, 420px);
+  max-height: min(42vh, 420px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -2522,7 +2557,8 @@ textarea {
 
 .models-float--studio {
   width: 100%;
-  max-height: min(78vh, 860px);
+  height: min(70vh, 720px);
+  max-height: min(70vh, 720px);
 }
 
 .models-float-head {
@@ -2999,17 +3035,27 @@ textarea {
   }
 }
 
-/* Mobile: 44px hit targets for the FAB, tabs and window switch. */
+/* Mobile: keep hit area without eating the whole 42vh sheet on short phones. */
 @media (max-width: 480px) {
-  .models-float-fab,
+  .models-float-fab {
+    min-height: 44px;
+    justify-content: center;
+  }
+
   .models-float-tab,
   .models-float-window,
   .models-float-actions .ghost-button {
-    min-height: 44px;
+    min-height: 36px;
   }
 
-  .models-float-fab {
-    justify-content: center;
+  .models-float {
+    height: min(50vh, 480px);
+    max-height: min(50vh, 480px);
+  }
+
+  .models-float--studio {
+    height: min(62vh, 640px);
+    max-height: min(62vh, 640px);
   }
 }
 

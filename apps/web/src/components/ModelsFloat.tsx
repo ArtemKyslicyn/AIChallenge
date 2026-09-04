@@ -21,7 +21,7 @@ const WINDOW_LABEL: Record<ModelsWindowHours, string> = {
   168: "7 дней",
 };
 
-const TAB_ORDER: ModelsTab[] = ["studio", "ranking", "feedback"];
+const TAB_ORDER: ModelsTab[] = ["ranking", "feedback", "studio"];
 
 const TAB_LABEL: Record<ModelsTab, string> = {
   studio: "Студия",
@@ -99,7 +99,8 @@ export function ModelsFloat({
   const panelRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<Partial<Record<ModelsTab, HTMLButtonElement | null>>>({});
 
-  const [uncontrolledTab, setUncontrolledTab] = useState<ModelsTab>("studio");
+  /** Ranking first: «Модели» should show the list, not a full-bleed studio sheet. */
+  const [uncontrolledTab, setUncontrolledTab] = useState<ModelsTab>("ranking");
   const tab = tabProp ?? uncontrolledTab;
   const selectTab = useCallback(
     (next: ModelsTab) => {
