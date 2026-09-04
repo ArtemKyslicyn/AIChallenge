@@ -1,0 +1,11 @@
+{
+  "name": "aichallenge-challenge-record",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "record": "node record.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}
