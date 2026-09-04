@@ -340,6 +340,8 @@ export function Chat({
                     panel_count: event.panel_count,
                     characters: event.characters,
                     panels: emptyPanels(event.panel_count),
+                    layout: event.layout === "per_panel" ? "per_panel" : "single_page",
+                    page_image_url: null,
                   },
                   mediaJob: {
                     kind: "comic",
@@ -347,7 +349,11 @@ export function Chat({
                     startedAt: Date.now(),
                   },
                 });
-                setStatus(`Комикс: ${event.panel_count} панелей…`);
+                setStatus(
+                  event.layout === "per_panel"
+                    ? `Комикс: ${event.panel_count} панелей…`
+                    : `Комикс: одна страница · ${event.panel_count} кадров…`,
+                );
                 break;
               case "comic_panel":
                 setItems((prev) =>
@@ -376,7 +382,18 @@ export function Chat({
                         visual: p.visual,
                       };
                     });
-                    return { ...item, comic: { ...item.comic, panels } };
+                    return {
+                      ...item,
+                      comic: {
+                        ...item.comic,
+                        panels,
+                        page_image_url:
+                          event.image_url ||
+                          item.comic.page_image_url ||
+                          panels.find((p) => p.image_url)?.image_url ||
+                          null,
+                      },
+                    };
                   }),
                 );
                 break;

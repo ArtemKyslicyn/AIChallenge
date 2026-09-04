@@ -23,8 +23,8 @@ from uuid import UUID, uuid4
 from app.application.cascade import try_cheap_first
 from app.application.comic import (
     STORYBOARD_SYSTEM,
-    build_panel_image_prompt,
-    panel_seed,
+    build_comic_page_prompt,
+    page_image_size,
     parse_storyboard_json,
     serialize_comic_fence,
     storyboard_narration,
@@ -190,6 +190,7 @@ class ComicStartEvent:
     title: str
     panel_count: int
     characters: list[dict[str, str]]
+    layout: str = "single_page"
 
 
 @dataclass(slots=True)
@@ -464,7 +465,8 @@ async def send_user_message_and_stream(
                             last_err or "Не удалось собрать раскадровку комикса."
                         )
                     assert media_limiter is not None
-                    media_limiter.check_images(session.id, len(board.panels))
+                    # One page image for the whole strip (not N Pollinations calls).
+                    media_limiter.check_images(session.id, 1)
                     if plan_model:
                         resolved_model = plan_model
                         draft.model_id = resolved_model
@@ -482,40 +484,48 @@ async def send_user_message_and_stream(
                             {"id": c.id, "name": c.name, "look": c.look}
                             for c in board.characters
                         ],
+                        layout="single_page",
                     )
                     ok_count = 0
                     fail_count = 0
                     assert media_generator is not None and media_store is not None
-                    for panel in board.panels:
-                        prompt = build_panel_image_prompt(board, panel)
-                        try:
-                            media_limiter.check(session.id, IMAGE_TOOL_NAME)
-                            artifact = await media_generator.generate_image(
-                                prompt,
-                                model="flux",
-                                width=768,
-                                height=768,
-                                seed=panel_seed(board, panel),
-                            )
-                            stored = await media_store.save(artifact)
-                            media_limiter.record(session.id, IMAGE_TOOL_NAME)
-                            panel.image_url = stored.public_path
+                    page_url: str | None = None
+                    page_error: str | None = None
+                    try:
+                        media_limiter.check(session.id, IMAGE_TOOL_NAME)
+                        width, height = page_image_size(len(board.panels))
+                        artifact = await media_generator.generate_image(
+                            build_comic_page_prompt(board),
+                            model="flux",
+                            width=width,
+                            height=height,
+                            seed=board.seed,
+                        )
+                        stored = await media_store.save(artifact)
+                        media_limiter.record(session.id, IMAGE_TOOL_NAME)
+                        page_url = stored.public_path
+                        board.page_image_url = page_url
+                        board.layout = "single_page"
+                        ok_count = len(board.panels)
+                        for panel in board.panels:
+                            panel.image_url = page_url
                             panel.status = "ok"
-                            ok_count += 1
                             yield ComicPanelEvent(
                                 comic_id=board.comic_id,
                                 index=panel.index,
                                 status="ok",
-                                image_url=panel.image_url,
+                                image_url=page_url,
                                 speaker=panel.speaker,
                                 dialogue=panel.dialogue,
                                 caption=panel.caption,
                                 text_mode=panel.text_mode,
                             )
-                        except (MediaGenerationError, MediaRateLimitError, OSError) as exc:
-                            fail_count += 1
+                    except (MediaGenerationError, MediaRateLimitError, OSError) as exc:
+                        page_error = str(exc)[:200]
+                        fail_count = len(board.panels)
+                        for panel in board.panels:
                             panel.status = "error"
-                            panel.error = str(exc)[:200]
+                            panel.error = page_error
                             yield ComicPanelEvent(
                                 comic_id=board.comic_id,
                                 index=panel.index,
@@ -524,7 +534,7 @@ async def send_user_message_and_stream(
                                 dialogue=panel.dialogue,
                                 caption=panel.caption,
                                 text_mode=panel.text_mode,
-                                error=panel.error,
+                                error=page_error,
                             )
                     yield ComicEndEvent(
                         comic_id=board.comic_id,
@@ -541,17 +551,18 @@ async def send_user_message_and_stream(
                                 "kind": "comic",
                                 "ok": False,
                                 "tool": COMIC_TOOL_NAME,
-                                "error": "all panels failed",
+                                "error": page_error or "comic page failed",
                                 "panel_count": len(board.panels),
                                 "ok_count": 0,
                                 "fail_count": fail_count,
+                                "layout": "single_page",
                             }
                         )
                         yield ToolResultEvent(
                             name=call.name,
                             call_id=call.id,
                             status="error",
-                            error="Не удалось сгенерировать панели комикса.",
+                            error="Не удалось сгенерировать страницу комикса.",
                         )
                     else:
                         draft.media_jobs.append(
@@ -563,13 +574,16 @@ async def send_user_message_and_stream(
                                 "panel_count": len(board.panels),
                                 "ok_count": ok_count,
                                 "fail_count": fail_count,
+                                "layout": "single_page",
+                                "images": 1,
                             }
                         )
                         yield ToolResultEvent(
                             name=call.name,
                             call_id=call.id,
                             status="ok",
-                            provider_label="comic+pollinations",
+                            media_url=page_url,
+                            provider_label="comic-page+pollinations",
                         )
                         comic_finished = True
                 except (MediaGenerationError, MediaRateLimitError) as exc:

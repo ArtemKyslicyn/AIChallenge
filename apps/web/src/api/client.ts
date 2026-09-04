@@ -75,6 +75,7 @@ export type ChatEvent =
       title: string;
       panel_count: number;
       characters: { id: string; name: string; look: string }[];
+      layout?: "single_page" | "per_panel";
     }
   | {
       type: "comic_panel";
