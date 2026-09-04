@@ -33,6 +33,15 @@ def test_detect_image_intent() -> None:
     )
 
 
+def test_detect_comic_intent_beats_image() -> None:
+    from app.domain.media import COMIC_TOOL_NAME
+
+    calls = detect_media_intent("Нарисуй комикс: кот и робот в метро")
+    assert len(calls) == 1
+    assert calls[0].name == COMIC_TOOL_NAME
+    assert "кот" in calls[0].arguments["brief"].casefold()
+
+
 def test_detect_video_intent() -> None:
     calls = detect_media_intent("Сделай короткое видео тумана над рекой")
     assert len(calls) == 1
@@ -53,6 +62,7 @@ def test_detect_strips_response_template() -> None:
 
 def test_soft_media_gate() -> None:
     assert maybe_needs_media_tools("нарисуй закат")
+    assert maybe_needs_media_tools("сделай комикс про чайник")
     assert not maybe_needs_media_tools("сколько будет 2+2?")
 
 

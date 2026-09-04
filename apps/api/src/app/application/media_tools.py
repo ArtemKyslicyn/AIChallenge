@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from app.domain.errors import MediaGenerationError, MediaRateLimitError
 from app.domain.media import (
+    COMIC_TOOL_NAME,
     IMAGE_TOOL_NAME,
     MEDIA_TOOL_SCHEMAS,
     VIDEO_TOOL_NAME,
@@ -17,6 +18,10 @@ from app.domain.media import (
 )
 from app.domain.ports import MediaGenerator, MediaStore
 
+_COMIC_HINT = re.compile(
+    r"(?i)(?:комикс|comic\s*strip|(?:нарисуй|сделай|сгенер(?:ируй|ировать))\s+комикс|"
+    r"(?:draw|make|create|generate)\s+(?:a\s+)?comic)"
+)
 _IMAGE_HINT = re.compile(
     r"(?i)(?:нарисуй|сгенер(?:ируй|ировать)\s+(?:картинк|изображен)|"
     r"сделай\s+(?:картинк|изображен|рисунок)|"
@@ -29,14 +34,14 @@ _VIDEO_HINT = re.compile(
     r"/pixazo\b)"
 )
 _SOFT_MEDIA = re.compile(
-    r"(?i)(?:картинк|изображен|рисунок|image|picture|drawing|видео|video|"
+    r"(?i)(?:комикс|comic|картинк|изображен|рисунок|image|picture|drawing|видео|video|"
     r"нарис|draw|visuali[sz]|pollinations|pixazo)"
 )
 _PROMPT_STRIP = re.compile(
     r"(?i)^(?:пожалуйста[, ]*)?(?:нарисуй|сгенер(?:ируй|ировать)|сделай|"
     r"generate|draw|paint|create|make)\s+"
     r"(?:(?:мне|please)\s+)?(?:(?:an?|the|коротк\w+|short)\s+)?"
-    r"(?:картинк\w*|изображен\w*|рисунок|image|picture|drawing|видео|video)?\s*"
+    r"(?:комикс\w*|comic(?:\s*strip)?|картинк\w*|изображен\w*|рисунок|image|picture|drawing|видео|video)?\s*"
     r"(?:of\s+|с\s+|про\s+|на\s+|с\s+темой\s+)?",
 )
 
@@ -70,7 +75,15 @@ def detect_media_intent(text: str) -> list[ToolCallRequest]:
             clean = clean.split(marker, 1)[0].strip(" —-\n")
     calls: list[ToolCallRequest] = []
     prompt = _PROMPT_STRIP.sub("", clean).strip(" .,!:;—-") or clean
-    if _VIDEO_HINT.search(clean):
+    if _COMIC_HINT.search(clean):
+        calls.append(
+            ToolCallRequest(
+                id=f"intent-{uuid4().hex[:8]}",
+                name=COMIC_TOOL_NAME,
+                arguments={"brief": prompt or clean},
+            )
+        )
+    elif _VIDEO_HINT.search(clean):
         calls.append(
             ToolCallRequest(
                 id=f"intent-{uuid4().hex[:8]}",
@@ -118,10 +131,20 @@ class SessionMediaRateLimiter:
         cutoff = now - 3600.0
         return [t for t in stamps if t >= cutoff]
 
+    def remaining_images(self, session_id: UUID) -> int | None:
+        """How many image slots left this hour; None means unlimited."""
+        if not self._image_limit:
+            return None
+        now = time.monotonic()
+        key = str(session_id)
+        stamps = self._prune(self._image[key], now)
+        self._image[key] = stamps
+        return max(0, self._image_limit - len(stamps))
+
     def check(self, session_id: UUID, tool_name: str) -> None:
         now = time.monotonic()
         key = str(session_id)
-        if tool_name == IMAGE_TOOL_NAME:
+        if tool_name in {IMAGE_TOOL_NAME, COMIC_TOOL_NAME}:
             stamps = self._prune(self._image[key], now)
             self._image[key] = stamps
             if self._image_limit and len(stamps) >= self._image_limit:
@@ -136,10 +159,20 @@ class SessionMediaRateLimiter:
                     f"Лимит видео: не больше {self._video_limit} в час для этой сессии."
                 )
 
+    def check_images(self, session_id: UUID, count: int) -> None:
+        """Fail if fewer than ``count`` image slots remain."""
+        remaining = self.remaining_images(session_id)
+        if remaining is None:
+            return
+        if count > remaining:
+            raise MediaRateLimitError(
+                f"Для комикса нужно {count} картинок, осталось {remaining} в этом часе."
+            )
+
     def record(self, session_id: UUID, tool_name: str) -> None:
         now = time.monotonic()
         key = str(session_id)
-        if tool_name == IMAGE_TOOL_NAME:
+        if tool_name in {IMAGE_TOOL_NAME, COMIC_TOOL_NAME}:
             self._image[key] = self._prune(self._image[key], now) + [now]
         elif tool_name == VIDEO_TOOL_NAME:
             self._video[key] = self._prune(self._video[key], now) + [now]

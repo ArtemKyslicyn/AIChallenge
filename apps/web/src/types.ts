@@ -1,11 +1,12 @@
 import type { CascadeStage } from "./api/client";
+import type { ComicStripState } from "./comic";
 import type { ExpertSlotResult } from "./strategies/runStrategy";
 import type { JudgeScorecard } from "./strategies/judge";
 import type { TempJudgeScorecard } from "./strategies/tempJudge";
 import type { TempSlotId } from "./strategies/tempStudio";
 import type { PromptStrategyId } from "./strategies/types";
 
-export type MediaJobKind = "image" | "video";
+export type MediaJobKind = "image" | "video" | "comic";
 
 export interface MediaJobState {
   kind: MediaJobKind;
@@ -21,8 +22,10 @@ export interface Turn {
   content: string;
   modelId: string | null;
   failed?: boolean;
-  /** Live media generation job (image / video) for in-bubble loader. */
+  /** Live media generation job (image / video / comic) for in-bubble loader. */
   mediaJob?: MediaJobState | null;
+  /** Live or hydrated comic strip (HTML overlays on Pollinations art). */
+  comic?: ComicStripState | null;
   /**
    * Server message id (prep D10). History turns carry it from the start; a live
    * reply only gets one at `message_end`, so its absence is exactly «no rating

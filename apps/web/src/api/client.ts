@@ -68,7 +68,27 @@ export type ChatEvent =
       media_url?: string | null;
       provider_label?: string | null;
       error?: string | null;
-    };
+    }
+  | {
+      type: "comic_start";
+      comic_id: string;
+      title: string;
+      panel_count: number;
+      characters: { id: string; name: string; look: string }[];
+    }
+  | {
+      type: "comic_panel";
+      comic_id: string;
+      index: number;
+      status: string;
+      text_mode: string;
+      image_url?: string | null;
+      speaker?: string | null;
+      dialogue?: string | null;
+      caption?: string | null;
+      error?: string | null;
+    }
+  | { type: "comic_end"; comic_id: string; ok_count: number; fail_count: number };
 
 const BASE = import.meta.env.VITE_API_URL || "/api/v1";
 const STORE_KEY = "aichallenge.session_store";

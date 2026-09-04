@@ -1,5 +1,7 @@
 import type { SessionCredentials } from "../api/client";
+import { extractComicFromContent, stripComicFence } from "../comic";
 import type { Turn } from "../types";
+import { ComicStrip } from "./ComicStrip";
 import { FeedbackStrip } from "./FeedbackStrip";
 import { Markdown } from "./Markdown";
 import { MediaJobCard } from "./MediaJobCard";
@@ -20,9 +22,14 @@ interface Props {
 
 export function TurnView({ turn, streaming, session }: Props) {
   const isAssistant = turn.role === "assistant";
+  const comic = turn.comic ?? (isAssistant ? extractComicFromContent(turn.content) : null);
+  const bodyText = isAssistant ? stripComicFence(turn.content) : turn.content;
   const showMediaJob =
-    isAssistant && turn.mediaJob && (turn.mediaJob.phase === "running" || turn.mediaJob.phase === "error");
-  const emptyBody = isAssistant && !turn.content.trim();
+    isAssistant &&
+    turn.mediaJob &&
+    (turn.mediaJob.phase === "running" || turn.mediaJob.phase === "error") &&
+    turn.mediaJob.kind !== "comic";
+  const emptyBody = isAssistant && !bodyText.trim() && !comic;
   // Prep D10: a live reply has no server id until `message_end`, so this is
   // also the «no feedback mid-stream» guard the checklist (H5) asks for.
   // A cut-off or empty answer is not rateable either: an abort that lands after
@@ -44,7 +51,8 @@ export function TurnView({ turn, streaming, session }: Props) {
         // flowing with the text while Markdown re-renders on every token.
         emptyBody && showMediaJob ? null : (
           <div className="body">
-            <Markdown streaming={streaming}>{turn.content}</Markdown>
+            {bodyText.trim() ? <Markdown streaming={streaming}>{bodyText}</Markdown> : null}
+            {comic ? <ComicStrip comic={comic} /> : null}
           </div>
         )
       ) : (
@@ -64,7 +72,11 @@ export function TurnView({ turn, streaming, session }: Props) {
             </span>
           ) : turn.mediaJob?.phase === "running" ? (
             <span className="badge" data-tone="pending">
-              {turn.mediaJob.kind === "video" ? "видео…" : "картинка…"}
+              {turn.mediaJob.kind === "video"
+                ? "видео…"
+                : turn.mediaJob.kind === "comic"
+                  ? "комикс…"
+                  : "картинка…"}
             </span>
           ) : (
             <span className="badge" data-tone="pending">

@@ -23,8 +23,9 @@ class FakeMediaGenerator:
         model: str = "flux",
         width: int = 1024,
         height: int = 1024,
+        seed: int | None = None,
     ) -> MediaArtifact:
-        _ = width, height
+        _ = width, height, seed
         clean = " ".join((prompt or "").split())
         if not clean:
             raise MediaGenerationError("Пустой промпт для картинки.")

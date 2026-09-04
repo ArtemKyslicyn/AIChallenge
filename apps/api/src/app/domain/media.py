@@ -36,6 +36,7 @@ class ToolCallRequest:
 
 IMAGE_TOOL_NAME = "generate_image"
 VIDEO_TOOL_NAME = "generate_video"
+COMIC_TOOL_NAME = "generate_comic"
 
 MEDIA_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -79,6 +80,31 @@ MEDIA_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": COMIC_TOOL_NAME,
+            "description": (
+                "Plan and generate a short comic strip (3–6 panels). "
+                "Use when the user asks for a comic/комикс. Pass their brief or dialogue as-is; "
+                "the server writes HTML dialogue overlays — do not put text into panel images."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brief": {
+                        "type": "string",
+                        "description": "User story and/or dialogue for the comic.",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Alias for brief.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -105,7 +131,7 @@ def parse_openai_tool_calls(message: dict[str, Any]) -> list[ToolCallRequest]:
         fn_raw = item.get("function")
         fn = fn_raw if isinstance(fn_raw, dict) else {}
         name = str(fn.get("name") or "").strip()
-        if name not in {IMAGE_TOOL_NAME, VIDEO_TOOL_NAME}:
+        if name not in {IMAGE_TOOL_NAME, VIDEO_TOOL_NAME, COMIC_TOOL_NAME}:
             continue
         out.append(
             ToolCallRequest(

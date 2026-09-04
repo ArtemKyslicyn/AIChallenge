@@ -11,6 +11,7 @@ import {
   type SessionCredentials,
 } from "../api/client";
 import { prefsToProbeBody } from "../chatPrefs/outgoing";
+import { emptyPanels, extractComicFromContent } from "../comic";
 import { useDebugLog } from "../debug/DebugContext";
 import { countWords } from "../generationPrefs";
 import {
@@ -58,6 +59,7 @@ const MEDIA_SUGGESTIONS = [
   "Нарисуй закат над морем в стиле акварели",
   "Сгенерируй картинку: робот читает книгу в библиотеке",
   "Сделай короткое видео: кот бежит по лужайке",
+  "Нарисуй комикс: кот и робот спорят в метро",
 ];
 
 const TEMP_STUDIO_SUGGESTIONS = [
@@ -80,6 +82,7 @@ function toTurn(message: MessageDto): Turn {
     messageId: message.id,
     feedback: message.feedback ?? null,
     cascadeStage: message.cascade_stage ?? "off",
+    comic: message.role === "assistant" ? extractComicFromContent(message.content) : null,
   };
 }
 
@@ -267,16 +270,25 @@ export function Chat({
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
               case "tool_start": {
-                const kind = event.name === "generate_video" ? "video" : "image";
+                const kind =
+                  event.name === "generate_video"
+                    ? "video"
+                    : event.name === "generate_comic"
+                      ? "comic"
+                      : "image";
                 const job = {
-                  kind: kind as "image" | "video",
+                  kind: kind as MediaJobState["kind"],
                   phase: "running" as const,
                   startedAt: Date.now(),
                 };
                 patch({ mediaJob: job });
                 setActiveMediaJob(job);
                 setStatus(
-                  kind === "video" ? "Генерирую видео…" : "Генерирую картинку…",
+                  kind === "video"
+                    ? "Генерирую видео…"
+                    : kind === "comic"
+                      ? "Собираю комикс…"
+                      : "Генерирую картинку…",
                 );
                 debug("info", `media job start · ${kind}`);
                 break;
@@ -288,7 +300,9 @@ export function Chat({
                     kind:
                       event.name === "generate_video"
                         ? ("video" as const)
-                        : ("image" as const),
+                        : event.name === "generate_comic"
+                          ? ("comic" as const)
+                          : ("image" as const),
                     phase: "error" as const,
                     startedAt: Date.now(),
                     error: event.error || "Медиа-инструмент не сработал.",
@@ -302,7 +316,9 @@ export function Chat({
                       kind:
                         event.name === "generate_video"
                           ? ("video" as const)
-                          : ("image" as const),
+                          : event.name === "generate_comic"
+                            ? ("comic" as const)
+                            : ("image" as const),
                       phase: "done",
                       startedAt: Date.now(),
                       providerLabel: event.provider_label,
@@ -316,6 +332,72 @@ export function Chat({
                   );
                 }
                 break;
+              case "comic_start":
+                patch({
+                  comic: {
+                    comic_id: event.comic_id,
+                    title: event.title,
+                    panel_count: event.panel_count,
+                    characters: event.characters,
+                    panels: emptyPanels(event.panel_count),
+                  },
+                  mediaJob: {
+                    kind: "comic",
+                    phase: "running",
+                    startedAt: Date.now(),
+                  },
+                });
+                setStatus(`Комикс: ${event.panel_count} панелей…`);
+                break;
+              case "comic_panel":
+                setItems((prev) =>
+                  prev.map((item): ThreadItem => {
+                    if (!isTurn(item) || item.id !== replyId || !item.comic) return item;
+                    const textMode: "bubble" | "caption" | "both" =
+                      event.text_mode === "caption" || event.text_mode === "both"
+                        ? event.text_mode
+                        : "bubble";
+                    const panels = item.comic.panels.map((p) => {
+                      if (p.index !== event.index) return p;
+                      return {
+                        index: p.index,
+                        status:
+                          event.status === "ok"
+                            ? ("ok" as const)
+                            : event.status === "error"
+                              ? ("error" as const)
+                              : p.status,
+                        image_url: event.image_url ?? p.image_url,
+                        speaker: event.speaker ?? p.speaker,
+                        dialogue: event.dialogue ?? p.dialogue,
+                        caption: event.caption ?? p.caption,
+                        text_mode: textMode,
+                        error: event.error ?? p.error,
+                        visual: p.visual,
+                      };
+                    });
+                    return { ...item, comic: { ...item.comic, panels } };
+                  }),
+                );
+                break;
+              case "comic_end":
+                setItems((prev) =>
+                  prev.map((item) =>
+                    isTurn(item) && item.id === replyId && item.comic
+                      ? {
+                          ...item,
+                          comic: { ...item.comic, done: true },
+                          mediaJob: null,
+                        }
+                      : item,
+                  ),
+                );
+                setActiveMediaJob(null);
+                setStatus(
+                  `Комикс готов · ok ${event.ok_count}` +
+                    (event.fail_count ? ` · fail ${event.fail_count}` : ""),
+                );
+                break;
               case "token":
                 setItems((prev) =>
                   prev.map((item) =>
@@ -325,7 +407,9 @@ export function Chat({
                           content: item.content + event.text,
                           // Hide running card once media markdown arrives
                           mediaJob:
-                            item.mediaJob?.phase === "running" && event.text.trim()
+                            item.mediaJob?.phase === "running" &&
+                            item.mediaJob.kind !== "comic" &&
+                            event.text.trim()
                               ? { ...item.mediaJob, phase: "done" }
                               : item.mediaJob,
                         }
@@ -338,6 +422,7 @@ export function Chat({
                   content: event.content,
                   modelId: event.model_id,
                   mediaJob: null,
+                  comic: extractComicFromContent(event.content),
                   // First moment the live turn has a real server id (prep D10):
                   // the feedback strip appears only from here on.
                   messageId: event.message_id,
@@ -798,10 +883,10 @@ export function Chat({
             <div className="empty">
               <h2>О чём поговорим?</h2>
               <p>
-                Режим <strong>Один</strong> — чат. Можно попросить нарисовать картинку или
-                короткое видео. <strong>×2</strong> — шаблоны. <strong>×T</strong> — температуры
-                0 / 0.7 / 1.2 с автооценкой. <strong>×4</strong> — лаборатория стратегий. Отладка —
-                плавающая кнопка Debug.
+                Режим <strong>Один</strong> — чат. Можно попросить нарисовать картинку, короткое
+                видео или комикс (текст реплик поверх картинок). <strong>×2</strong> — шаблоны.{" "}
+                <strong>×T</strong> — температуры 0 / 0.7 / 1.2 с автооценкой.{" "}
+                <strong>×4</strong> — лаборатория стратегий. Отладка — плавающая кнопка Debug.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (

@@ -1,7 +1,7 @@
 # Comic Generator — Design Spec
 
 **Date:** 2026-09-04  
-**Status:** Approved for planning (awaiting implementation plan)  
+**Status:** Implemented (v1)  
 **Depends on:** chat SSE, media tools (`MEDIA_TOOLS_ENABLED`), Pollinations image adapter, media store  
 **Approach:** single chat tool `generate_comic` + server-side storyboard + HTML text overlay (not baked into images)
 

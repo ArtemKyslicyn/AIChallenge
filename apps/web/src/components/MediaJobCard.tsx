@@ -27,24 +27,33 @@ export function MediaJobCard({ job, compact = false }: Props) {
 
   const elapsed = formatElapsed(now - job.startedAt);
   const isVideo = job.kind === "video";
+  const isComic = job.kind === "comic";
   const title =
     job.phase === "error"
       ? isVideo
         ? "Видео не удалось"
-        : "Картинка не удалась"
+        : isComic
+          ? "Комикс не удался"
+          : "Картинка не удалась"
       : job.phase === "done"
         ? isVideo
           ? "Видео готово"
-          : "Картинка готова"
+          : isComic
+            ? "Комикс готов"
+            : "Картинка готова"
         : isVideo
           ? "Генерирую видео"
-          : "Генерирую картинку";
+          : isComic
+            ? "Собираю комикс"
+            : "Генерирую картинку";
 
   const hint =
     job.phase === "running"
       ? isVideo
         ? "Джоба Pixazo в очереди — обычно 1–3 минуты"
-        : "Pollinations рисует — обычно 10–40 секунд"
+        : isComic
+          ? "Раскадровка, потом панели Pollinations"
+          : "Pollinations рисует — обычно 10–40 секунд"
       : job.phase === "error"
         ? job.error || "Ошибка генерации"
         : job.providerLabel || "Можно смотреть ниже";
