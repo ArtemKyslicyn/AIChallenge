@@ -11,7 +11,11 @@ from uuid import uuid4
 COMIC_FENCE_START = "```comic+json"
 COMIC_FENCE_END = "```"
 NO_TEXT_CLAUSE = (
-    "no text, no letters, no words, no captions, no speech bubbles, no watermarks, blank dialogue area"
+    "no text, no letters, no words, no captions, no speech bubbles, no watermarks"
+)
+_FOREGROUND_CLAUSE = (
+    "cartoon comic characters in the foreground, clear action pose, "
+    "not an empty cityscape, not architecture photography, not a building facade"
 )
 _BUBBLE_MAX_CHARS = 90
 _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
@@ -19,6 +23,7 @@ _FENCE_RE = re.compile(
     r"```comic\+json\s*([\s\S]*?)```",
     re.IGNORECASE,
 )
+_DIALOGUE_KEYS = ("dialogue", "line", "speech", "text", "said", "replica", "реплика")
 
 
 @dataclass(slots=True)
@@ -113,7 +118,7 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
     for i, item in enumerate(panels_raw[:6]):
         if not isinstance(item, dict):
             continue
-        dialogue = _as_str(item.get("dialogue")) or None
+        dialogue = _panel_dialogue(item)
         caption = _as_str(item.get("caption")) or None
         mode = _as_str(item.get("text_mode")).lower()
         if mode not in {"bubble", "caption", "both"}:
@@ -126,7 +131,8 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
         panels.append(
             ComicPanel(
                 index=i + 1,
-                visual=_as_str(item.get("visual")) or "comic panel scene",
+                visual=_as_str(item.get("visual") or item.get("scene") or item.get("description"))
+                or "comic panel scene with characters in the foreground",
                 speaker=_as_str(item.get("speaker")) or None,
                 dialogue=dialogue,
                 caption=caption,
@@ -144,32 +150,65 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
     except (TypeError, ValueError):
         seed = int(uuid4().int % 2_147_483_647)
 
-    return ComicStoryboard(
+    board = ComicStoryboard(
         title=_as_str(data.get("title")) or "Comic",
         style=_as_str(data.get("style"))
-        or "clean comic book illustration, consistent characters, flat colors",
+        or "clean comic book illustration, consistent characters, flat colors, bold ink outlines",
         seed=seed,
         characters=characters,
         panels=panels,
         comic_id=_as_str(data.get("comic_id")) or uuid4().hex[:12],
     )
+    normalize_storyboard_speech(board)
+    return board
+
+
+def _panel_dialogue(item: dict[str, Any]) -> str | None:
+    for key in _DIALOGUE_KEYS:
+        value = _as_str(item.get(key))
+        if value:
+            return value
+    return None
 
 
 def character_looks_line(board: ComicStoryboard) -> str:
     if not board.characters:
-        return ""
+        return "main comic characters in the foreground"
     parts = [f"{c.name} ({c.id}): {c.look}" for c in board.characters]
-    return "Characters (keep identical across panels): " + "; ".join(parts)
+    return "Same characters: " + "; ".join(parts)
+
+
+def panel_seed(board: ComicStoryboard, panel: ComicPanel) -> int:
+    """Per-panel seed so Pollinations does not return the same image N times."""
+    return int(board.seed) + int(panel.index) * 1009
 
 
 def build_panel_image_prompt(board: ComicStoryboard, panel: ComicPanel) -> str:
+    """Lead with the unique panel scene so Flux does not collapse to one cityscape."""
+    looks = character_looks_line(board)
+    scene = panel.visual.strip() or f"comic panel {panel.index} with the main characters"
     parts = [
-        board.style,
-        character_looks_line(board),
-        f"Panel {panel.index}: {panel.visual}",
+        f"Comic panel {panel.index} of {len(board.panels)}: {scene}",
+        looks,
+        board.style or "clean comic book illustration, flat colors, bold outlines",
+        _FOREGROUND_CLAUSE,
         NO_TEXT_CLAUSE,
     ]
-    return ", ".join(p for p in parts if p)
+    return ". ".join(p for p in parts if p)
+
+
+def normalize_storyboard_speech(board: ComicStoryboard) -> None:
+    """Guarantee each panel has readable HTML overlay text."""
+    for panel in board.panels:
+        if panel.dialogue or panel.caption:
+            if panel.text_mode not in {"bubble", "caption", "both"}:
+                panel.text_mode = choose_text_mode(
+                    dialogue=panel.dialogue, caption=panel.caption
+                )
+            continue
+        who = panel.speaker or "Герой"
+        panel.dialogue = f"{who}: …"
+        panel.text_mode = "bubble"
 
 
 def storyboard_narration(board: ComicStoryboard) -> str:
@@ -249,8 +288,12 @@ title, style, seed (int), characters[{id,name,look}], panels[{index,visual,speak
 Rules:
 - panels length must be between 3 and 6 inclusive; choose count from the story.
 - Prefer keeping the user's dialogue wording when they supplied lines.
-- visual: English scene description for an image model; never ask for text/letters/bubbles in the image.
-- text_mode: bubble for short spoken lines, caption for narration or long text, both when needed.
-- style: short consistent art direction for all panels.
-- characters: short look sheets so the same people recur.
+- EVERY panel MUST include non-empty dialogue (spoken line) OR caption (narration). Prefer dialogue.
+- visual: English description of THIS panel only — different camera angle/action than other panels.
+  Put characters and their action first (who, doing what). Background is secondary.
+  Never ask for text/letters/bubbles in the image. Avoid generic empty streets or building facades
+  unless the plot truly needs them AND characters are clearly in the foreground.
+- text_mode: "bubble" for short spoken lines, "caption" for narration or long text, "both" when needed.
+- style: short consistent art direction (e.g. "bold ink comic, flat cel shading").
+- characters: short look sheets so the same people recur across panels.
 """
