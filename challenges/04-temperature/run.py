@@ -31,7 +31,7 @@ def main() -> int:
         m.strip()
         for m in os.environ.get(
             "CHALLENGE_MODELS",
-            "google/gemini-2.5-flash,deepseek/deepseek-chat,mistralai/mistral-nemo",
+            "deepseek/deepseek-v4-flash,deepseek/deepseek-chat,mistralai/mistral-nemo",
         ).split(",")
         if m.strip()
     ]

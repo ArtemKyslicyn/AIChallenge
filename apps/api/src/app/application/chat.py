@@ -111,6 +111,12 @@ class ReplyDraft:
     #: Read out of band by the judge, which has nothing to grade in an answer
     #: that errored, was cut off, or never found a model.
     status: str = ""
+    #: User question + metrics for ops analytics (fail-open capture).
+    prompt: str = ""
+    latency_ms: int | None = None
+    tokens_approx: int | None = None
+    cost_proxy: float | None = None
+    chat_mode: str | None = None
 
     @property
     def text(self) -> str:
@@ -254,6 +260,7 @@ async def send_user_message_and_stream(
     await uow.commit()
 
     draft.message_id = assistant.id
+    draft.prompt = text
 
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
 
@@ -330,6 +337,9 @@ async def send_user_message_and_stream(
             await uow.commit()
             draft.finished = True
             draft.status = status
+            draft.latency_ms = _elapsed_ms(time.monotonic())
+            draft.tokens_approx = max(1, len(answer) // 4) if answer else None
+            draft.cost_proxy = (cost_proxy or {}).get(model_id) if model_id else None
             # One save point for every ending — ok, aborted, exhausted, error.
             # A reader who hangs up never reaches here, and writes no trace.
             await save_trace(model_id, answer, status)
