@@ -36,6 +36,12 @@ services:
       - ./configs/scenarios:/app/configs/scenarios:ro
       - ./configs/lab:/app/configs/lab:ro
       - media_data:/app/data/media
+    networks:
+      default:
+        # Stable name for web nginx; avoids clash with ops-console service `api`
+        # when both share aichallenge_default.
+        aliases:
+          - aichallenge-api
     depends_on:
       db:
         condition: service_healthy
