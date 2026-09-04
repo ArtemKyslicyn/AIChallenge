@@ -60,7 +60,7 @@ export function LabTurnView({ turn, onOpenResults, expanded = true, onToggleExpa
       aria-label="Лаборатория: четыре стратегии промпта"
     >
       <header className="lab-turn-head">
-        <div>
+        <div className="lab-turn-copy">
           <h2 className="lab-turn-title">Лаборатория промптов</h2>
           <p className="lab-turn-task">{turn.taskDisplay}</p>
           <nav className="lab-run-strategies" aria-label="Перейти к стратегии">

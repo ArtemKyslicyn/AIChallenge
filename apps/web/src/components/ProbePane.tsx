@@ -30,7 +30,11 @@ export function ProbePane({
           <h3>{title}</h3>
           {subtitle && <p className="compare-pane-sub">{subtitle}</p>}
         </div>
-        {slot.modelId && <span className="badge">{slot.modelId}</span>}
+        {slot.modelId && (
+          <span className="badge" title={slot.modelId}>
+            {slot.modelId}
+          </span>
+        )}
       </header>
 
       {slot.loading && !hasExperts && (
