@@ -28,6 +28,7 @@ from app.application.media_tools import (
     maybe_needs_media_tools,
     tool_calls_from_completion,
 )
+from app.domain.media import VIDEO_TOOL_NAME
 from app.application.sessions import authorize_session, session_title_from_message
 from app.domain.cascade import CASCADE_OFF, AnswerScorer
 from app.domain.entities import (
@@ -117,6 +118,8 @@ class ReplyDraft:
     tokens_approx: int | None = None
     cost_proxy: float | None = None
     chat_mode: str | None = None
+    #: Media tool outcomes for ops analytics: [{kind, ok, provider, error?}]
+    media_jobs: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -376,6 +379,14 @@ async def send_user_message_and_stream(
             )
             if executed.error:
                 tool_failures += 1
+                draft.media_jobs.append(
+                    {
+                        "kind": "video" if call.name == VIDEO_TOOL_NAME else "image",
+                        "ok": False,
+                        "tool": call.name,
+                        "error": str(executed.error)[:200],
+                    }
+                )
                 yield ToolResultEvent(
                     name=call.name,
                     call_id=call.id,
@@ -383,6 +394,14 @@ async def send_user_message_and_stream(
                     error=executed.error,
                 )
             else:
+                draft.media_jobs.append(
+                    {
+                        "kind": "video" if call.name == VIDEO_TOOL_NAME else "image",
+                        "ok": True,
+                        "tool": call.name,
+                        "provider": executed.provider_label or "",
+                    }
+                )
                 yield ToolResultEvent(
                     name=call.name,
                     call_id=call.id,
