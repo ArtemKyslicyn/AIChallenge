@@ -66,12 +66,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
+ANALYTICS_TEXT_MAX = 24_000
+
+
+def _clip_analytics_text(value: str, limit: int = ANALYTICS_TEXT_MAX) -> str:
+    if len(value) <= limit:
+        return value
+    return value[:limit] + "…[truncated]"
+
+
 async def _emit_turn_analytics(
     container: Container,
     *,
     distinct_id: str,
     session_id: UUID,
     draft: ReplyDraft,
+    prompt: str = "",
 ) -> None:
     """Beacon one chat turn. Never raises into the stream path."""
     try:
@@ -84,15 +94,29 @@ async def _emit_turn_analytics(
         ]
         if draft.finished and draft.message_id is not None:
             status = draft.status or "unknown"
-            answer_chars = len(draft.text)
+            answer = draft.text
+            answer_chars = len(answer)
             props: dict[str, object] = {
                 "session_id": str(session_id),
                 "message_id": str(draft.message_id),
                 "status": status,
                 "answer_chars": answer_chars,
             }
+            question = (prompt or draft.prompt or "").strip()
+            if question:
+                props["prompt"] = _clip_analytics_text(question)
+            if answer:
+                props["answer"] = _clip_analytics_text(answer)
             if draft.model_id:
                 props["model_id"] = draft.model_id
+            if draft.latency_ms is not None:
+                props["latency_ms"] = draft.latency_ms
+            if draft.tokens_approx is not None:
+                props["tokens_approx"] = draft.tokens_approx
+            if draft.cost_proxy is not None:
+                props["cost_proxy"] = draft.cost_proxy
+            if draft.chat_mode:
+                props["chat_mode"] = draft.chat_mode
             # Failures are a separate growth event so reliability dashboards
             # can filter without scanning every completion status.
             failed = status in {"error", "exhausted"}
@@ -109,7 +133,11 @@ async def _emit_turn_analytics(
 
 
 def schedule_turn_analytics(
-    container: Container, session: Session, draft: ReplyDraft
+    container: Container,
+    session: Session,
+    draft: ReplyDraft,
+    *,
+    prompt: str = "",
 ) -> asyncio.Task[None] | None:
     """Fire-and-forget capture after the SSE body is done."""
     distinct = (session.visitor_hash or "").strip() or "anonymous"
@@ -119,6 +147,7 @@ def schedule_turn_analytics(
             distinct_id=distinct,
             session_id=session.id,
             draft=draft,
+            prompt=prompt,
         )
     )
 
@@ -447,7 +476,7 @@ async def send_message(
             # After the answer is delivered and durable, never before: the
             # judge measures this turn and has no right to be part of it.
             schedule_judgement(container, payload.content, draft)
-            schedule_turn_analytics(container, session, draft)
+            schedule_turn_analytics(container, session, draft, prompt=payload.content)
             await close_quietly(db)
 
     return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)

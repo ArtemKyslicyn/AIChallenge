@@ -1,7 +1,7 @@
 # Admin Analytics (Event Store + Multi-Product Console) — Design Spec
 
 **Date:** 2026-09-04  
-**Status:** Draft — awaiting review (revised: private multi-product repo)  
+**Status:** Active (pointer; full docs in private `ops-console` repo)  
 **Depends on:** AIChallenge v1 chat + traces/feedback as **one product source**  
 **Decision locked:** Option **A** — own Postgres event-store + admin UI (PostHog-*like* capture, not self-hosted PostHog)
 
@@ -10,8 +10,9 @@
 Private **ops / product console** for a small trusted circle:
 
 - multi-**product** dashboard (AIChallenge is the first product; more later)
-- uniques, visits, requests, funnels, model/ops graphs
+- uniques, visits, requests, funnels, model/ops graphs, users, costs
 - durable append-only **event store**
+- deep turn inspection in ops: prompt + answer + latency/tokens/cost (trusted circle only)
 
 Public AIChallenge chat stays anonymous. Console is **not** inside the chat SPA and **not** in the public AIChallenge git history as an implementation plan.
 
@@ -21,7 +22,6 @@ Public AIChallenge chat stays anonymous. Console is **not** inside the chat SPA 
 - No session replay / marketing pixels
 - No fine-grained RBAC (one admin role)
 - No secrets / LLM keys in the UI
-- No default storage of full prompts/completions
 - No admin UI inside `apps/web`
 - Implementation **plan** must not be committed to the public AIChallenge repo
 
@@ -37,6 +37,7 @@ Public AIChallenge chat stays anonymous. Console is **not** inside the chat SPA 
 | Analytics engine | Own Postgres event store + SQL aggregates |
 | Capture shape | PostHog-like `capture` (`event`, `distinct_id`, `properties`, `timestamp`, `product_id`) |
 | Auth | Dedicated admin session; not chat `X-Visitor-Id` |
+| Turn text | Stored in **ops** event `props` (`prompt`, `answer`), truncated; not exposed publicly |
 | Network | VPN / IP allowlist + app login |
 | Plans / internal docs | Keep **out of public git**; live in the private repo or local-only notes |
 
@@ -54,7 +55,7 @@ Public AIChallenge chat stays anonymous. Console is **not** inside the chat SPA 
 | `distinct_id` | usually visitor hash |
 | `session_id` | opaque string/UUID nullable |
 | `message_id` | nullable |
-| `props` | JSONB |
+| `props` | JSONB (may include prompt/answer/metrics) |
 | `source` | `api` \| `web` \| `admin` \| `system` |
 
 Indexes: `(product_id, event_time DESC)`, `(product_id, name, event_time DESC)`, `(product_id, distinct_id, event_time DESC)`.
@@ -83,7 +84,7 @@ private-repo/
   docs/         — specs & plans (private only)
 ```
 
-AIChallenge monorepo later adds only a **small emitter** (env: capture URL + ingest key + `product_id=aichallenge`). No admin SPA in AIChallenge.
+AIChallenge monorepo adds only a **small emitter** (env: capture URL + ingest key + `product_id=aichallenge`). No admin SPA in AIChallenge.
 
 ## 6. HTTP (console API)
 
@@ -92,22 +93,26 @@ AIChallenge monorepo later adds only a **small emitter** (env: capture URL + ing
 | `POST` | `/v1/capture` | ingest key | product beacons / server emits |
 | `POST` | `/v1/admin/login` | rate-limited | admin session |
 | `GET` | `/v1/admin/overview?product_id=&hours=` | admin | KPIs |
-| `GET` | `/v1/admin/timeseries` | admin | graphs |
+| `GET` | `/v1/admin/timeseries` | admin | graphs (zero-filled) |
 | `GET` | `/v1/admin/funnel` | admin | funnel |
-| `GET` | `/v1/admin/events` | admin | explore |
+| `GET` | `/v1/admin/events` | admin | explore (`hours`, filters) |
+| `GET` | `/v1/admin/models` | admin | model breakdown |
+| `GET` | `/v1/admin/users` | admin | visitors |
+| `GET` | `/v1/admin/costs` | admin | cost≈ |
 | `GET` | `/v1/admin/products` | admin | product switcher |
 
 ## 7. Admin UI
 
 - Login  
 - Product switcher  
-- Overview / Usage / Funnel / Explore for the **selected** product  
+- Overview / Users / Requests / Charts / Models / Costs / Funnel / Explore  
 - No cross-product PII join beyond `product_id`
 
-## 8. AIChallenge integration (later, thin)
+## 8. AIChallenge integration
 
 - Env names only: `ANALYTICS_CAPTURE_URL`, `ANALYTICS_INGEST_KEY`, `ANALYTICS_PRODUCT_ID`  
 - Emit on complete / feedback / optional `app_opened`  
+- Turn props may include `prompt`, `answer`, `latency_ms`, `tokens_approx`, `cost_proxy`  
 - Fail-open: analytics errors must not break chat  
 
 ## 9. Success criteria
@@ -115,10 +120,9 @@ AIChallenge monorepo later adds only a **small emitter** (env: capture URL + ing
 - Private repo runs console + capture for `product_id=aichallenge`  
 - Second product can be registered without schema redesign  
 - Public AIChallenge repo has no implementation plan for this console  
-- Chat UX unchanged until thin emitter is explicitly added  
+- Chat UX unchanged if analytics is down  
 
 ## 10. Open points
 
 - Private repo name / GitHub org  
-- Whether AIChallenge emitter ships in the same milestone as console MVP  
 - Cookie domain for `ops.` vs API host  
