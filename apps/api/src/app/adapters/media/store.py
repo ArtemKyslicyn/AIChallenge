@@ -36,8 +36,11 @@ class CompositeMediaGenerator:
         model: str = "flux",
         width: int = 1024,
         height: int = 1024,
+        seed: int | None = None,
     ) -> MediaArtifact:
-        return await self._images.generate_image(prompt, model=model, width=width, height=height)
+        return await self._images.generate_image(
+            prompt, model=model, width=width, height=height, seed=seed
+        )
 
     async def generate_video(self, prompt: str) -> MediaArtifact:
         if self._videos is None:

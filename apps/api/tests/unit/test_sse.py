@@ -3,6 +3,9 @@ from uuid import UUID
 
 from app.adapters.api.sse import SSE_HEADERS, event_to_frame, to_sse
 from app.application.chat import (
+    ComicEndEvent,
+    ComicPanelEvent,
+    ComicStartEvent,
     ErrorEvent,
     MessageEndEvent,
     ModelEvent,
@@ -77,6 +80,50 @@ def test_tool_frames() -> None:
     )
     assert result[0] == "tool_result"
     assert result[1]["media_url"] == "/api/v1/media/x"
+
+
+def test_comic_frames() -> None:
+    start = _parse(
+        event_to_frame(
+            ComicStartEvent(
+                comic_id="c1",
+                title="Metro",
+                panel_count=3,
+                characters=[{"id": "a", "name": "Cat", "look": "tabby"}],
+            )
+        )
+    )
+    assert start[0] == "comic_start"
+    assert start[1]["panel_count"] == 3
+    panel = _parse(
+        event_to_frame(
+            ComicPanelEvent(
+                comic_id="c1",
+                index=1,
+                status="ok",
+                text_mode="bubble",
+                image_url="/api/v1/media/p.jpg",
+                speaker="a",
+                dialogue="Hi",
+            )
+        )
+    )
+    assert panel == (
+        "comic_panel",
+        {
+            "comic_id": "c1",
+            "index": 1,
+            "status": "ok",
+            "image_url": "/api/v1/media/p.jpg",
+            "speaker": "a",
+            "dialogue": "Hi",
+            "caption": None,
+            "text_mode": "bubble",
+            "error": None,
+        },
+    )
+    end = _parse(event_to_frame(ComicEndEvent(comic_id="c1", ok_count=2, fail_count=1)))
+    assert end[1]["ok_count"] == 2
 
 
 def test_headers_disable_proxy_buffering() -> None:

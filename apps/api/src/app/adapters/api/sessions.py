@@ -140,19 +140,40 @@ async def _emit_turn_analytics(
                 if not job.get("ok"):
                     continue
                 kind = str(job.get("kind") or "image")
-                events.append(
-                    AnalyticsEvent(
-                        name="media_video_generated" if kind == "video" else "media_image_generated",
-                        distinct_id=distinct_id,
-                        properties={
-                            "session_id": str(session_id),
-                            "message_id": str(draft.message_id),
-                            "ok": True,
-                            "provider": job.get("provider") or "",
-                            "tool": job.get("tool") or "",
-                        },
+                if kind == "comic":
+                    events.append(
+                        AnalyticsEvent(
+                            name="comic_generated",
+                            distinct_id=distinct_id,
+                            properties={
+                                "session_id": str(session_id),
+                                "message_id": str(draft.message_id),
+                                "ok": True,
+                                "panel_count": job.get("panel_count") or 0,
+                                "ok_count": job.get("ok_count") or 0,
+                                "fail_count": job.get("fail_count") or 0,
+                                "provider": job.get("provider") or "",
+                                "tool": job.get("tool") or "",
+                                "model_id": draft.model_id or "",
+                            },
+                        )
                     )
-                )
+                else:
+                    events.append(
+                        AnalyticsEvent(
+                            name="media_video_generated"
+                            if kind == "video"
+                            else "media_image_generated",
+                            distinct_id=distinct_id,
+                            properties={
+                                "session_id": str(session_id),
+                                "message_id": str(draft.message_id),
+                                "ok": True,
+                                "provider": job.get("provider") or "",
+                                "tool": job.get("tool") or "",
+                            },
+                        )
+                    )
         await container.analytics.capture(events)
     except Exception:
         logger.warning("turn analytics emit failed session_id=%s", session_id, exc_info=True)

@@ -158,6 +158,7 @@ class MediaGenerator(Protocol):
         model: str = "flux",
         width: int = 1024,
         height: int = 1024,
+        seed: int | None = None,
     ) -> MediaArtifact: ...
 
     async def generate_video(self, prompt: str) -> MediaArtifact: ...

@@ -9,6 +9,9 @@ from typing import Any
 
 from app.application.chat import (
     ChatEvent,
+    ComicEndEvent,
+    ComicPanelEvent,
+    ComicStartEvent,
     ErrorEvent,
     MessageEndEvent,
     ModelEvent,
@@ -73,6 +76,40 @@ def event_to_frame(event: ChatEvent) -> str:
                     "media_url": event.media_url,
                     "provider_label": event.provider_label,
                     "error": event.error,
+                },
+            )
+        case ComicStartEvent():
+            return format_frame(
+                "comic_start",
+                {
+                    "comic_id": event.comic_id,
+                    "title": event.title,
+                    "panel_count": event.panel_count,
+                    "characters": event.characters,
+                },
+            )
+        case ComicPanelEvent():
+            return format_frame(
+                "comic_panel",
+                {
+                    "comic_id": event.comic_id,
+                    "index": event.index,
+                    "status": event.status,
+                    "image_url": event.image_url,
+                    "speaker": event.speaker,
+                    "dialogue": event.dialogue,
+                    "caption": event.caption,
+                    "text_mode": event.text_mode,
+                    "error": event.error,
+                },
+            )
+        case ComicEndEvent():
+            return format_frame(
+                "comic_end",
+                {
+                    "comic_id": event.comic_id,
+                    "ok_count": event.ok_count,
+                    "fail_count": event.fail_count,
                 },
             )
 
