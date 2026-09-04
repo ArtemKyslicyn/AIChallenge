@@ -16,6 +16,6 @@
 python3 challenges/05-model-tiers/run.py
 ```
 
-Артефакты: `results.json`, `RESULTS.md`, видео `challenge-05.webm`.
+Артефакты: `results.json`, `RESULTS.md`, видео **`challenge-05.mp4`** (и `.webm`).
 
 Формат сдачи: **Видео + Код**.
