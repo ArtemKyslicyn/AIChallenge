@@ -9,6 +9,7 @@ from app.application.comic import (
     build_panel_image_prompt,
     choose_text_mode,
     extract_comic_from_content,
+    panel_seed,
     parse_storyboard_json,
     serialize_comic_fence,
     storyboard_narration,
@@ -63,9 +64,28 @@ def test_panel_prompt_forbids_text() -> None:
         }
     )
     prompt = build_panel_image_prompt(board, board.panels[0])
+    assert prompt.lower().startswith("comic panel 1")
     assert "silver robot" in prompt
-    assert NO_TEXT_CLAUSE.split(",")[0] in prompt
     assert "no speech bubbles" in prompt
+    assert "not an empty cityscape" in prompt
+    assert panel_seed(board, board.panels[0]) != panel_seed(board, board.panels[1])
+
+
+def test_dialogue_alias_and_empty_fill() -> None:
+    board = parse_storyboard_json(
+        {
+            "title": "T",
+            "panels": [
+                {"visual": "cat waves", "speech": "Привет!"},
+                {"visual": "robot nods", "line": "Ок"},
+                {"visual": "both leave"},
+            ],
+        }
+    )
+    assert board.panels[0].dialogue == "Привет!"
+    assert board.panels[1].dialogue == "Ок"
+    assert board.panels[2].dialogue  # placeholder fill
+    assert board.panels[2].text_mode == "bubble"
 
 
 def test_fence_roundtrip() -> None:

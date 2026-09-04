@@ -15,10 +15,13 @@ function PanelCard({
 }) {
   const who = speakerName(characters, panel.speaker);
   const showBubble =
-    (panel.text_mode === "bubble" || panel.text_mode === "both") && Boolean(panel.dialogue);
+    Boolean(panel.dialogue) &&
+    (panel.text_mode === "bubble" ||
+      panel.text_mode === "both" ||
+      (!panel.caption && panel.text_mode !== "caption"));
   const showCaption =
-    (panel.text_mode === "caption" || panel.text_mode === "both" || !showBubble) &&
-    Boolean(panel.caption || (!showBubble && panel.dialogue));
+    Boolean(panel.caption) &&
+    (panel.text_mode === "caption" || panel.text_mode === "both" || !showBubble);
   const captionText = panel.caption || (!showBubble ? panel.dialogue : null);
 
   return (

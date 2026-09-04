@@ -24,6 +24,7 @@ from app.application.cascade import try_cheap_first
 from app.application.comic import (
     STORYBOARD_SYSTEM,
     build_panel_image_prompt,
+    panel_seed,
     parse_storyboard_json,
     serialize_comic_fence,
     storyboard_narration,
@@ -490,7 +491,11 @@ async def send_user_message_and_stream(
                         try:
                             media_limiter.check(session.id, IMAGE_TOOL_NAME)
                             artifact = await media_generator.generate_image(
-                                prompt, model="flux", seed=board.seed
+                                prompt,
+                                model="flux",
+                                width=768,
+                                height=768,
+                                seed=panel_seed(board, panel),
                             )
                             stored = await media_store.save(artifact)
                             media_limiter.record(session.id, IMAGE_TOOL_NAME)
@@ -528,7 +533,7 @@ async def send_user_message_and_stream(
                     )
                     fence = serialize_comic_fence(board)
                     accumulated.append(fence)
-                    yield TokenEvent(text=fence)
+                    # Persist fence in message content, but do not stream raw JSON to the UI.
                     if ok_count == 0:
                         tool_failures += 1
                         draft.media_jobs.append(
