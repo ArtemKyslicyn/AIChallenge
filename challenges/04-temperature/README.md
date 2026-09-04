@@ -15,6 +15,10 @@
 python3 challenges/04-temperature/run.py
 ```
 
-Артефакты: `results.json`, `RESULTS.md`, видео `challenge-04.webm` (после `challenges/record`).
+Артефакты: `results.json`, `RESULTS.md`, видео **`challenge-04.mp4`** (и `.webm`).
+
+```bash
+cd challenges/record && npm install && npx playwright install chromium && npm run record
+```
 
 Формат сдачи: **Видео + Код**.

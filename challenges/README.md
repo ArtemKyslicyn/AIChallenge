@@ -26,6 +26,6 @@ npx playwright install chromium
 npm run record
 ```
 
-Пишет `04-temperature/challenge-04.webm` и `05-model-tiers/challenge-05.webm`.
+Пишет `challenge-04.webm` / `.mp4` и `challenge-05.webm` / `.mp4` (нужен `ffmpeg`).
 
 Формат сдачи: **Видео + Код** (этот каталог + ролики).
