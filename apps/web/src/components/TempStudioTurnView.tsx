@@ -128,7 +128,7 @@ export function TempStudioTurnView({ turn }: Props) {
       aria-label={`Студия температуры: ${tempLabels}`}
     >
       <header className="lab-turn-head">
-        <div>
+        <div className="lab-turn-copy">
           <p className="temp-studio-kicker">Режим ×T · temperature</p>
           <h2 className="lab-turn-title">Студия температуры</h2>
           <p className="lab-turn-task">{turn.taskDisplay}</p>

@@ -1687,6 +1687,10 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--surface) 95%, var(--bg));
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .temp-studio-kicker {
@@ -1703,6 +1707,8 @@ textarea {
   font-size: 12px;
   line-height: 1.4;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .temp-studio-run-temps {
@@ -1710,6 +1716,7 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   margin: var(--space-2) 0 0;
+  max-width: 100%;
 }
 
 .temp-studio-pill {
@@ -1785,10 +1792,12 @@ textarea {
   line-height: 1.4;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
 }
 
 .temp-studio-winner-strip span {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Full-width stacked answers (not 3-col): long prose needs reading width. */
@@ -1796,17 +1805,23 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .temp-studio-frame {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   scroll-margin-top: 4.5rem;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 60%, transparent);
+  box-sizing: border-box;
 }
 
 .temp-studio-frame--cold {
@@ -1835,8 +1850,8 @@ textarea {
   gap: 6px 12px;
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface-2));
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface) 96%, var(--surface-2));
+  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
 }
 
 .temp-studio-frame-badge-main {
@@ -1844,6 +1859,7 @@ textarea {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 10rem;
 }
 
 .temp-studio-frame--cold .temp-studio-frame-badge {
@@ -1871,6 +1887,7 @@ textarea {
   font-size: 11px;
   line-height: 1.35;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .temp-studio-frame-wins {
@@ -1882,11 +1899,15 @@ textarea {
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 80%, transparent);
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .temp-studio-frame-body {
-  max-height: min(60vh, 28rem);
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .temp-studio-frame .compare-pane {
@@ -1895,6 +1916,25 @@ textarea {
   margin: 0;
   box-shadow: none;
   background: transparent;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.temp-studio-frame .compare-pane-head {
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.temp-studio-frame .compare-pane-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.temp-studio-frame .compare-pane-head > .badge,
+.temp-studio-verdict-head > .badge {
+  flex: 0 1 12rem;
+  max-width: min(100%, 14rem);
 }
 
 .temp-studio-frame .compare-pane-head h3 {
@@ -1903,8 +1943,11 @@ textarea {
   color: var(--text-muted);
 }
 
-.temp-studio-frame .compare-body {
-  max-height: none;
+.temp-studio-frame .compare-pane .body,
+.temp-studio-frame .md {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .temp-studio-verdict {
@@ -1914,6 +1957,10 @@ textarea {
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
   scroll-margin-top: 4.5rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .temp-studio-verdict-head {
@@ -1922,6 +1969,7 @@ textarea {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+  min-width: 0;
 }
 
 .temp-studio-verdict-head h3 {
@@ -1940,7 +1988,14 @@ textarea {
 
 .temp-studio-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
   margin-bottom: var(--space-2);
+  -webkit-overflow-scrolling: touch;
+}
+
+.temp-studio-table {
+  width: 100%;
+  min-width: 0;
 }
 
 .temp-studio-table th[scope="row"] {
@@ -1955,6 +2010,7 @@ textarea {
   font-size: 13px;
   line-height: 1.45;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .temp-studio-tips li + li {
@@ -1966,15 +2022,21 @@ textarea {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
-/* Lab ×4 grid */
+/* Lab ×4 */
 .lab-turn {
   margin: var(--space-4) 0;
   padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--surface) 95%, var(--bg));
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .lab-turn-head {
@@ -1984,6 +2046,13 @@ textarea {
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  min-width: 0;
+}
+
+.lab-turn-copy {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lab-turn-title {
@@ -1992,17 +2061,31 @@ textarea {
   font-weight: 650;
 }
 
-.lab-turn-task {
+.lab-turn-task,
+.lab-turn-winner,
+.lab-turn-progress {
   margin: 0;
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.lab-turn-winner,
+.lab-turn-progress {
+  margin-top: var(--space-2);
+}
+
+.lab-turn-winner strong {
+  color: var(--text);
 }
 
 .lab-turn-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 .lab-run-strategies {
@@ -2010,6 +2093,7 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   margin: var(--space-2) 0 0;
+  max-width: 100%;
 }
 
 .lab-strategy-pill {
@@ -2061,22 +2145,27 @@ textarea {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/* Full-width stack: 2×2 crushed long strategy answers. */
 .lab-stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lab-frame {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   scroll-margin-top: 4.5rem;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 60%, transparent);
+  box-sizing: border-box;
 }
 
 .lab-frame--neutral {
@@ -2113,8 +2202,8 @@ textarea {
   gap: 6px 12px;
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface-2));
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface) 96%, var(--surface-2));
+  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
 }
 
 .lab-frame--steps .lab-frame-badge {
@@ -2134,6 +2223,7 @@ textarea {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 10rem;
 }
 
 .lab-frame-title {
@@ -2147,6 +2237,7 @@ textarea {
   font-size: 11px;
   line-height: 1.35;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .lab-frame-badge-meta {
@@ -2154,6 +2245,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
 }
 
 .lab-frame-score {
@@ -2175,11 +2267,13 @@ textarea {
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--text);
+  max-width: 100%;
+  white-space: normal;
 }
 
 .lab-frame-body {
-  max-height: min(60vh, 28rem);
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lab-frame .compare-pane {
@@ -2188,6 +2282,25 @@ textarea {
   margin: 0;
   box-shadow: none;
   background: transparent;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.lab-frame .compare-pane-head {
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.lab-frame .compare-pane-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lab-frame .compare-pane-head > .badge,
+.lab-frame .expert-slot-head > .badge {
+  flex: 0 1 12rem;
+  max-width: min(100%, 14rem);
 }
 
 .lab-frame .compare-pane-head h3 {
@@ -2196,16 +2309,22 @@ textarea {
   color: var(--text-muted);
 }
 
-.lab-frame .compare-body {
-  max-height: none;
+.lab-frame .compare-pane .body,
+.lab-frame .md,
+.lab-compact-preview {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .lab-meta-preview {
   margin: 0 0 var(--space-2);
   font-size: 12px;
+  max-width: 100%;
 }
 
-.lab-meta-preview pre {
+.lab-meta-preview pre,
+.lab-frame .lab-meta-preview pre {
   margin: var(--space-1) 0 0;
   padding: var(--space-2);
   border-radius: var(--radius-md);
@@ -2214,7 +2333,23 @@ textarea {
   white-space: pre-wrap;
   font-size: 11px;
   max-height: 120px;
+  max-width: 100%;
   overflow: auto;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .lab-strategy-pill,
+  .temp-studio-pill,
+  .temp-studio-jump-verdict {
+    min-height: 36px;
+  }
+
+  .lab-frame,
+  .temp-studio-frame {
+    max-height: min(55vh, 24rem);
+  }
 }
 
 .empty-lab-lead {
