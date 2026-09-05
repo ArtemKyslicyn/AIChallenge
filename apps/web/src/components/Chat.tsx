@@ -340,7 +340,7 @@ export function Chat({
                     panel_count: event.panel_count,
                     characters: event.characters,
                     panels: emptyPanels(event.panel_count),
-                    layout: event.layout === "per_panel" ? "per_panel" : "single_page",
+                    layout: event.layout === "single_page" ? "single_page" : "per_panel",
                     page_image_url: null,
                   },
                   mediaJob: {
@@ -350,9 +350,9 @@ export function Chat({
                   },
                 });
                 setStatus(
-                  event.layout === "per_panel"
-                    ? `Комикс: ${event.panel_count} панелей…`
-                    : `Комикс: одна страница · ${event.panel_count} кадров…`,
+                  event.layout === "single_page"
+                    ? `Комикс: одна страница · ${event.panel_count} кадров…`
+                    : `Комикс: ${event.panel_count} панелей…`,
                 );
                 break;
               case "comic_panel":

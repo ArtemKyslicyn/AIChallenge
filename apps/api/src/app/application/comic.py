@@ -24,6 +24,41 @@ _FENCE_RE = re.compile(
     re.IGNORECASE,
 )
 _DIALOGUE_KEYS = ("dialogue", "line", "speech", "text", "said", "replica", "реплика")
+_CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+# GET /image/{prompt} URLs break or ignore the tail when the path is huge.
+_MAX_GET_PROMPT_CHARS = 700
+
+
+def _panel_dialogue(item: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    """Return (dialogue, caption, speaker) from loose LLM shapes."""
+    caption = _as_str(item.get("caption")) or None
+    speaker = _as_str(item.get("speaker")) or None
+    raw = None
+    for key in _DIALOGUE_KEYS:
+        if key in item and item.get(key) is not None:
+            raw = item.get(key)
+            break
+    if isinstance(raw, dict):
+        # {"cat": "Hi", "robot": "Yo", "caption": "..."}
+        lines: list[str] = []
+        for key, value in raw.items():
+            if str(key).lower() in {"caption", "narration", "note"}:
+                cap = _as_str(value)
+                if cap:
+                    caption = caption or cap
+                continue
+            text = _as_str(value)
+            if not text:
+                continue
+            if speaker is None:
+                speaker = str(key)
+            lines.append(text if len(raw) == 1 else f"{key}: {text}")
+        return (" / ".join(lines) if lines else None, caption, speaker)
+    if isinstance(raw, list):
+        bits = [_as_str(x) for x in raw if _as_str(x)]
+        return (" / ".join(bits) if bits else None, caption, speaker)
+    dialogue = _as_str(raw) if raw is not None else None
+    return (dialogue or None, caption, speaker)
 
 
 @dataclass(slots=True)
@@ -54,9 +89,9 @@ class ComicStoryboard:
     characters: list[ComicCharacter] = field(default_factory=list)
     panels: list[ComicPanel] = field(default_factory=list)
     comic_id: str = field(default_factory=lambda: uuid4().hex[:12])
-    #: One Pollinations page that contains the whole strip (preferred v1 layout).
+    #: Optional single-page art (legacy / experimental). Default is per_panel.
     page_image_url: str | None = None
-    layout: str = "single_page"  # single_page | per_panel (legacy)
+    layout: str = "per_panel"  # per_panel | single_page
 
     def character_map(self) -> dict[str, ComicCharacter]:
         return {c.id: c for c in self.characters}
@@ -121,8 +156,9 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
     for i, item in enumerate(panels_raw[:6]):
         if not isinstance(item, dict):
             continue
-        dialogue = _panel_dialogue(item)
-        caption = _as_str(item.get("caption")) or None
+        dialogue, caption, speaker = _panel_dialogue(item)
+        caption = caption or (_as_str(item.get("caption")) or None)
+        speaker = speaker or (_as_str(item.get("speaker")) or None)
         mode = _as_str(item.get("text_mode")).lower()
         if mode not in {"bubble", "caption", "both"}:
             mode = choose_text_mode(dialogue=dialogue, caption=caption)
@@ -131,12 +167,18 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
             caption = caption or dialogue
             dialogue = None if caption == dialogue else dialogue
             mode = "caption" if not dialogue else "both"
+        visual = (
+            _as_str(item.get("visual"))
+            or _as_str(item.get("scene"))
+            or _as_str(item.get("description"))
+            or _as_str(item.get("desc"))
+            or "comic panel scene with characters in the foreground"
+        )
         panels.append(
             ComicPanel(
                 index=i + 1,
-                visual=_as_str(item.get("visual") or item.get("scene") or item.get("description"))
-                or "comic panel scene with characters in the foreground",
-                speaker=_as_str(item.get("speaker")) or None,
+                visual=visual,
+                speaker=speaker,
                 dialogue=dialogue,
                 caption=caption,
                 text_mode=mode,
@@ -161,24 +203,42 @@ def parse_storyboard_json(raw: str | dict[str, Any]) -> ComicStoryboard:
         characters=characters,
         panels=panels,
         comic_id=_as_str(data.get("comic_id")) or uuid4().hex[:12],
+        layout="per_panel",
     )
     normalize_storyboard_speech(board)
     return board
 
 
-def _panel_dialogue(item: dict[str, Any]) -> str | None:
-    for key in _DIALOGUE_KEYS:
-        value = _as_str(item.get(key))
-        if value:
-            return value
-    return None
+def _short_look(look: str, *, max_chars: int = 120) -> str:
+    text = " ".join((look or "").split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rsplit(" ", 1)[0] + "…"
 
 
-def character_looks_line(board: ComicStoryboard) -> str:
+def character_looks_line(board: ComicStoryboard, *, compact: bool = False) -> str:
     if not board.characters:
-        return "main comic characters in the foreground, highly detailed and consistent"
-    parts = [f"{c.name} ({c.id}): {c.look}" for c in board.characters]
-    return "Character bible (identical in every panel): " + " | ".join(parts)
+        return "main comic characters in the foreground, consistent design"
+    if compact:
+        parts = [
+            f"{c.name}: {_short_look(c.look, max_chars=80)}" for c in board.characters[:4]
+        ]
+        return "same characters: " + "; ".join(parts)
+    parts = [f"{c.name} ({c.id}): {_short_look(c.look)}" for c in board.characters]
+    return "Character sheet: " + " | ".join(parts)
+
+
+def _englishish_scene(visual: str, panel_index: int) -> str:
+    """Prefer Latin prompts for Flux; Cyrillic tails are often ignored."""
+    scene = " ".join((visual or "").split())
+    if not scene:
+        return f"panel {panel_index} with the main characters acting"
+    if _CYRILLIC.search(scene) and not re.search(r"[A-Za-z]{3,}", scene):
+        return (
+            f"panel {panel_index} story beat from the brief, characters in the foreground, "
+            f"clear action (scene note was non-English)"
+        )
+    return scene[:220]
 
 
 def page_layout_instruction(panel_count: int) -> str:
@@ -204,44 +264,51 @@ def page_image_size(panel_count: int) -> tuple[int, int]:
     return 1024, 1408
 
 
+def _clip_prompt(text: str, *, limit: int = _MAX_GET_PROMPT_CHARS) -> str:
+    clean = " ".join((text or "").split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
 def build_comic_page_prompt(board: ComicStoryboard) -> str:
-    """Single-image comic page: all panels inside one artwork, no baked-in text."""
+    """Single-image comic page (experimental): keep short for GET URL limits."""
     n = len(board.panels)
-    beats: list[str] = []
-    for panel in board.panels:
-        scene = panel.visual.strip() or f"panel {panel.index} with the main characters"
-        beats.append(f"Panel {panel.index}: {scene}")
-    parts = [
-        f"Detailed {board.style or 'bold ink comic book'} illustration",
-        page_layout_instruction(n),
-        "Each panel shows a DIFFERENT moment of the same story; characters stay visually identical",
-        character_looks_line(board),
-        "Story beats: " + " // ".join(beats),
-        _FOREGROUND_CLAUSE,
-        "high detail faces, clothing folds, props, consistent proportions across panels",
-        NO_TEXT_CLAUSE,
-        "leave empty space near the top of each panel for speech bubbles",
+    beats = [
+        f"P{panel.index}:{_englishish_scene(panel.visual, panel.index)[:90]}"
+        for panel in board.panels
     ]
-    return ". ".join(p for p in parts if p)
+    style = (board.style or "bold ink comic, flat colors").strip()[:80]
+    parts = [
+        f"comic book page, {page_layout_instruction(n)}",
+        style,
+        character_looks_line(board, compact=True),
+        "different action each panel",
+        " // ".join(beats),
+        _FOREGROUND_CLAUSE,
+        NO_TEXT_CLAUSE,
+    ]
+    return _clip_prompt(". ".join(p for p in parts if p))
 
 
 def panel_seed(board: ComicStoryboard, panel: ComicPanel) -> int:
-    """Legacy per-panel seed (unused when layout is single_page)."""
     return int(board.seed) + int(panel.index) * 1009
 
 
 def build_panel_image_prompt(board: ComicStoryboard, panel: ComicPanel) -> str:
-    """Legacy single-panel prompt (kept for tests / future per_panel mode)."""
-    looks = character_looks_line(board)
-    scene = panel.visual.strip() or f"comic panel {panel.index} with the main characters"
+    """One Pollinations image per panel — Flux follows this much better than multi-grid pages."""
+    scene = _englishish_scene(panel.visual, panel.index)
+    style = (board.style or "clean comic book illustration, flat colors, bold outlines").strip()[
+        :90
+    ]
     parts = [
-        f"Comic panel {panel.index} of {len(board.panels)}: {scene}",
-        looks,
-        board.style or "clean comic book illustration, flat colors, bold outlines",
+        f"Comic panel {panel.index}/{len(board.panels)}: {scene}",
+        character_looks_line(board, compact=True),
+        style,
         _FOREGROUND_CLAUSE,
         NO_TEXT_CLAUSE,
     ]
-    return ". ".join(p for p in parts if p)
+    return _clip_prompt(". ".join(p for p in parts if p))
 
 
 def normalize_storyboard_speech(board: ComicStoryboard) -> None:
@@ -316,8 +383,8 @@ def extract_comic_from_content(content: str) -> ComicStoryboard | None:
         data = json.loads(match.group(1))
         board = parse_storyboard_json(data)
         page_url = _as_str(data.get("page_image_url")) or None
-        layout = _as_str(data.get("layout")) or "single_page"
-        board.layout = layout if layout in {"single_page", "per_panel"} else "single_page"
+        layout = _as_str(data.get("layout")) or "per_panel"
+        board.layout = layout if layout in {"single_page", "per_panel"} else "per_panel"
         board.page_image_url = page_url
         # Restore panel media status from persisted fields
         for i, panel in enumerate(board.panels):
@@ -338,19 +405,31 @@ def strip_comic_fence(content: str) -> str:
     return _FENCE_RE.sub("", content or "").strip()
 
 
-STORYBOARD_SYSTEM = """You are a comic storyboard planner for a SINGLE comic page image.
-Return ONLY one JSON object (no markdown) with keys:
-title, style, seed (int), characters[{id,name,look}], panels[{index,visual,speaker,dialogue,caption,text_mode}].
+STORYBOARD_SYSTEM = """You are a comic storyboard planner.
+Return ONLY one JSON object (no markdown fences) with this shape:
+{
+  "title": "...",
+  "style": "bold ink comic, flat cel shading",
+  "seed": 12345,
+  "characters": [{"id": "cat", "name": "Cat", "look": "orange tabby, blue scarf, green eyes, bipedal"}],
+  "panels": [
+    {
+      "index": 1,
+      "visual": "Cat waves on a metro platform, robot approaches",
+      "speaker": "cat",
+      "dialogue": "Hey!",
+      "caption": null,
+      "text_mode": "bubble"
+    }
+  ]
+}
 Rules:
-- panels length must be between 3 and 6 inclusive; choose count from the story.
-- Prefer keeping the user's dialogue wording when they supplied lines.
-- EVERY panel MUST include non-empty dialogue (spoken line) OR caption (narration). Prefer dialogue.
-- characters.look MUST be a rich English description (at least ~20 words each): species/age vibe,
-  face, hair/fur/metal, eye color, clothing with colors, signature props, body silhouette.
-  These looks will be copied into ONE page image so consistency depends on your detail.
-- visual: English description of THIS panel only — different camera/action than other panels.
-  Lead with who is doing what. Background is secondary.
-  Never ask for text/letters/bubbles in the image.
-- text_mode: "bubble" for short spoken lines, "caption" for narration or long text, "both" when needed.
-- style: short consistent art direction (e.g. "bold ink comic, flat cel shading, clean gutters").
+- panels length 3–6 inclusive.
+- Keep the user's spoken lines when they supplied dialogue (any language OK for dialogue/caption).
+- EVERY panel needs non-empty dialogue OR caption. Prefer short dialogue.
+- characters.look: English, ~15–40 words, distinctive colors/props (same sheet reused per panel).
+- visual: MUST be English. Lead with who does what. Different action each panel. No text/letters/bubbles in visual.
+- dialogue must be a STRING (not an object). speaker is a character id string.
+- text_mode: "bubble" | "caption" | "both".
+- style: short English art direction.
 """

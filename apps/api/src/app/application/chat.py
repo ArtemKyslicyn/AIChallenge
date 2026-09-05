@@ -23,8 +23,8 @@ from uuid import UUID, uuid4
 from app.application.cascade import try_cheap_first
 from app.application.comic import (
     STORYBOARD_SYSTEM,
-    build_comic_page_prompt,
-    page_image_size,
+    build_panel_image_prompt,
+    panel_seed,
     parse_storyboard_json,
     serialize_comic_fence,
     storyboard_narration,
@@ -190,7 +190,7 @@ class ComicStartEvent:
     title: str
     panel_count: int
     characters: list[dict[str, str]]
-    layout: str = "single_page"
+    layout: str = "per_panel"
 
 
 @dataclass(slots=True)
@@ -416,10 +416,12 @@ async def send_user_message_and_stream(
                 calls = []
         blocks: list[str] = []
         comic_finished = False
+        comic_attempted = False
         for call in calls[:2]:
             tool_rounds += 1
             yield ToolStartEvent(name=call.name, call_id=call.id)
             if call.name == COMIC_TOOL_NAME:
+                comic_attempted = True
                 args = call.arguments if isinstance(call.arguments, dict) else {}
                 brief = str(args.get("brief") or args.get("prompt") or text).strip() or text
                 try:
@@ -429,7 +431,8 @@ async def send_user_message_and_stream(
                             role=MessageRole.USER,
                             content=(
                                 "Build a comic storyboard JSON for this brief. "
-                                "Preserve user dialogue when present.\n\n"
+                                "Preserve user dialogue when present. "
+                                "visual fields MUST be English; dialogue may keep user language.\n\n"
                                 f"{brief}"
                             ),
                         ),
@@ -453,7 +456,9 @@ async def send_user_message_and_stream(
                                     role=MessageRole.USER,
                                     content=(
                                         "Previous output was invalid. "
-                                        f"Error: {exc}. Return ONLY valid JSON."
+                                        f"Error: {exc}. Return ONLY valid JSON. "
+                                        "dialogue must be a string, not an object. "
+                                        "visual must be English."
                                     ),
                                 ),
                             ]
@@ -465,8 +470,8 @@ async def send_user_message_and_stream(
                             last_err or "Не удалось собрать раскадровку комикса."
                         )
                     assert media_limiter is not None
-                    # One page image for the whole strip (not N Pollinations calls).
-                    media_limiter.check_images(session.id, 1)
+                    board.layout = "per_panel"
+                    media_limiter.check_images(session.id, len(board.panels))
                     if plan_model:
                         resolved_model = plan_model
                         draft.model_id = resolved_model
@@ -484,48 +489,41 @@ async def send_user_message_and_stream(
                             {"id": c.id, "name": c.name, "look": c.look}
                             for c in board.characters
                         ],
-                        layout="single_page",
+                        layout="per_panel",
                     )
                     ok_count = 0
                     fail_count = 0
                     assert media_generator is not None and media_store is not None
-                    page_url: str | None = None
-                    page_error: str | None = None
-                    try:
-                        media_limiter.check(session.id, IMAGE_TOOL_NAME)
-                        width, height = page_image_size(len(board.panels))
-                        artifact = await media_generator.generate_image(
-                            build_comic_page_prompt(board),
-                            model="flux",
-                            width=width,
-                            height=height,
-                            seed=board.seed,
-                        )
-                        stored = await media_store.save(artifact)
-                        media_limiter.record(session.id, IMAGE_TOOL_NAME)
-                        page_url = stored.public_path
-                        board.page_image_url = page_url
-                        board.layout = "single_page"
-                        ok_count = len(board.panels)
-                        for panel in board.panels:
-                            panel.image_url = page_url
+                    for panel in board.panels:
+                        prompt = build_panel_image_prompt(board, panel)
+                        try:
+                            media_limiter.check(session.id, IMAGE_TOOL_NAME)
+                            artifact = await media_generator.generate_image(
+                                prompt,
+                                model="flux",
+                                width=768,
+                                height=768,
+                                seed=panel_seed(board, panel),
+                            )
+                            stored = await media_store.save(artifact)
+                            media_limiter.record(session.id, IMAGE_TOOL_NAME)
+                            panel.image_url = stored.public_path
                             panel.status = "ok"
+                            ok_count += 1
                             yield ComicPanelEvent(
                                 comic_id=board.comic_id,
                                 index=panel.index,
                                 status="ok",
-                                image_url=page_url,
+                                image_url=panel.image_url,
                                 speaker=panel.speaker,
                                 dialogue=panel.dialogue,
                                 caption=panel.caption,
                                 text_mode=panel.text_mode,
                             )
-                    except (MediaGenerationError, MediaRateLimitError, OSError) as exc:
-                        page_error = str(exc)[:200]
-                        fail_count = len(board.panels)
-                        for panel in board.panels:
+                        except (MediaGenerationError, MediaRateLimitError, OSError) as exc:
+                            fail_count += 1
                             panel.status = "error"
-                            panel.error = page_error
+                            panel.error = str(exc)[:200]
                             yield ComicPanelEvent(
                                 comic_id=board.comic_id,
                                 index=panel.index,
@@ -534,7 +532,7 @@ async def send_user_message_and_stream(
                                 dialogue=panel.dialogue,
                                 caption=panel.caption,
                                 text_mode=panel.text_mode,
-                                error=page_error,
+                                error=panel.error,
                             )
                     yield ComicEndEvent(
                         comic_id=board.comic_id,
@@ -543,7 +541,6 @@ async def send_user_message_and_stream(
                     )
                     fence = serialize_comic_fence(board)
                     accumulated.append(fence)
-                    # Persist fence in message content, but do not stream raw JSON to the UI.
                     if ok_count == 0:
                         tool_failures += 1
                         draft.media_jobs.append(
@@ -551,18 +548,18 @@ async def send_user_message_and_stream(
                                 "kind": "comic",
                                 "ok": False,
                                 "tool": COMIC_TOOL_NAME,
-                                "error": page_error or "comic page failed",
+                                "error": "all panels failed",
                                 "panel_count": len(board.panels),
                                 "ok_count": 0,
                                 "fail_count": fail_count,
-                                "layout": "single_page",
+                                "layout": "per_panel",
                             }
                         )
                         yield ToolResultEvent(
                             name=call.name,
                             call_id=call.id,
                             status="error",
-                            error="Не удалось сгенерировать страницу комикса.",
+                            error="Не удалось сгенерировать панели комикса.",
                         )
                     else:
                         draft.media_jobs.append(
@@ -574,16 +571,15 @@ async def send_user_message_and_stream(
                                 "panel_count": len(board.panels),
                                 "ok_count": ok_count,
                                 "fail_count": fail_count,
-                                "layout": "single_page",
-                                "images": 1,
+                                "layout": "per_panel",
+                                "images": ok_count,
                             }
                         )
                         yield ToolResultEvent(
                             name=call.name,
                             call_id=call.id,
                             status="ok",
-                            media_url=page_url,
-                            provider_label="comic-page+pollinations",
+                            provider_label="comic+pollinations",
                         )
                         comic_finished = True
                 except (MediaGenerationError, MediaRateLimitError) as exc:
@@ -652,7 +648,16 @@ async def send_user_message_and_stream(
             first_token_at = time.monotonic()
             yield TokenEvent(text=media_prefix)
 
-        if comic_finished:
+        if comic_finished or comic_attempted:
+            if comic_attempted and not comic_finished and not accumulated:
+                fail_note = (
+                    "\n\nНе удалось собрать комикс. "
+                    "Попробуй короче описать сюжет и диалоги.\n"
+                )
+                accumulated.append(fail_note)
+                if first_token_at is None:
+                    first_token_at = time.monotonic()
+                yield TokenEvent(text=fail_note)
             end_model = resolved_model or "media-tools"
             draft.model_id = end_model
             if resolved_model is None:

@@ -106,7 +106,7 @@ function SinglePageStrip({ comic }: { comic: ComicStripState }) {
 }
 
 export function ComicStrip({ comic }: { comic: ComicStripState }) {
-  const layout = comic.layout || "single_page";
+    const layout = comic.layout || "per_panel";
   if (layout === "single_page") {
     return <SinglePageStrip comic={comic} />;
   }

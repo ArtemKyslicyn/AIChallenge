@@ -69,6 +69,8 @@ def test_panel_prompt_forbids_text() -> None:
     assert "no speech bubbles" in prompt
     assert "not an empty cityscape" in prompt
     assert panel_seed(board, board.panels[0]) != panel_seed(board, board.panels[1])
+    assert len(prompt) <= 700
+    assert board.layout == "per_panel"
 
 
 def test_comic_page_prompt_is_one_image() -> None:
@@ -99,10 +101,34 @@ def test_comic_page_prompt_is_one_image() -> None:
     )
     prompt = build_comic_page_prompt(board)
     assert "2x2" in page_layout_instruction(4) or "2x2" in prompt
-    assert "Panel 1:" in prompt and "Panel 4:" in prompt
+    assert "P1:" in prompt and "P4:" in prompt
     assert "orange tabby" in prompt
     assert "no speech bubbles" in prompt
-    assert "Character bible" in prompt
+    assert len(prompt) <= 700
+
+
+def test_dialogue_nested_object_and_description_key() -> None:
+    board = parse_storyboard_json(
+        {
+            "title": "Metro",
+            "panels": [
+                {
+                    "number": 1,
+                    "description": "cat waves on platform",
+                    "dialogue": {"cat": "Эй!"},
+                },
+                {
+                    "description": "robot bows",
+                    "dialogue": {"robot": "Привет"},
+                },
+                {"description": "both board train", "dialogue": {"cat": "Поехали"}},
+            ],
+        }
+    )
+    assert board.panels[0].dialogue == "Эй!"
+    assert board.panels[0].speaker == "cat"
+    assert "platform" in board.panels[0].visual
+    assert board.layout == "per_panel"
 
 
 def test_dialogue_alias_and_empty_fill() -> None:
