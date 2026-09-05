@@ -50,6 +50,9 @@ class PollinationsImageClient:
         clean = " ".join((prompt or "").split())
         if not clean:
             raise MediaGenerationError("Пустой промпт для картинки.")
+        # Long path segments get truncated/ignored by CDNs and Flux.
+        if len(clean) > 900:
+            clean = clean[:899].rsplit(" ", 1)[0] + "…"
         encoded = quote(clean, safe="")
         params = [
             f"model={quote(str(model or 'flux'))}",

@@ -52,8 +52,8 @@ export function extractComicFromContent(content: string): ComicStripState | null
       typeof (data as { page_image_url?: unknown }).page_image_url === "string"
         ? (data as { page_image_url: string }).page_image_url
         : null;
-    const layoutRaw = String((data as { layout?: unknown }).layout || "single_page");
-    const layout = layoutRaw === "per_panel" ? "per_panel" : "single_page";
+    const layoutRaw = String((data as { layout?: unknown }).layout || "per_panel");
+    const layout = layoutRaw === "single_page" ? "single_page" : "per_panel";
     const panels: ComicPanelState[] = panelsRaw.map((p, i) => {
       const statusRaw = String(p.status || "");
       const image_url =

@@ -3,7 +3,7 @@
 **Date:** 2026-09-04  
 **Status:** Implemented (v1)  
 **Depends on:** chat SSE, media tools (`MEDIA_TOOLS_ENABLED`), Pollinations image adapter, media store  
-**Approach:** single chat tool `generate_comic` + server-side storyboard + **one Pollinations page image** (all panels inside) + HTML dialogue overlays (not baked into the image)
+**Approach:** single chat tool `generate_comic` + server-side storyboard + **one Pollinations image per panel** (Flux follows single scenes better than multi-panel pages) + HTML dialogue overlays (not baked into the image)
 
 ## Goal
 
@@ -29,10 +29,12 @@ User writes a free-form request in normal chat («нарисуй комикс…
 | On-image text | Forbidden in prompts; UI overlay only |
 | Overlay | Short dialogue → bubble; long / narrative → caption (or both) |
 | Consistency | Style bible + character sheet + shared `seed`; sheet repeated in every panel prompt |
-| Progress | Text storyboard tokens first → `comic_start` skeletons → panels via SSE |
-| Architecture | Approach 1: one tool `generate_comic`; server owns storyboard JSON + Pollinations loop |
-| Rate limit | Do **not** start a comic if remaining image budget &lt; planned `panel_count` |
-| Parallelism | Sequential panel generation in v1 |
+| Progress | Text storyboard tokens first → `comic_start` skeleton → **N** panel images via SSE |
+| Architecture | Approach 1: one tool `generate_comic`; server owns storyboard JSON + Pollinations per panel |
+| Rate limit | Do **not** start a comic if remaining image budget &lt; **panel count** |
+| Parallelism | Sequential panels in v1 (simpler rate limits + clearer SSE) |
+| Layout | Default **`per_panel`**. `single_page` kept as experimental (Flux often ignores multi-grid prompts) |
+| Failures | After `generate_comic` attempt (ok or fail), **do not** fall through to free chat that invents fake `comic+json` |
 
 ## Flow
 
