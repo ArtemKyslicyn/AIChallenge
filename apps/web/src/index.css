@@ -4268,6 +4268,287 @@ textarea {
   .shell-mode-btn {
     padding: 0.35rem 0.55rem;
   }
+
+  .agent-rail {
+    display: none;
+  }
+
+  .agent-workshop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-panels--split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Multi-agent workspace */
+.agent-workshop-lead {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.agent-workshop-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.agent-rail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agent-rail-head {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-rail-search {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.5rem;
+}
+
+.agent-rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+  overflow: auto;
+  flex: 1;
+}
+
+.agent-rail-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.agent-rail-item {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.agent-rail-item:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.agent-rail-item.is-active {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.agent-rail-item.is-open:not(.is-active) {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.agent-rail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-rail-item-actions {
+  display: flex;
+  gap: 0;
+}
+
+.agent-rail-item-actions .ghost-button {
+  padding: 0.2rem 0.35rem;
+  font-size: 12px;
+  min-width: 1.5rem;
+}
+
+.agent-rail-foot {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+.agent-panels {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.agent-panels--split {
+  grid-template-columns: 1fr 1fr;
+}
+
+.agent-panel {
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agent-panel--focus {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.agent-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.agent-panel-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.agent-panel-tools {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.agent-busy-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+  animation: agent-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.agent-panel-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.2fr);
+  gap: 0;
+}
+
+.agent-panel-split .agent-workshop-builder,
+.agent-panel-split .agent-workshop-dialog {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-panel-split .agent-workshop-builder {
+  border-right: 1px solid var(--border);
+}
+
+.agent-panel-compact {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-panel-settings {
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-panel-settings > summary {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-size: 12px;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.agent-panel-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-panel-settings[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-panel-settings .agent-builder {
+  max-height: 40vh;
+}
+
+.agent-panel-compact .agent-workshop-dialog {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-how-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.agent-builder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agent-workshop--split .agent-workshop-body {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-busy-dot {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
