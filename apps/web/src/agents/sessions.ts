@@ -5,6 +5,10 @@ export interface RunLine {
   role: "user" | "assistant" | "error" | "status";
   text: string;
   modelId?: string | null;
+  /** e.g. команда · parallel · abc123 */
+  tag?: string;
+  /** Display name when line is a handoff / peer message */
+  speaker?: string;
 }
 
 export interface AgentSession {
