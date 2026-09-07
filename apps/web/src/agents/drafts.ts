@@ -6,10 +6,12 @@ export interface AgentDraft extends AgentDefinitionDto {
 }
 
 const KEY = "aichallenge.agent_drafts.v1";
-const MAX_DRAFTS = 20;
+export const MAX_DRAFTS = 20;
 
 export interface AgentDraftStore {
   activeId: string;
+  /** Up to 2 ids for side-by-side panels (first = primary). */
+  panelIds: string[];
   drafts: AgentDraft[];
 }
 
@@ -31,15 +33,35 @@ export function blankDraft(partial?: Partial<AgentDefinitionDto>): AgentDraft {
   };
 }
 
+export function duplicateDraft(source: AgentDraft): AgentDraft {
+  return {
+    ...source,
+    id: uid(),
+    name: `${source.name.replace(/\s*\(копия( \d+)?\)$/, "")} (копия)`.slice(0, 120),
+    updatedAt: Date.now(),
+  };
+}
+
+function normalizePanels(panelIds: string[] | undefined, drafts: AgentDraft[], activeId: string): string[] {
+  const ids = (panelIds ?? [activeId])
+    .filter((id) => drafts.some((d) => d.id === id))
+    .slice(0, 2);
+  if (ids.length === 0 && drafts[0]) return [drafts[0].id];
+  if (!ids.includes(activeId) && drafts.some((d) => d.id === activeId)) {
+    return [activeId, ...ids.filter((id) => id !== activeId)].slice(0, 2);
+  }
+  return ids;
+}
+
 export function loadDraftStore(seed: AgentDraft): AgentDraftStore {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) {
-      return { activeId: seed.id, drafts: [seed] };
+      return { activeId: seed.id, panelIds: [seed.id], drafts: [seed] };
     }
-    const parsed = JSON.parse(raw) as AgentDraftStore;
+    const parsed = JSON.parse(raw) as Partial<AgentDraftStore>;
     if (!parsed || !Array.isArray(parsed.drafts) || parsed.drafts.length === 0) {
-      return { activeId: seed.id, drafts: [seed] };
+      return { activeId: seed.id, panelIds: [seed.id], drafts: [seed] };
     }
     const drafts = parsed.drafts
       .filter((d) => d && typeof d.id === "string")
@@ -53,12 +75,16 @@ export function loadDraftStore(seed: AgentDraft): AgentDraftStore {
         max_tokens: typeof d.max_tokens === "number" ? d.max_tokens : 512,
         updatedAt: typeof d.updatedAt === "number" ? d.updatedAt : Date.now(),
       }));
-    if (!drafts.length) return { activeId: seed.id, drafts: [seed] };
+    if (!drafts.length) return { activeId: seed.id, panelIds: [seed.id], drafts: [seed] };
     const activeId =
-      drafts.some((d) => d.id === parsed.activeId) ? parsed.activeId : drafts[0].id;
-    return { activeId, drafts };
+      drafts.some((d) => d.id === parsed.activeId) ? String(parsed.activeId) : drafts[0].id;
+    return {
+      activeId,
+      panelIds: normalizePanels(parsed.panelIds, drafts, activeId),
+      drafts,
+    };
   } catch {
-    return { activeId: seed.id, drafts: [seed] };
+    return { activeId: seed.id, panelIds: [seed.id], drafts: [seed] };
   }
 }
 
@@ -69,11 +95,10 @@ export function saveDraftStore(store: AgentDraftStore): void {
   const activeId = drafts.some((d) => d.id === store.activeId)
     ? store.activeId
     : drafts[0]?.id ?? "";
-  localStorage.setItem(KEY, JSON.stringify({ activeId, drafts }));
+  const panelIds = normalizePanels(store.panelIds, drafts, activeId);
+  localStorage.setItem(KEY, JSON.stringify({ activeId, panelIds, drafts }));
 }
 
 export function canAddDraft(store: AgentDraftStore): boolean {
   return store.drafts.length < MAX_DRAFTS;
 }
-
-export { MAX_DRAFTS };
