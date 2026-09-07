@@ -1,7 +1,7 @@
 # First Agent (Day 6) — Design Spec
 
 **Date:** 2026-09-07  
-**Status:** Implemented (v1)  
+**Status:** Implemented (v1 + Day 6.1 client team)  
 **Depends on:** `ChatRouter` / `GenerationParams`, probe-style LLM path, web App shell (no react-router)  
 **Challenge format:** Video + Code (`challenges/06-first-agent/`)  
 **Frontend skill:** `.cursor/skills/aichallenge-frontend/SKILL.md`  
@@ -11,27 +11,40 @@
 
 Реализовать **первого агента** как отдельную **серверную инкапсуляцию** настройки и вызова LLM: `AgentDefinition` (system prompt, model, temperature, max_tokens, …) + application use case `run_agent`. Снаружи HTTP/UI/challenge видят только результат (`content` + обязательный `model_id`).
 
-В UI — отдельный workspace **«Агенты»** (shell mode), где можно собрать definition и прогнать **одиночные** запросы. Это не multi-turn chat с памятью и не вкладка в «Модели».
+В UI — отдельный workspace **«Агенты»** (shell mode), где можно собрать definition, прогнать **одиночные** запросы и (Day 6.1) оркестрировать **пачку** агентов на клиенте. Это не multi-turn chat с серверной памятью и не вкладка в «Модели».
 
 **Disambiguation:** product UI «Агенты» ≠ coding agents (`AGENTS.md`) ≠ media **agent loop** (tool rounds in chat). В коде нет bare type `Agent` — только `AgentDefinition` + `run_agent`.
 
 ## Non-goals (Day 6 / v1)
 
-- Визуальный editor графа / multi-agent orchestration UI (и никакой заморозки HTTP-контракта «под граф»)
+- Визуальный editor графа / заморозка HTTP-контракта «под граф»
 - Postgres-таблица агентов или server-side history диалогов
-- Multi-turn memory внутри одного agent run (история реплик в UI — только лог независимых прогонов)
+- Multi-turn memory внутри одного agent run (история реплик в UI — только лог независимых прогонов; handoff/roundtable собирают текст на клиенте)
 - Tools / function-calling внутри agent run
 - Замена основного чата или Scenario YAML
 - Streaming SSE для agent run (`complete_chat` → JSON)
 - Отдельный react-router `/agents`
 - Второй YAML-tree `configs/agents/` (пресеты — на клиенте)
 - Domain-слой, который сам вызывает `ChatRouter`
+- Server-side batch/orchestration endpoint (клиент вызывает N× `POST …/run`)
+
+## Day 6.1 — Client team orchestration
+
+Опираясь на паттерны AutoGen / CrewAI / handoff (parallel fan-out, sequential chain, peer roundtable):
+
+| Mode | Behavior |
+|------|----------|
+| Параллельно | Одна задача → все выбранные агенты сразу |
+| Цепочка | A → B → C; следующий получает handoff с ответом предыдущего |
+| Обсуждение | Раунд 1 параллельно; раунд 2 каждый комментирует остальных |
+
+UI: чекбоксы в rail, общая полоса задачи, лента команды + теги в личных логах. HTTP без изменений.
 
 ## Locked decisions
 
 | Topic | Choice |
 |-------|--------|
-| Scope | Один definition + workshop + одиночные runs; граф — отдельный день, без stub в UI/API |
+| Scope | Definition + workshop + runs; client team modes (Day 6.1); graph editor — later |
 | Encapsulation | Application `run_agent` + domain `AgentDefinition` (pure validate/clamp only). HTTP не зовёт `/llm/complete` для этой фичи |
 | Dialog semantics | **Stateless runs.** UI transcript = журнал независимых `run` (каждый: definition + один user message). Подпись: «Каждый вопрос — отдельный прогон» |
 | Storage | Черновики в **localStorage**; run body = полный `definition` (ephemeral) |

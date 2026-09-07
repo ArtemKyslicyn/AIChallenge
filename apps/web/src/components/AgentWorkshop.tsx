@@ -16,6 +16,13 @@ import {
   type AgentDraftStore,
   MAX_DRAFTS,
 } from "../agents/drafts";
+import {
+  buildChainHandoff,
+  buildRoundtableFollowup,
+  TEAM_MODE_HINT,
+  TEAM_MODE_LABEL,
+  type TeamMode,
+} from "../agents/orchestrate";
 import { AGENT_PRESETS } from "../agents/presets";
 import {
   emptySession,
@@ -30,6 +37,21 @@ function draftById(store: AgentDraftStore, id: string): AgentDraft | undefined {
   return store.drafts.find((d) => d.id === id);
 }
 
+function uid(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID().slice(0, 8)
+    : String(Date.now()).slice(-8);
+}
+
+interface TeamEvent {
+  id: string;
+  kind: "task" | "reply" | "error" | "status";
+  agentName?: string;
+  text: string;
+  modelId?: string | null;
+  tag?: string;
+}
+
 export function AgentWorkshop() {
   const titleId = useId();
   const [store, setStore] = useState<AgentDraftStore>(() =>
@@ -41,7 +63,13 @@ export function AgentWorkshop() {
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [mobileSheet, setMobileSheet] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [teamMode, setTeamMode] = useState<TeamMode>("parallel");
+  const [teamTask, setTeamTask] = useState("");
+  const [teamLog, setTeamLog] = useState<TeamEvent[]>([]);
+  const [teamBusy, setTeamBusy] = useState(false);
   const abortMap = useRef<Map<string, AbortController>>(new Map());
+  const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
   const sessionTimer = useRef<number | null>(null);
 
@@ -79,8 +107,14 @@ export function AgentWorkshop() {
     return () => {
       for (const c of abortMap.current.values()) c.abort();
       abortMap.current.clear();
+      teamAbort.current?.abort();
     };
   }, []);
+
+  // Drop selection for deleted agents
+  useEffect(() => {
+    setSelectedIds((prev) => prev.filter((id) => store.drafts.some((d) => d.id === id)));
+  }, [store.drafts]);
 
   const modelOptions = useMemo(() => {
     const ids = new Set(models.map((m) => m.id));
@@ -112,6 +146,10 @@ export function AgentWorkshop() {
     });
   }
 
+  function pushTeam(ev: Omit<TeamEvent, "id">) {
+    setTeamLog((prev) => [...prev, { ...ev, id: `t-${Date.now()}-${Math.random()}` }]);
+  }
+
   function patchDraft(id: string, patch: Partial<AgentDraft>) {
     setStore((prev) => ({
       ...prev,
@@ -121,12 +159,26 @@ export function AgentWorkshop() {
     }));
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function selectAllFiltered() {
+    setSelectedIds(filteredDrafts.map((d) => d.id));
+  }
+
+  function clearSelect() {
+    setSelectedIds([]);
+  }
+
   function focusAgent(id: string) {
     setStore((prev) => {
-      const panelIds = prev.panelIds.includes(id)
+      const nextPanels = prev.panelIds.includes(id)
         ? prev.panelIds
         : [id, ...prev.panelIds.filter((x) => x !== id)].slice(0, 2);
-      return { ...prev, activeId: id, panelIds: split ? panelIds : [id] };
+      return { ...prev, activeId: id, panelIds: split ? nextPanels : [id] };
     });
     setMobileSheet(false);
   }
@@ -155,6 +207,7 @@ export function AgentWorkshop() {
       panelIds: split ? [next.id, ...prev.panelIds].slice(0, 2) : [next.id],
       drafts: [next, ...prev.drafts],
     }));
+    setSelectedIds((prev) => [...prev, next.id]);
   }
 
   function createFromPreset(index: number) {
@@ -198,14 +251,15 @@ export function AgentWorkshop() {
       delete next[id];
       return next;
     });
+    setSelectedIds((prev) => prev.filter((x) => x !== id));
     setStore((prev) => {
       const drafts = prev.drafts.filter((x) => x.id !== id);
       const activeId = prev.activeId === id ? drafts[0].id : prev.activeId;
-      const panelIds = prev.panelIds.filter((x) => x !== id);
+      const nextPanels = prev.panelIds.filter((x) => x !== id);
       return {
         drafts,
         activeId,
-        panelIds: panelIds.length ? panelIds : [activeId],
+        panelIds: nextPanels.length ? nextPanels : [activeId],
       };
     });
   }
@@ -214,23 +268,39 @@ export function AgentWorkshop() {
     patchSession(id, { log: [], status: "" });
   }
 
-  async function send(agentId: string) {
+  /** Core run used by single compose and team orchestration. */
+  async function runOne(
+    agentId: string,
+    message: string,
+    opts?: { tag?: string; signal?: AbortSignal; clearInput?: boolean },
+  ): Promise<{ content: string; model_id: string } | null> {
     const draft = draftById(store, agentId);
-    const session = ensureSession(sessions, agentId);
-    const message = session.input.trim();
-    if (!draft || !message || busyIds[agentId]) return;
+    if (!draft) return null;
     if (!draft.system_prompt.trim()) {
       patchSession(agentId, { status: "Заполните инструкцию агента." });
-      setStore((prev) => ({ ...prev, activeId: agentId }));
-      setMobileSheet(true);
-      return;
+      return null;
     }
 
-    appendLog(agentId, { id: `u-${Date.now()}`, role: "user", text: message });
-    patchSession(agentId, { input: "", status: "Ждём ответ…" });
+    const tag = opts?.tag;
+    appendLog(agentId, {
+      id: `u-${Date.now()}-${agentId}`,
+      role: "user",
+      text: message,
+      tag,
+    });
+    patchSession(agentId, {
+      status: "Ждём ответ…",
+      ...(opts?.clearInput ? { input: "" } : {}),
+    });
     setBusyIds((prev) => ({ ...prev, [agentId]: true }));
 
     const controller = new AbortController();
+    const external = opts?.signal;
+    const onAbort = () => controller.abort();
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener("abort", onAbort, { once: true });
+    }
     abortMap.current.get(agentId)?.abort();
     abortMap.current.set(agentId, controller);
 
@@ -247,27 +317,38 @@ export function AgentWorkshop() {
         controller.signal,
       );
       appendLog(agentId, {
-        id: `a-${Date.now()}`,
+        id: `a-${Date.now()}-${agentId}`,
         role: "assistant",
         text: result.content,
         modelId: result.model_id,
+        tag,
+        speaker: draft.name,
       });
       patchSession(agentId, { status: "" });
+      return result;
     } catch (e) {
       if (controller.signal.aborted) {
         appendLog(agentId, {
           id: `s-${Date.now()}`,
           role: "status",
           text: "Запрос отменён.",
+          tag,
         });
         patchSession(agentId, { status: "" });
       } else {
         const msg =
           e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
-        appendLog(agentId, { id: `e-${Date.now()}`, role: "error", text: msg });
+        appendLog(agentId, {
+          id: `e-${Date.now()}`,
+          role: "error",
+          text: msg,
+          tag,
+        });
         patchSession(agentId, { status: "Не удалось получить ответ." });
       }
+      return null;
     } finally {
+      if (external) external.removeEventListener("abort", onAbort);
       setBusyIds((prev) => {
         const next = { ...prev };
         delete next[agentId];
@@ -277,8 +358,180 @@ export function AgentWorkshop() {
     }
   }
 
+  async function send(agentId: string) {
+    const session = ensureSession(sessions, agentId);
+    const message = session.input.trim();
+    if (!message || busyIds[agentId]) return;
+    await runOne(agentId, message, { clearInput: true });
+  }
+
   function stop(agentId: string) {
     abortMap.current.get(agentId)?.abort();
+  }
+
+  function stopTeam() {
+    teamAbort.current?.abort();
+  }
+
+  async function runTeam() {
+    const task = teamTask.trim();
+    const ids = store.drafts
+      .map((d) => d.id)
+      .filter((id) => selectedIds.includes(id));
+    if (!task) {
+      window.alert("Введите задачу для команды.");
+      return;
+    }
+    if (ids.length < 1) {
+      window.alert("Отметьте агентов в списке слева (чекбоксы).");
+      return;
+    }
+    if (teamMode === "chain" && ids.length < 2) {
+      window.alert("Для цепочки нужно минимум 2 агента.");
+      return;
+    }
+    if (teamMode === "roundtable" && ids.length < 2) {
+      window.alert("Для обсуждения нужно минимум 2 агента.");
+      return;
+    }
+
+    const runId = uid();
+    const tag = `команда · ${TEAM_MODE_LABEL[teamMode]} · ${runId}`;
+    const controller = new AbortController();
+    teamAbort.current?.abort();
+    teamAbort.current = controller;
+    setTeamBusy(true);
+    pushTeam({ kind: "task", text: task, tag });
+
+    // Open selected agents in split when 2
+    if (ids.length >= 2) {
+      setStore((prev) => ({
+        ...prev,
+        activeId: ids[0],
+        panelIds: ids.slice(0, 2),
+      }));
+    }
+
+    try {
+      if (teamMode === "parallel") {
+        await Promise.all(
+          ids.map(async (id) => {
+            const d = draftById(store, id)!;
+            const result = await runOne(id, task, { tag, signal: controller.signal, clearInput: false });
+            if (result) {
+              pushTeam({
+                kind: "reply",
+                agentName: d.name,
+                text: result.content,
+                modelId: result.model_id,
+                tag,
+              });
+            } else if (!controller.signal.aborted) {
+              pushTeam({ kind: "error", agentName: d.name, text: "Нет ответа", tag });
+            }
+          }),
+        );
+      } else if (teamMode === "chain") {
+        let previous: { name: string; content: string } | null = null;
+        for (let i = 0; i < ids.length; i++) {
+          if (controller.signal.aborted) break;
+          const id = ids[i];
+          const d = draftById(store, id)!;
+          const message =
+            previous == null
+              ? task
+              : buildChainHandoff({
+                  task,
+                  fromName: previous.name,
+                  fromContent: previous.content,
+                  step: i + 1,
+                  total: ids.length,
+                });
+          pushTeam({
+            kind: "status",
+            agentName: d.name,
+            text: previous
+              ? `Handoff от «${previous.name}» → «${d.name}»`
+              : `Старт цепочки → «${d.name}»`,
+            tag,
+          });
+          const result = await runOne(id, message, {
+            tag,
+            signal: controller.signal,
+            clearInput: false,
+          });
+          if (!result) {
+            pushTeam({ kind: "error", agentName: d.name, text: "Цепочка прервана", tag });
+            break;
+          }
+          pushTeam({
+            kind: "reply",
+            agentName: d.name,
+            text: result.content,
+            modelId: result.model_id,
+            tag,
+          });
+          previous = { name: d.name, content: result.content };
+        }
+      } else {
+        // Roundtable: round 1 parallel, round 2 peer review
+        const round1: { id: string; name: string; content: string }[] = [];
+        await Promise.all(
+          ids.map(async (id) => {
+            const d = draftById(store, id)!;
+            const result = await runOne(id, task, {
+              tag: `${tag} · R1`,
+              signal: controller.signal,
+              clearInput: false,
+            });
+            if (result) {
+              round1.push({ id, name: d.name, content: result.content });
+              pushTeam({
+                kind: "reply",
+                agentName: d.name,
+                text: result.content,
+                modelId: result.model_id,
+                tag: `${tag} · R1`,
+              });
+            }
+          }),
+        );
+        if (controller.signal.aborted || round1.length < 2) {
+          pushTeam({ kind: "status", text: "Обсуждение: раунд 2 пропущен", tag });
+        } else {
+          pushTeam({ kind: "status", text: "Раунд 2 — агенты отвечают друг другу", tag });
+          await Promise.all(
+            round1.map(async (self) => {
+              const message = buildRoundtableFollowup({
+                task,
+                selfName: self.name,
+                peers: round1.map((p) => ({ name: p.name, content: p.content })),
+              });
+              const result = await runOne(self.id, message, {
+                tag: `${tag} · R2`,
+                signal: controller.signal,
+                clearInput: false,
+              });
+              if (result) {
+                pushTeam({
+                  kind: "reply",
+                  agentName: self.name,
+                  text: result.content,
+                  modelId: result.model_id,
+                  tag: `${tag} · R2`,
+                });
+              }
+            }),
+          );
+        }
+      }
+      if (controller.signal.aborted) {
+        pushTeam({ kind: "status", text: "Команда остановлена", tag });
+      }
+    } finally {
+      setTeamBusy(false);
+      teamAbort.current = null;
+    }
   }
 
   const builder = (draft: AgentDraft) => (
@@ -300,7 +553,7 @@ export function AgentWorkshop() {
         <textarea
           value={draft.system_prompt}
           onChange={(e) => patchDraft(draft.id, { system_prompt: e.target.value })}
-          rows={split ? 6 : 12}
+          rows={split ? 5 : 10}
           spellCheck
         />
       </label>
@@ -358,6 +611,73 @@ export function AgentWorkshop() {
     </div>
   );
 
+  function dialogBody(draft: AgentDraft, session: AgentSession, busy: boolean) {
+    return (
+      <>
+        <div className="agent-log" aria-live="polite">
+          {session.log.length === 0 ? (
+            <div className="agent-log-empty">
+              <p>Личный лог агента. Командные задачи появляются и здесь, и в ленте команды сверху.</p>
+            </div>
+          ) : (
+            session.log.map((line) => (
+              <article key={line.id} className={`agent-log-line agent-log-line--${line.role}`}>
+                <div className="agent-log-meta">
+                  {line.tag ? <span className="agent-tag">{line.tag}</span> : null}
+                  {line.role === "assistant" && line.modelId ? (
+                    <span className="badge">{line.modelId}</span>
+                  ) : null}
+                </div>
+                <p>{line.text}</p>
+              </article>
+            ))
+          )}
+        </div>
+        {session.status ? (
+          <p className="agent-status" role="status">
+            {session.status}
+          </p>
+        ) : null}
+        <form
+          className="agent-compose"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(draft.id);
+          }}
+        >
+          <textarea
+            value={session.input}
+            onChange={(e) => patchSession(draft.id, { input: e.target.value })}
+            rows={2}
+            placeholder={`Лично → ${draft.name}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {busy ? (
+            <button
+              type="button"
+              className="agent-send-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                stop(draft.id);
+              }}
+            >
+              Стоп
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="agent-send-btn"
+              disabled={!session.input.trim()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Отправить
+            </button>
+          )}
+        </form>
+      </>
+    );
+  }
+
   const panel = (agentId: string) => {
     const draft = draftById(store, agentId);
     if (!draft) return null;
@@ -389,7 +709,6 @@ export function AgentWorkshop() {
                   const other = store.drafts.find((d) => d.id !== agentId);
                   if (other) openSplitWith(other.id);
                 }}
-                title="Открыть второго агента рядом"
               >
                 + Рядом
               </button>
@@ -399,7 +718,7 @@ export function AgentWorkshop() {
                 className="ghost-button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (panelIds.length === 2 && panelIds[0] !== agentId) {
+                  if (panelIds[0] !== agentId) {
                     setStore((prev) => ({
                       ...prev,
                       activeId: agentId,
@@ -445,92 +764,13 @@ export function AgentWorkshop() {
     );
   };
 
-  function dialogBody(draft: AgentDraft, session: AgentSession, busy: boolean) {
-    return (
-      <>
-        <div className="agent-log" aria-live="polite">
-          {session.log.length === 0 ? (
-            <div className="agent-log-empty">
-              <p>
-                Прогоны этого агента не мешают другим — можно слать запросы параллельно.
-                Лог держится, пока открыта вкладка браузера.
-              </p>
-              <button
-                type="button"
-                className="chip"
-                onClick={() =>
-                  patchSession(draft.id, {
-                    input: "Сократи этот текст: ну короче это типа важно",
-                  })
-                }
-              >
-                Пример: сократи текст
-              </button>
-            </div>
-          ) : (
-            session.log.map((line) => (
-              <article key={line.id} className={`agent-log-line agent-log-line--${line.role}`}>
-                {line.role === "assistant" && line.modelId ? (
-                  <span className="badge">{line.modelId}</span>
-                ) : null}
-                <p>{line.text}</p>
-              </article>
-            ))
-          )}
-        </div>
-        {session.status ? (
-          <p className="agent-status" role="status">
-            {session.status}
-          </p>
-        ) : null}
-        <form
-          className="agent-compose"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send(draft.id);
-          }}
-        >
-          <textarea
-            value={session.input}
-            onChange={(e) => patchSession(draft.id, { input: e.target.value })}
-            rows={2}
-            placeholder={`Сообщение → ${draft.name}`}
-            disabled={false}
-            onClick={(e) => e.stopPropagation()}
-          />
-          {busy ? (
-            <button
-              type="button"
-              className="agent-send-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                stop(draft.id);
-              }}
-            >
-              Стоп
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="agent-send-btn"
-              disabled={!session.input.trim()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              Отправить
-            </button>
-          )}
-        </form>
-      </>
-    );
-  }
-
   return (
     <section className={`agent-workshop${split ? " agent-workshop--split" : ""}`} aria-labelledby={titleId}>
       <header className="agent-workshop-top">
         <div className="agent-workshop-title-row">
           <h2 id={titleId}>Агенты</h2>
           <p className="agent-workshop-lead">
-            Несколько агентов · параллельные запросы · автосохранение настроек
+            Пачка · цепочка handoff · обсуждение — по практикам multi-agent orchestration
           </p>
         </div>
         <div className="agent-presets" role="group" aria-label="Пресеты">
@@ -544,6 +784,88 @@ export function AgentWorkshop() {
           </button>
         </div>
       </header>
+
+      <section className="agent-team" aria-label="Задача команде">
+        <div className="agent-team-modes" role="group" aria-label="Режим команды">
+          {(Object.keys(TEAM_MODE_LABEL) as TeamMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className="shell-mode-btn"
+              aria-pressed={teamMode === mode}
+              onClick={() => setTeamMode(mode)}
+            >
+              {TEAM_MODE_LABEL[mode]}
+            </button>
+          ))}
+        </div>
+        <p className="agent-hint">{TEAM_MODE_HINT[teamMode]}</p>
+        <p className="agent-team-selected">
+          В команде: <strong>{selectedIds.length}</strong>
+          {selectedIds.length
+            ? ` — ${selectedIds
+                .map((id) => draftById(store, id)?.name)
+                .filter(Boolean)
+                .join(", ")}`
+            : " (отметьте чекбоксами слева)"}
+          {" · "}
+          <button type="button" className="text-link" onClick={selectAllFiltered}>
+            все видимые
+          </button>
+          {" · "}
+          <button type="button" className="text-link" onClick={clearSelect}>
+            сбросить
+          </button>
+        </p>
+        <form
+          className="agent-team-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runTeam();
+          }}
+        >
+          <textarea
+            value={teamTask}
+            onChange={(e) => setTeamTask(e.target.value)}
+            rows={2}
+            placeholder="Задача для пачки агентов…"
+            disabled={teamBusy}
+          />
+          {teamBusy ? (
+            <button type="button" className="agent-send-btn" onClick={stopTeam}>
+              Стоп команды
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="agent-send-btn"
+              disabled={!teamTask.trim() || selectedIds.length < 1}
+            >
+              Запустить команду
+            </button>
+          )}
+        </form>
+        {teamLog.length > 0 ? (
+          <div className="agent-team-log" aria-live="polite">
+            <div className="agent-team-log-head">
+              <strong>Лента команды</strong>
+              <button type="button" className="ghost-button" onClick={() => setTeamLog([])}>
+                Очистить
+              </button>
+            </div>
+            {teamLog.map((ev) => (
+              <article key={ev.id} className={`agent-team-event agent-team-event--${ev.kind}`}>
+                <div className="agent-log-meta">
+                  {ev.tag ? <span className="agent-tag">{ev.tag}</span> : null}
+                  {ev.agentName ? <strong>{ev.agentName}</strong> : null}
+                  {ev.modelId ? <span className="badge">{ev.modelId}</span> : null}
+                </div>
+                <p>{ev.text}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <div className="agent-workshop-layout">
         <aside className="agent-rail" aria-label="Список агентов">
@@ -563,8 +885,17 @@ export function AgentWorkshop() {
             {filteredDrafts.map((d) => {
               const busy = Boolean(busyIds[d.id]);
               const inPanel = panelIds.includes(d.id);
+              const checked = selectedIds.includes(d.id);
               return (
                 <li key={d.id}>
+                  <label className="agent-rail-check">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSelect(d.id)}
+                      aria-label={`В команду: ${d.name}`}
+                    />
+                  </label>
                   <button
                     type="button"
                     className={`agent-rail-item${store.activeId === d.id ? " is-active" : ""}${
@@ -609,7 +940,7 @@ export function AgentWorkshop() {
           </ul>
           <p className="agent-rail-foot">
             {store.drafts.length}/{MAX_DRAFTS}
-            {split ? " · split" : ""}
+            {selectedIds.length ? ` · команда ${selectedIds.length}` : ""}
           </p>
         </aside>
 
