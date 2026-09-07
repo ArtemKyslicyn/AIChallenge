@@ -36,6 +36,14 @@ class ProbeDisabledError(DomainError):
     """Direct LLM probe is switched off by configuration."""
 
 
+class AgentsRunDisabledError(DomainError):
+    """Agent workshop runs are switched off by configuration."""
+
+
+class AgentRunRateLimitError(DomainError):
+    """Visitor exceeded the configured agent-workshop run rate limit."""
+
+
 class LLMProviderError(DomainError):
     """A provider call failed. Carries just enough for the router to decide.
 

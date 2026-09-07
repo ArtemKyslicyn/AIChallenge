@@ -90,10 +90,12 @@ export function Chat({
   session,
   onStaleSession,
   onFirstMessage,
+  onOpenAgents,
 }: {
   session: SessionCredentials;
   onStaleSession: () => void;
   onFirstMessage?: (text: string) => void;
+  onOpenAgents?: () => void;
 }) {
   const [items, setItems] = useState<ThreadItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -905,6 +907,13 @@ export function Chat({
                 <strong>×T</strong> — температуры 0 / 0.7 / 1.2 с автооценкой.{" "}
                 <strong>×4</strong> — лаборатория стратегий. Отладка — плавающая кнопка Debug.
               </p>
+              {onOpenAgents ? (
+                <p className="empty-agents-link">
+                  <button type="button" className="text-link" onClick={onOpenAgents}>
+                    Собрать агента (урок 6)
+                  </button>
+                </p>
+              ) : null}
               <div className="suggestions">
                 {SUGGESTIONS.map((text) => (
                   <button

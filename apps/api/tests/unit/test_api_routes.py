@@ -74,6 +74,51 @@ def test_list_models_includes_auto(api: TestClient) -> None:
     assert body[0]["capabilities"]["temperature"] is True
 
 
+def test_agent_workshop_run_returns_model_id(api: TestClient) -> None:
+    response = api.post(
+        "/api/v1/agent-workshop/run",
+        json={
+            "definition": {
+                "name": "Редактор",
+                "system_prompt": "Ты краткий.",
+                "preferred_model": "auto",
+                "temperature": 0.2,
+            },
+            "message": "ping",
+        },
+        headers={"X-Visitor-Id": "test-visitor-agent"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_id"] == "fake-model"
+    assert body["content"]
+
+
+def test_agent_workshop_empty_message_is_422(api: TestClient) -> None:
+    response = api.post(
+        "/api/v1/agent-workshop/run",
+        json={
+            "definition": {"system_prompt": "S"},
+            "message": "  ",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "message_validation"
+
+
+def test_agent_workshop_disabled_returns_404() -> None:
+    with client(agents_run_enabled=False) as api:
+        response = api.post(
+            "/api/v1/agent-workshop/run",
+            json={
+                "definition": {"system_prompt": "S"},
+                "message": "ping",
+            },
+        )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "agents_run_disabled"
+
+
 def test_probe_accepts_generation_fields(api: TestClient) -> None:
     response = api.post(
         "/api/v1/llm/complete",

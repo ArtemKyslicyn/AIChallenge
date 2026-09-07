@@ -1,4 +1,4 @@
-# Challenges (Days 4–5)
+# Challenges (Days 4–6)
 
 Автопрогон заданий челленджа через **prod** API платформы AIChallenge.
 
@@ -6,6 +6,7 @@
 |-------|------|-----------------|
 | [`04-temperature/`](04-temperature/) | Температура 0 / 0.7 / 1.2 | Режим **×T** |
 | [`05-model-tiers/`](05-model-tiers/) | Слабая / средняя / сильная | **Модели → Студия** |
+| [`06-first-agent/`](06-first-agent/) | Первый агент (definition → run) | Topbar **Агенты** / `?shell=agents` |
 
 ## Прогон (prod)
 
@@ -13,6 +14,7 @@
 # из корня репо
 python3 challenges/04-temperature/run.py
 python3 challenges/05-model-tiers/run.py
+python3 challenges/06-first-agent/run.py
 ```
 
 По умолчанию `BASE_URL=https://aichallenge.arcilite.ru`. Результаты: `results.json` + `RESULTS.md` в каждой папке.
@@ -24,8 +26,10 @@ cd challenges/record
 npm install
 npx playwright install chromium
 npm run record
+# или только день 6:
+RECORD_ONLY=06 npm run record
 ```
 
-Пишет `challenge-04.webm` / `.mp4` и `challenge-05.webm` / `.mp4` (нужен `ffmpeg`).
+Пишет `challenge-04|05|06.webm` / `.mp4` (нужен `ffmpeg`).
 
 Формат сдачи: **Видео + Код** (этот каталог + ролики).

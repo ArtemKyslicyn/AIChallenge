@@ -135,6 +135,50 @@ def probe(
     raise RuntimeError("All probe candidates failed: " + " | ".join(errors[:4]))
 
 
+def agent_run(
+    base: str,
+    message: str,
+    *,
+    system_prompt: str,
+    name: str = "Challenge agent",
+    preferred_model: str = "auto",
+    temperature: float | None = 0.3,
+    max_tokens: int | None = 512,
+    timeout: float = 120.0,
+) -> dict[str, Any]:
+    """POST /api/v1/agent-workshop/run — Day 6 encapsulated agent."""
+    t0 = time.perf_counter()
+    data = request_json(
+        base,
+        "/api/v1/agent-workshop/run",
+        method="POST",
+        body={
+            "definition": {
+                "name": name,
+                "system_prompt": system_prompt,
+                "preferred_model": preferred_model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            "message": message,
+        },
+        timeout=timeout,
+        retries=1,
+    )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+    content = str(data.get("content") or "")
+    model_id = data.get("model_id")
+    if not model_id:
+        raise RuntimeError("agent-workshop response missing model_id")
+    return {
+        "content": content,
+        "model_id": model_id,
+        "latency_ms": latency_ms,
+        "tokens_approx": estimate_tokens(content),
+        "cost_proxy": estimate_cost_proxy(str(model_id)),
+    }
+
+
 def list_models(base: str) -> list[dict[str, Any]]:
     data = request_json(base, "/api/v1/llm/models", timeout=30.0)
     if not isinstance(data, list):

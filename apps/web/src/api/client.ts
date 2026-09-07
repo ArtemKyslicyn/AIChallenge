@@ -584,6 +584,31 @@ export function probeComplete(
   );
 }
 
+export interface AgentDefinitionDto {
+  name: string;
+  system_prompt: string;
+  preferred_model: string;
+  temperature: number | null;
+  max_tokens: number | null;
+}
+
+/** Day-6 workshop: encapsulated agent run (not `/llm/complete`). */
+export function runAgentWorkshop(
+  definition: AgentDefinitionDto,
+  message: string,
+  signal?: AbortSignal,
+): Promise<ProbeResultDto> {
+  return request<ProbeResultDto>(
+    "/agent-workshop/run",
+    {
+      method: "POST",
+      body: JSON.stringify({ definition, message }),
+      signal,
+    },
+    240_000,
+  );
+}
+
 /**
  * `GET /api/v1/lab/pareto` — aggregates per `model_id` over a time window.
  *
