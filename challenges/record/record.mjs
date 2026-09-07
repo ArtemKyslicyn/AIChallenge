@@ -1,5 +1,5 @@
 /**
- * Record challenge 04 (×T) and 05 (Performance Studio) against prod.
+ * Record challenge 04 (×T), 05 (Performance Studio), 06 (Agents) against prod.
  * Pins stable models, waits for real answers (no errors), slow-scrolls content → MP4.
  */
 import { chromium } from "playwright";
@@ -339,8 +339,56 @@ async function challenge05(page) {
   await settle(page, 2000);
 }
 
+async function challenge06(page) {
+  const prompt06 = fs
+    .readFileSync(path.join(__dirname, "../06-first-agent/prompt.txt"), "utf8")
+    .trim();
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.15);
+  await settle(page, 1500);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await settle(page, 800);
+
+  // Apply editor preset if visible
+  const preset = page.getByRole("button", { name: /Краткий редактор/i });
+  if ((await preset.count()) > 0) {
+    page.once("dialog", (d) => d.accept().catch(() => {}));
+    await preset.first().click();
+    await settle(page, 800);
+  }
+
+  const box = page.locator(".agent-compose textarea");
+  await box.fill(prompt06);
+  await settle(page, 800);
+  await page.locator(".agent-send-btn").click();
+
+  console.log("06: waiting for agent answer + model badge…");
+  await page.waitForFunction(
+    () => {
+      const lines = document.querySelectorAll(".agent-log-line--assistant");
+      if (!lines.length) return false;
+      const last = lines[lines.length - 1];
+      const text = (last.textContent || "").trim();
+      const badge = last.querySelector(".badge");
+      return text.length > 8 && Boolean(badge && (badge.textContent || "").trim());
+    },
+    { timeout: 180_000 },
+  );
+  await settle(page, 1500);
+
+  const answer = page.locator(".agent-log-line--assistant").last();
+  await answer.scrollIntoViewIfNeeded();
+  await settle(page, 4000);
+  await page.locator(".agent-builder, .agent-workshop-builder").first().scrollIntoViewIfNeeded().catch(() => {});
+  await settle(page, 2500);
+  await answer.scrollIntoViewIfNeeded();
+  await settle(page, 3000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
+const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
 
 async function withRetries(label, fn, attempts = 2) {
   let last;
@@ -358,7 +406,7 @@ async function withRetries(label, fn, attempts = 2) {
   throw last;
 }
 
-const ONLY = (process.env.RECORD_ONLY || "04,05")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -370,5 +418,9 @@ if (ONLY.includes("04")) {
 if (ONLY.includes("05")) {
   console.log("Recording challenge 05 against", BASE);
   await withVideo(out05, (page) => withRetries("05", () => challenge05(page)));
+}
+if (ONLY.includes("06")) {
+  console.log("Recording challenge 06 against", BASE);
+  await withVideo(out06, (page) => withRetries("06", () => challenge06(page)));
 }
 console.log("done");

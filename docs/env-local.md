@@ -99,6 +99,8 @@ ROUTERAI_KEY=...   # fallback: дешёвые RouterAI после OpenRouter
 
 Media tools (картинки/видео в чате): в `.env` на сервере `MEDIA_TOOLS_ENABLED=true`, опционально `POLLINATIONS_API_KEY`, для видео `PIXAZO_API_KEY`. Затем recreate `api`.
 
+Agent workshop (Day 6): `AGENTS_RUN_ENABLED=true` (по умолчанию), лимит `AGENTS_RUN_LIMIT_PER_HOUR=60`. UI: topbar **Агенты** или `?shell=agents`.
+
 Не вставляй ключи в чат Cursor/Claude и не коммить `.env`.
 
 ## Наблюдаемость и оценки (имена переменных)

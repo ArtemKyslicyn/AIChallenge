@@ -121,6 +121,24 @@ class ProbeResponse(BaseModel):
     model_id: str
 
 
+class AgentDefinitionPayload(BaseModel):
+    name: str = ""
+    system_prompt: str = Field(default="", max_length=MAX_CONTENT_BYTES)
+    preferred_model: str = AUTO_MODEL
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=8192)
+
+
+class AgentWorkshopRunRequest(BaseModel):
+    definition: AgentDefinitionPayload
+    message: str = Field(default="", max_length=MAX_CONTENT_BYTES)
+
+
+class AgentWorkshopRunResponse(BaseModel):
+    content: str
+    model_id: str
+
+
 class ModelCapabilitiesResponse(BaseModel):
     temperature: bool
     max_tokens: bool

@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     routerai_key: str = ""
     llm_model_chain: str = ""  # csv
     llm_probe_enabled: bool = True
+    agents_run_enabled: bool = True
+    agents_run_limit_per_hour: int = 60
     llm_exhausted_ttl_seconds: int = 300
     # Bounds on the work one request may do while walking the model chain.
     llm_max_attempts: int = 5

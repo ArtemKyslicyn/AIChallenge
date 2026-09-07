@@ -34,6 +34,7 @@ from app.adapters.persistence.repositories import (
 )
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
+from app.application.agent_rate_limit import AgentRunRateLimiter
 from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
@@ -117,6 +118,7 @@ class Container:
     media_generator: MediaGenerator | None
     media_store: MediaStore | None
     media_limiter: SessionMediaRateLimiter | None
+    agent_run_limiter: AgentRunRateLimiter
     #: Shared by every router tier, refreshed once per chat request.
     penalties: FeedbackPenaltyCache
     #: Judges a cheap answer for the cascade. Stateless, so one is enough.
@@ -332,6 +334,9 @@ def build_container(settings: Settings) -> Container:
         media_generator=media_generator,
         media_store=media_store,
         media_limiter=media_limiter,
+        agent_run_limiter=AgentRunRateLimiter(
+            limit_per_hour=settings.agents_run_limit_per_hour
+        ),
         penalties=penalties,
         scorer=HeuristicAnswerScorer(
             min_answer_chars=settings.cascade_min_answer_chars,

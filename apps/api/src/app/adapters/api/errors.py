@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
+    AgentRunRateLimitError,
+    AgentsRunDisabledError,
     DomainError,
     FeedbackTargetError,
     LLMExhaustedError,
@@ -29,6 +31,8 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     MessageNotFoundError: status.HTTP_404_NOT_FOUND,
     ScenarioNotFoundError: status.HTTP_404_NOT_FOUND,
     ProbeDisabledError: status.HTTP_404_NOT_FOUND,
+    AgentsRunDisabledError: status.HTTP_404_NOT_FOUND,
+    AgentRunRateLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
     SessionClosedError: status.HTTP_409_CONFLICT,
     FeedbackTargetError: status.HTTP_400_BAD_REQUEST,
     MessageValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
