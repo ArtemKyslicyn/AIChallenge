@@ -4669,10 +4669,53 @@ textarea {
   max-width: 10rem;
 }
 
-.agent-team-block {
+.agent-team-budget {
   margin: 0;
   font-size: 12px;
-  color: color-mix(in srgb, #b42318 55%, var(--text-muted));
+  color: var(--text-muted);
+}
+
+.agent-fanin-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.agent-fanin-toggle input {
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.agent-progon-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.agent-progon-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.agent-progon-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.45rem;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.agent-progon-model.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 .agent-first-steps {

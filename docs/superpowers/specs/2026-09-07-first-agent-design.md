@@ -40,6 +40,10 @@
 
 **UX (Day 6.1 pass):** сегмент **«Один агент» | «Команда»** (default solo). В solo — личный compose, без team bar/чекбоксов. В team — состав chips (+ порядок ↑↓ для цепочки), одна задача, ответы в ленте команды; личный лог только brief-статус. HTTP без изменений.
 
+## Day 6.2 — `/прогон` (implemented)
+
+См. `docs/superpowers/specs/2026-09-08-agent-progon-design.md`: режим **Прогон** (fan-out по temperature/models + Склейщик), optional fan-in для parallel/roundtable, фазы в ленте. Без headless и без нового HTTP.
+
 ## Locked decisions
 
 | Topic | Choice |

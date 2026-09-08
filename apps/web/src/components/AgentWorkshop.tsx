@@ -19,11 +19,23 @@ import {
 import {
   buildChainHandoff,
   buildRoundtableFollowup,
+  buildTeamFanInMessage,
   TEAM_MODE_HINT,
   TEAM_MODE_LABEL,
   TEAM_MODE_SCHEME,
+  teamRequestBudget,
   type TeamMode,
 } from "../agents/orchestrate";
+import {
+  AGGREGATOR_DEFINITION,
+  buildProgonVariants,
+  markdownJoinParts,
+  pickDefaultModelIds,
+  PROGON_DEFAULT_TEMPERATURES,
+  stripProgonTrigger,
+  type ProgonAxis,
+  type ProgonPart,
+} from "../agents/progon";
 import { AGENT_PRESETS } from "../agents/presets";
 import {
   emptySession,
@@ -84,6 +96,9 @@ export function AgentWorkshop() {
   const [teamTask, setTeamTask] = useState("");
   const [teamLog, setTeamLog] = useState<TeamEvent[]>([]);
   const [teamBusy, setTeamBusy] = useState(false);
+  const [fanIn, setFanIn] = useState(true);
+  const [progonAxis, setProgonAxis] = useState<ProgonAxis>("temperature");
+  const [progonModelIds, setProgonModelIds] = useState<string[]>([]);
   const abortMap = useRef<Map<string, AbortController>>(new Map());
   const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -108,19 +123,74 @@ export function AgentWorkshop() {
     return map;
   }, [teamOrderedIds]);
 
+  const progonVariantsPreview = useMemo(() => {
+    if (teamMode !== "progon") return [];
+    const baseId = teamOrderedIds[0];
+    const base = baseId ? draftById(store, baseId) : undefined;
+    if (!base) return [];
+    return buildProgonVariants(
+      {
+        name: base.name,
+        system_prompt: base.system_prompt,
+        preferred_model: base.preferred_model,
+        temperature: base.temperature,
+        max_tokens: base.max_tokens,
+      },
+      {
+        axis: progonAxis,
+        temperatures: [...PROGON_DEFAULT_TEMPERATURES],
+        modelIds: progonModelIds,
+      },
+    );
+  }, [teamMode, teamOrderedIds, store, progonAxis, progonModelIds]);
+
   const teamBlockReason = useMemo(() => {
-    if (!teamTask.trim()) return "Введите задачу для команды";
-    if (teamOrderedIds.length < 1) return "Добавьте агентов в состав (кнопка «+» у имени или чип ниже)";
+    const effectiveTask = stripProgonTrigger(teamTask).task;
+    if (!effectiveTask) return "Введите задачу для команды";
+
+    if (teamMode === "progon") {
+      if (teamOrderedIds.length < 1) return "Выберите базового агента в составе";
+      if (progonAxis === "model" && progonModelIds.length < 2) {
+        return "Для прогона по моделям отметьте минимум 2 модели";
+      }
+      if (progonAxis === "temperature" && progonVariantsPreview.length < 2) {
+        return "Не удалось собрать варианты temperature";
+      }
+      return null;
+    }
+    if (teamOrderedIds.length < 1) return "Добавьте агентов в состав";
     if (teamMode === "chain" && teamOrderedIds.length < 2) return "Для цепочки нужно минимум 2 агента";
     if (teamMode === "roundtable" && teamOrderedIds.length < 2) {
       return "Для обсуждения нужно минимум 2 агента";
     }
     return null;
-  }, [teamTask, teamOrderedIds, teamMode]);
+  }, [
+    teamTask,
+    teamOrderedIds,
+    teamMode,
+    progonAxis,
+    progonModelIds,
+    progonVariantsPreview.length,
+  ]);
+
+  const requestBudget = useMemo(() => {
+    return teamRequestBudget({
+      mode: teamMode,
+      memberCount: teamOrderedIds.length,
+      variantCount: progonVariantsPreview.length,
+      fanIn:
+        teamMode === "progon" || teamMode === "parallel" || teamMode === "roundtable"
+          ? fanIn
+          : false,
+    });
+  }, [teamMode, teamOrderedIds.length, progonVariantsPreview.length, fanIn]);
 
   useEffect(() => {
     listModels()
-      .then(setModels)
+      .then((list) => {
+        setModels(list);
+        setProgonModelIds((prev) => (prev.length ? prev : pickDefaultModelIds(list, 3)));
+      })
       .catch(() => setModels([]));
   }, []);
 
@@ -476,21 +546,92 @@ export function AgentWorkshop() {
     teamAbort.current?.abort();
   }
 
+  async function runFanIn(
+    task: string,
+    parts: ProgonPart[],
+    tag: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (parts.length < 1) {
+      pushTeam({ kind: "status", text: "Склейка пропущена — нет ответов", tag });
+      return;
+    }
+    pushTeam({ kind: "status", text: "Fan-in · Склейщик", tag: `${tag} · Σ` });
+    const message = buildTeamFanInMessage({ task, parts });
+    try {
+      const result = await runAgentWorkshop(
+        {
+          name: AGGREGATOR_DEFINITION.name,
+          system_prompt: AGGREGATOR_DEFINITION.system_prompt,
+          preferred_model: AGGREGATOR_DEFINITION.preferred_model,
+          temperature: AGGREGATOR_DEFINITION.temperature ?? null,
+          max_tokens: AGGREGATOR_DEFINITION.max_tokens ?? null,
+        },
+        message,
+        signal,
+      );
+      pushTeam({
+        kind: "reply",
+        agentName: "Склейщик",
+        text: result.content,
+        modelId: result.model_id,
+        tag: `${tag} · Σ`,
+      });
+    } catch (e) {
+      if (signal.aborted) return;
+      const fallback = markdownJoinParts({ task, parts });
+      const err =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+      pushTeam({
+        kind: "status",
+        text: `Склейщик недоступен (${err}). Показан markdown join.`,
+        tag: `${tag} · Σ`,
+      });
+      pushTeam({
+        kind: "reply",
+        agentName: "Склейка (fallback)",
+        text: fallback,
+        tag: `${tag} · Σ`,
+      });
+    }
+  }
+
   async function runTeam() {
-    const task = teamTask.trim();
-    const ids = teamOrderedIds;
-    if (teamBlockReason) {
+    const parsed = stripProgonTrigger(teamTask);
+    let mode: TeamMode = teamMode;
+    if (parsed.triggered) mode = "progon";
+    const task = parsed.task;
+    const ids = mode === "progon" ? teamOrderedIds.slice(0, 1) : teamOrderedIds;
+
+    if (!task) {
+      window.alert("Введите задачу для команды");
+      return;
+    }
+    if (parsed.triggered && teamMode !== "progon") setTeamMode("progon");
+    if (mode === "progon" && ids.length < 1) {
+      window.alert("Выберите базового агента в составе");
+      return;
+    }
+    if (mode !== "progon" && teamBlockReason) {
       window.alert(teamBlockReason);
+      return;
+    }
+    if (mode === "progon" && progonAxis === "model" && progonModelIds.length < 2) {
+      window.alert("Для прогона по моделям отметьте минимум 2 модели");
       return;
     }
 
     const runId = uid();
-    const tag = `${TEAM_MODE_LABEL[teamMode]} · ${runId}`;
+    const tag = `${TEAM_MODE_LABEL[mode]} · ${runId}`;
     const controller = new AbortController();
     teamAbort.current?.abort();
     teamAbort.current = controller;
     setTeamBusy(true);
-    pushTeam({ kind: "task", text: task, tag });
+    pushTeam({
+      kind: "task",
+      text: parsed.triggered ? `/прогон ${task}` : task,
+      tag,
+    });
 
     if (ids.length >= 1) {
       setStore((prev) => ({
@@ -507,13 +648,93 @@ export function AgentWorkshop() {
       mirror: "brief" as const,
     };
 
+    const doFanIn =
+      fanIn && (mode === "parallel" || mode === "roundtable" || mode === "progon");
+
     try {
-      if (teamMode === "parallel") {
+      if (mode === "progon") {
+        const base = draftById(storeRef.current, ids[0])!;
+        const variants = buildProgonVariants(
+          {
+            name: base.name,
+            system_prompt: base.system_prompt,
+            preferred_model: base.preferred_model,
+            temperature: base.temperature,
+            max_tokens: base.max_tokens,
+          },
+          {
+            axis: progonAxis,
+            temperatures: [...PROGON_DEFAULT_TEMPERATURES],
+            modelIds: progonModelIds,
+          },
+        );
+        pushTeam({
+          kind: "status",
+          text: `Fan-out · ${variants.length} вариантов (${progonAxis})`,
+          tag,
+        });
+        const parts: ProgonPart[] = [];
+        await Promise.all(
+          variants.map(async (v) => {
+            try {
+              const result = await runAgentWorkshop(
+                {
+                  name: v.name,
+                  system_prompt: v.system_prompt,
+                  preferred_model: v.preferred_model,
+                  temperature: v.temperature ?? null,
+                  max_tokens: v.max_tokens ?? null,
+                },
+                task,
+                controller.signal,
+              );
+              parts.push({
+                label: v.label,
+                modelId: result.model_id,
+                content: result.content,
+                temperature: v.temperature,
+              });
+              pushTeam({
+                kind: "reply",
+                agentName: v.name,
+                text: result.content,
+                modelId: result.model_id,
+                tag: `${tag} · ${v.label}`,
+              });
+            } catch (e) {
+              if (controller.signal.aborted) return;
+              const msg =
+                e instanceof ApiError
+                  ? e.message
+                  : e instanceof Error
+                    ? e.message
+                    : String(e);
+              pushTeam({
+                kind: "error",
+                agentName: v.name,
+                text: msg,
+                tag: `${tag} · ${v.label}`,
+              });
+            }
+          }),
+        );
+        if (doFanIn && !controller.signal.aborted) {
+          await runFanIn(task, parts, tag, controller.signal);
+        }
+      } else if (mode === "parallel") {
+        pushTeam({ kind: "status", text: `Fan-out · ${ids.length} агентов`, tag });
+        const parts: ProgonPart[] = [];
         await Promise.all(
           ids.map(async (id) => {
             const d = draftById(storeRef.current, id)!;
             const result = await runOne(id, task, teamOpts);
             if (result) {
+              parts.push({
+                label: d.name,
+                modelId: result.model_id,
+                content: result.content,
+                temperature: d.temperature,
+              });
               pushTeam({
                 kind: "reply",
                 agentName: d.name,
@@ -526,7 +747,10 @@ export function AgentWorkshop() {
             }
           }),
         );
-      } else if (teamMode === "chain") {
+        if (doFanIn && !controller.signal.aborted && parts.length > 1) {
+          await runFanIn(task, parts, tag, controller.signal);
+        }
+      } else if (mode === "chain") {
         let previous: { name: string; content: string } | null = null;
         for (let i = 0; i < ids.length; i++) {
           if (controller.signal.aborted) break;
@@ -546,8 +770,8 @@ export function AgentWorkshop() {
             kind: "status",
             agentName: d.name,
             text: previous
-              ? `Шаг ${i + 1}: «${previous.name}» → «${d.name}»`
-              : `Шаг 1: старт → «${d.name}»`,
+              ? `Handoff ${i + 1}: «${previous.name}» → «${d.name}»`
+              : `Старт → «${d.name}»`,
             tag,
           });
           const result = await runOne(id, message, teamOpts);
@@ -565,30 +789,40 @@ export function AgentWorkshop() {
           previous = { name: d.name, content: result.content };
         }
       } else {
-        const round1: { id: string; name: string; content: string }[] = [];
+        const round1: { id: string; name: string; content: string; modelId: string }[] = [];
+        pushTeam({ kind: "status", text: "Раунд 1 · fan-out", tag });
         await Promise.all(
           ids.map(async (id) => {
             const d = draftById(storeRef.current, id)!;
             const result = await runOne(id, task, {
               ...teamOpts,
-              tag: `${tag} · раунд 1`,
+              tag: `${tag} · R1`,
             });
             if (result) {
-              round1.push({ id, name: d.name, content: result.content });
+              round1.push({
+                id,
+                name: d.name,
+                content: result.content,
+                modelId: result.model_id,
+              });
               pushTeam({
                 kind: "reply",
                 agentName: d.name,
                 text: result.content,
                 modelId: result.model_id,
-                tag: `${tag} · раунд 1`,
+                tag: `${tag} · R1`,
               });
             }
           }),
         );
+        const peerParts: ProgonPart[] = [];
         if (controller.signal.aborted || round1.length < 2) {
           pushTeam({ kind: "status", text: "Раунд 2 пропущен", tag });
+          for (const r of round1) {
+            peerParts.push({ label: r.name, modelId: r.modelId, content: r.content });
+          }
         } else {
-          pushTeam({ kind: "status", text: "Раунд 2 — комментарии друг другу", tag });
+          pushTeam({ kind: "status", text: "Раунд 2 · peer review", tag });
           await Promise.all(
             round1.map(async (self) => {
               const message = buildRoundtableFollowup({
@@ -598,19 +832,27 @@ export function AgentWorkshop() {
               });
               const result = await runOne(self.id, message, {
                 ...teamOpts,
-                tag: `${tag} · раунд 2`,
+                tag: `${tag} · R2`,
               });
               if (result) {
+                peerParts.push({
+                  label: `${self.name} (R2)`,
+                  modelId: result.model_id,
+                  content: result.content,
+                });
                 pushTeam({
                   kind: "reply",
                   agentName: self.name,
                   text: result.content,
                   modelId: result.model_id,
-                  tag: `${tag} · раунд 2`,
+                  tag: `${tag} · R2`,
                 });
               }
             }),
           );
+        }
+        if (doFanIn && !controller.signal.aborted && peerParts.length > 1) {
+          await runFanIn(task, peerParts, tag, controller.signal);
         }
       }
       if (controller.signal.aborted) {
@@ -903,7 +1145,7 @@ export function AgentWorkshop() {
             <h2 id={titleId}>Агенты</h2>
             <p className="agent-workshop-lead">
               {isTeam
-                ? "Одна задача — нескольким агентам. Ответы в ленте команды."
+                ? "Команда: fan-out, handoff, прогон. Ответы и склейка — в ленте."
                 : "Соберите агента и задайте вопрос. Каждый вопрос — отдельный прогон без памяти."}
             </p>
           </div>
@@ -958,9 +1200,9 @@ export function AgentWorkshop() {
           <p className="agent-hint">{TEAM_MODE_HINT[teamMode]}</p>
 
           <div className="agent-team-roster" aria-label="Состав команды">
-            <span className="agent-team-roster-label">Состав</span>
+            <span className="agent-team-roster-label">{teamMode === "progon" ? "Базовый агент" : "Состав"}</span>
             {teamOrderedIds.length === 0 ? (
-              <span className="agent-hint">Пока пусто — отметьте агентов слева или добавьте пресет</span>
+              <span className="agent-hint">{teamMode === "progon" ? "Выберите одного базового агента слева" : "Пока пусто — отметьте агентов слева или добавьте пресет"}</span>
             ) : (
               teamOrderedIds.map((id) => {
                 const d = draftById(store, id);
@@ -1034,6 +1276,75 @@ export function AgentWorkshop() {
             ) : null}
           </div>
 
+          {teamMode === "progon" ? (
+            <div className="agent-progon-controls">
+              <div className="agent-team-modes" role="group" aria-label="Ось прогона">
+                <button
+                  type="button"
+                  className="shell-mode-btn"
+                  aria-pressed={progonAxis === "temperature"}
+                  onClick={() => setProgonAxis("temperature")}
+                >
+                  По temperature
+                </button>
+                <button
+                  type="button"
+                  className="shell-mode-btn"
+                  aria-pressed={progonAxis === "model"}
+                  onClick={() => setProgonAxis("model")}
+                >
+                  По моделям
+                </button>
+              </div>
+              {progonAxis === "temperature" ? (
+                <p className="agent-hint">Матрица: {PROGON_DEFAULT_TEMPERATURES.join(" · ")}</p>
+              ) : (
+                <div className="agent-progon-models" role="group" aria-label="Модели прогона">
+                  {modelOptions
+                    .filter((m) => m.id !== "auto")
+                    .slice(0, 8)
+                    .map((m) => {
+                      const on = progonModelIds.includes(m.id);
+                      return (
+                        <label key={m.id} className={`agent-progon-model${on ? " is-on" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => {
+                              setProgonModelIds((prev) => {
+                                if (prev.includes(m.id)) return prev.filter((x) => x !== m.id);
+                                if (prev.length >= 4) return prev;
+                                return [...prev, m.id];
+                              });
+                            }}
+                          />
+                          {m.label || m.id}
+                        </label>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {teamMode === "parallel" || teamMode === "roundtable" || teamMode === "progon" ? (
+            <label className="agent-fanin-toggle">
+              <input
+                type="checkbox"
+                checked={fanIn}
+                onChange={(e) => setFanIn(e.target.checked)}
+              />
+              Fan-in: склеить через «Склейщик» (supervisor)
+            </label>
+          ) : null}
+
+          <p className="agent-team-budget" role="status">
+            Запросов ≈ <strong>{requestBudget}</strong>
+            {teamMode === "progon" && progonVariantsPreview.length
+              ? ` · ${progonVariantsPreview.map((v) => v.label).join(", ")}`
+              : ""}
+          </p>
+
           <form
             className="agent-team-form"
             onSubmit={(e) => {
@@ -1045,7 +1356,7 @@ export function AgentWorkshop() {
               value={teamTask}
               onChange={(e) => setTeamTask(e.target.value)}
               rows={2}
-              placeholder="Задача для команды…"
+              placeholder={teamMode === "progon" ? "/прогон объясни temperature…" : "Задача для команды…"}
               disabled={teamBusy}
             />
             {teamBusy ? (
