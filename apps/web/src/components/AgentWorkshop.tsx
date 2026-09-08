@@ -21,6 +21,7 @@ import {
   buildRoundtableFollowup,
   TEAM_MODE_HINT,
   TEAM_MODE_LABEL,
+  TEAM_MODE_SCHEME,
   type TeamMode,
 } from "../agents/orchestrate";
 import { AGENT_PRESETS } from "../agents/presets";
@@ -32,6 +33,20 @@ import {
   type AgentSession,
   type RunLine,
 } from "../agents/sessions";
+
+type WorkspaceMode = "solo" | "team";
+
+const WORKSPACE_KEY = "aichallenge.agent_workspace_mode";
+
+function loadWorkspaceMode(): WorkspaceMode {
+  try {
+    const v = sessionStorage.getItem(WORKSPACE_KEY);
+    if (v === "team" || v === "solo") return v;
+  } catch {
+    /* ignore */
+  }
+  return "solo";
+}
 
 function draftById(store: AgentDraftStore, id: string): AgentDraft | undefined {
   return store.drafts.find((d) => d.id === id);
@@ -63,6 +78,7 @@ export function AgentWorkshop() {
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [mobileSheet, setMobileSheet] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState("");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => loadWorkspaceMode());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [teamMode, setTeamMode] = useState<TeamMode>("parallel");
   const [teamTask, setTeamTask] = useState("");
@@ -72,16 +88,49 @@ export function AgentWorkshop() {
   const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
   const sessionTimer = useRef<number | null>(null);
+  const storeRef = useRef(store);
+  storeRef.current = store;
 
   const active = draftById(store, store.activeId) ?? store.drafts[0];
   const panelIds = store.panelIds.length ? store.panelIds : [store.activeId];
   const split = panelIds.length > 1;
+  const isTeam = workspaceMode === "team";
+
+  /** Team composition preserves selection / reorder order (chain steps). */
+  const teamOrderedIds = useMemo(
+    () => selectedIds.filter((id) => store.drafts.some((d) => d.id === id)),
+    [store.drafts, selectedIds],
+  );
+
+  const teamOrderIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    teamOrderedIds.forEach((id, i) => map.set(id, i + 1));
+    return map;
+  }, [teamOrderedIds]);
+
+  const teamBlockReason = useMemo(() => {
+    if (!teamTask.trim()) return "Введите задачу для команды";
+    if (teamOrderedIds.length < 1) return "Добавьте агентов в состав (кнопка «+» у имени или чип ниже)";
+    if (teamMode === "chain" && teamOrderedIds.length < 2) return "Для цепочки нужно минимум 2 агента";
+    if (teamMode === "roundtable" && teamOrderedIds.length < 2) {
+      return "Для обсуждения нужно минимум 2 агента";
+    }
+    return null;
+  }, [teamTask, teamOrderedIds, teamMode]);
 
   useEffect(() => {
     listModels()
       .then(setModels)
       .catch(() => setModels([]));
   }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(WORKSPACE_KEY, workspaceMode);
+    } catch {
+      /* ignore */
+    }
+  }, [workspaceMode]);
 
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
@@ -111,7 +160,6 @@ export function AgentWorkshop() {
     };
   }, []);
 
-  // Drop selection for deleted agents
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => store.drafts.some((d) => d.id === id)));
   }, [store.drafts]);
@@ -131,6 +179,19 @@ export function AgentWorkshop() {
         d.system_prompt.toLowerCase().includes(q),
     );
   }, [store.drafts, libraryQuery]);
+
+  function setMode(mode: WorkspaceMode) {
+    setWorkspaceMode(mode);
+    if (mode === "team") {
+      setSelectedIds((prev) => {
+        if (prev.length) return prev;
+        const id = storeRef.current.activeId;
+        return id ? [id] : [];
+      });
+      // Prefer single panel focus in team — answers live in team log
+      setStore((prev) => ({ ...prev, panelIds: [prev.activeId] }));
+    }
+  }
 
   function patchSession(id: string, patch: Partial<AgentSession>) {
     setSessions((prev) => ({
@@ -165,25 +226,33 @@ export function AgentWorkshop() {
     );
   }
 
-  function selectAllFiltered() {
-    setSelectedIds(filteredDrafts.map((d) => d.id));
-  }
-
-  function clearSelect() {
-    setSelectedIds([]);
+  function moveTeamMember(id: string, dir: -1 | 1) {
+    setSelectedIds((prev) => {
+      const i = prev.indexOf(id);
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
   }
 
   function focusAgent(id: string) {
     setStore((prev) => {
-      const nextPanels = prev.panelIds.includes(id)
-        ? prev.panelIds
-        : [id, ...prev.panelIds.filter((x) => x !== id)].slice(0, 2);
-      return { ...prev, activeId: id, panelIds: split ? nextPanels : [id] };
+      const nextPanels =
+        !isTeam && prev.panelIds.length > 1 && prev.panelIds.includes(id)
+          ? prev.panelIds
+          : !isTeam && prev.panelIds.length > 1
+            ? [id, ...prev.panelIds.filter((x) => x !== id)].slice(0, 2)
+            : [id];
+      return { ...prev, activeId: id, panelIds: nextPanels };
     });
     setMobileSheet(false);
   }
 
   function openSplitWith(id: string) {
+    if (isTeam) return;
     setStore((prev) => {
       const primary = prev.activeId;
       if (id === primary) return prev;
@@ -204,10 +273,10 @@ export function AgentWorkshop() {
     setSessions((prev) => ({ ...prev, [next.id]: emptySession() }));
     setStore((prev) => ({
       activeId: next.id,
-      panelIds: split ? [next.id, ...prev.panelIds].slice(0, 2) : [next.id],
+      panelIds: !isTeam && split ? [next.id, ...prev.panelIds].slice(0, 2) : [next.id],
       drafts: [next, ...prev.drafts],
     }));
-    setSelectedIds((prev) => [...prev, next.id]);
+    if (isTeam) setSelectedIds((prev) => [...prev, next.id]);
   }
 
   function createFromPreset(index: number) {
@@ -227,9 +296,10 @@ export function AgentWorkshop() {
     setSessions((prev) => ({ ...prev, [next.id]: emptySession() }));
     setStore((prev) => ({
       activeId: next.id,
-      panelIds: split ? [next.id, prev.activeId].slice(0, 2) : [next.id],
+      panelIds: !isTeam && split ? [next.id, prev.activeId].slice(0, 2) : [next.id],
       drafts: [next, ...prev.drafts],
     }));
+    if (isTeam) setSelectedIds((prev) => [...prev, next.id]);
   }
 
   function onDelete(id: string) {
@@ -268,13 +338,20 @@ export function AgentWorkshop() {
     patchSession(id, { log: [], status: "" });
   }
 
-  /** Core run used by single compose and team orchestration. */
+  /**
+   * Core run. Team runs use mirror:"brief" so full text lives in the team log only.
+   */
   async function runOne(
     agentId: string,
     message: string,
-    opts?: { tag?: string; signal?: AbortSignal; clearInput?: boolean },
+    opts?: {
+      tag?: string;
+      signal?: AbortSignal;
+      clearInput?: boolean;
+      mirror?: "full" | "brief" | "none";
+    },
   ): Promise<{ content: string; model_id: string } | null> {
-    const draft = draftById(store, agentId);
+    const draft = draftById(storeRef.current, agentId);
     if (!draft) return null;
     if (!draft.system_prompt.trim()) {
       patchSession(agentId, { status: "Заполните инструкцию агента." });
@@ -282,12 +359,24 @@ export function AgentWorkshop() {
     }
 
     const tag = opts?.tag;
-    appendLog(agentId, {
-      id: `u-${Date.now()}-${agentId}`,
-      role: "user",
-      text: message,
-      tag,
-    });
+    const mirror = opts?.mirror ?? "full";
+
+    if (mirror === "full") {
+      appendLog(agentId, {
+        id: `u-${Date.now()}-${agentId}`,
+        role: "user",
+        text: message,
+        tag,
+      });
+    } else if (mirror === "brief") {
+      appendLog(agentId, {
+        id: `s-${Date.now()}-${agentId}`,
+        role: "status",
+        text: "Участвует в команде — ответ в ленте сверху.",
+        tag,
+      });
+    }
+
     patchSession(agentId, {
       status: "Ждём ответ…",
       ...(opts?.clearInput ? { input: "" } : {}),
@@ -316,34 +405,48 @@ export function AgentWorkshop() {
         message,
         controller.signal,
       );
-      appendLog(agentId, {
-        id: `a-${Date.now()}-${agentId}`,
-        role: "assistant",
-        text: result.content,
-        modelId: result.model_id,
-        tag,
-        speaker: draft.name,
-      });
+      if (mirror === "full") {
+        appendLog(agentId, {
+          id: `a-${Date.now()}-${agentId}`,
+          role: "assistant",
+          text: result.content,
+          modelId: result.model_id,
+          tag,
+          speaker: draft.name,
+        });
+      } else if (mirror === "brief") {
+        appendLog(agentId, {
+          id: `a-${Date.now()}-${agentId}`,
+          role: "status",
+          text: `Готово · ${result.model_id}`,
+          modelId: result.model_id,
+          tag,
+        });
+      }
       patchSession(agentId, { status: "" });
       return result;
     } catch (e) {
       if (controller.signal.aborted) {
-        appendLog(agentId, {
-          id: `s-${Date.now()}`,
-          role: "status",
-          text: "Запрос отменён.",
-          tag,
-        });
+        if (mirror !== "none") {
+          appendLog(agentId, {
+            id: `s-${Date.now()}`,
+            role: "status",
+            text: "Запрос отменён.",
+            tag,
+          });
+        }
         patchSession(agentId, { status: "" });
       } else {
         const msg =
           e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
-        appendLog(agentId, {
-          id: `e-${Date.now()}`,
-          role: "error",
-          text: msg,
-          tag,
-        });
+        if (mirror !== "none") {
+          appendLog(agentId, {
+            id: `e-${Date.now()}`,
+            role: "error",
+            text: msg,
+            tag,
+          });
+        }
         patchSession(agentId, { status: "Не удалось получить ответ." });
       }
       return null;
@@ -362,7 +465,7 @@ export function AgentWorkshop() {
     const session = ensureSession(sessions, agentId);
     const message = session.input.trim();
     if (!message || busyIds[agentId]) return;
-    await runOne(agentId, message, { clearInput: true });
+    await runOne(agentId, message, { clearInput: true, mirror: "full" });
   }
 
   function stop(agentId: string) {
@@ -375,49 +478,41 @@ export function AgentWorkshop() {
 
   async function runTeam() {
     const task = teamTask.trim();
-    const ids = store.drafts
-      .map((d) => d.id)
-      .filter((id) => selectedIds.includes(id));
-    if (!task) {
-      window.alert("Введите задачу для команды.");
-      return;
-    }
-    if (ids.length < 1) {
-      window.alert("Отметьте агентов в списке слева (чекбоксы).");
-      return;
-    }
-    if (teamMode === "chain" && ids.length < 2) {
-      window.alert("Для цепочки нужно минимум 2 агента.");
-      return;
-    }
-    if (teamMode === "roundtable" && ids.length < 2) {
-      window.alert("Для обсуждения нужно минимум 2 агента.");
+    const ids = teamOrderedIds;
+    if (teamBlockReason) {
+      window.alert(teamBlockReason);
       return;
     }
 
     const runId = uid();
-    const tag = `команда · ${TEAM_MODE_LABEL[teamMode]} · ${runId}`;
+    const tag = `${TEAM_MODE_LABEL[teamMode]} · ${runId}`;
     const controller = new AbortController();
     teamAbort.current?.abort();
     teamAbort.current = controller;
     setTeamBusy(true);
     pushTeam({ kind: "task", text: task, tag });
 
-    // Open selected agents in split when 2
-    if (ids.length >= 2) {
+    if (ids.length >= 1) {
       setStore((prev) => ({
         ...prev,
         activeId: ids[0],
-        panelIds: ids.slice(0, 2),
+        panelIds: [ids[0]],
       }));
     }
+
+    const teamOpts = {
+      tag,
+      signal: controller.signal,
+      clearInput: false as const,
+      mirror: "brief" as const,
+    };
 
     try {
       if (teamMode === "parallel") {
         await Promise.all(
           ids.map(async (id) => {
-            const d = draftById(store, id)!;
-            const result = await runOne(id, task, { tag, signal: controller.signal, clearInput: false });
+            const d = draftById(storeRef.current, id)!;
+            const result = await runOne(id, task, teamOpts);
             if (result) {
               pushTeam({
                 kind: "reply",
@@ -436,7 +531,7 @@ export function AgentWorkshop() {
         for (let i = 0; i < ids.length; i++) {
           if (controller.signal.aborted) break;
           const id = ids[i];
-          const d = draftById(store, id)!;
+          const d = draftById(storeRef.current, id)!;
           const message =
             previous == null
               ? task
@@ -451,15 +546,11 @@ export function AgentWorkshop() {
             kind: "status",
             agentName: d.name,
             text: previous
-              ? `Handoff от «${previous.name}» → «${d.name}»`
-              : `Старт цепочки → «${d.name}»`,
+              ? `Шаг ${i + 1}: «${previous.name}» → «${d.name}»`
+              : `Шаг 1: старт → «${d.name}»`,
             tag,
           });
-          const result = await runOne(id, message, {
-            tag,
-            signal: controller.signal,
-            clearInput: false,
-          });
+          const result = await runOne(id, message, teamOpts);
           if (!result) {
             pushTeam({ kind: "error", agentName: d.name, text: "Цепочка прервана", tag });
             break;
@@ -474,15 +565,13 @@ export function AgentWorkshop() {
           previous = { name: d.name, content: result.content };
         }
       } else {
-        // Roundtable: round 1 parallel, round 2 peer review
         const round1: { id: string; name: string; content: string }[] = [];
         await Promise.all(
           ids.map(async (id) => {
-            const d = draftById(store, id)!;
+            const d = draftById(storeRef.current, id)!;
             const result = await runOne(id, task, {
-              tag: `${tag} · R1`,
-              signal: controller.signal,
-              clearInput: false,
+              ...teamOpts,
+              tag: `${tag} · раунд 1`,
             });
             if (result) {
               round1.push({ id, name: d.name, content: result.content });
@@ -491,15 +580,15 @@ export function AgentWorkshop() {
                 agentName: d.name,
                 text: result.content,
                 modelId: result.model_id,
-                tag: `${tag} · R1`,
+                tag: `${tag} · раунд 1`,
               });
             }
           }),
         );
         if (controller.signal.aborted || round1.length < 2) {
-          pushTeam({ kind: "status", text: "Обсуждение: раунд 2 пропущен", tag });
+          pushTeam({ kind: "status", text: "Раунд 2 пропущен", tag });
         } else {
-          pushTeam({ kind: "status", text: "Раунд 2 — агенты отвечают друг другу", tag });
+          pushTeam({ kind: "status", text: "Раунд 2 — комментарии друг другу", tag });
           await Promise.all(
             round1.map(async (self) => {
               const message = buildRoundtableFollowup({
@@ -508,9 +597,8 @@ export function AgentWorkshop() {
                 peers: round1.map((p) => ({ name: p.name, content: p.content })),
               });
               const result = await runOne(self.id, message, {
-                tag: `${tag} · R2`,
-                signal: controller.signal,
-                clearInput: false,
+                ...teamOpts,
+                tag: `${tag} · раунд 2`,
               });
               if (result) {
                 pushTeam({
@@ -518,7 +606,7 @@ export function AgentWorkshop() {
                   agentName: self.name,
                   text: result.content,
                   modelId: result.model_id,
-                  tag: `${tag} · R2`,
+                  tag: `${tag} · раунд 2`,
                 });
               }
             }),
@@ -537,8 +625,8 @@ export function AgentWorkshop() {
   const builder = (draft: AgentDraft) => (
     <div className="agent-builder">
       <header className="agent-builder-head">
-        <h3>Кто отвечает</h3>
-        <p className="agent-hint">Имя и инструкция сохраняются сами в этом браузере.</p>
+        <h3>Настройка</h3>
+        <p className="agent-hint">Имя и инструкция сохраняются в этом браузере.</p>
       </header>
       <label className="agent-field">
         <span>Имя</span>
@@ -612,12 +700,49 @@ export function AgentWorkshop() {
   );
 
   function dialogBody(draft: AgentDraft, session: AgentSession, busy: boolean) {
+    if (isTeam) {
+      return (
+        <div className="agent-log agent-log--team-hint" aria-live="polite">
+          <div className="agent-log-empty">
+            <p>
+              Режим <strong>Команда</strong>: задание и ответы — в ленте сверху.
+            </p>
+            <p className="agent-hint">
+              Здесь только статус участия. Чтобы поговорить лично — переключитесь на «Один агент».
+            </p>
+            {session.log.length > 0 ? (
+              <div className="agent-team-brief-log">
+                {session.log.slice(-6).map((line) => (
+                  <p key={line.id} className={`agent-brief-line agent-brief-line--${line.role}`}>
+                    {line.text}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {session.status ? (
+            <p className="agent-status" role="status">
+              {session.status}
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
       <>
         <div className="agent-log" aria-live="polite">
           {session.log.length === 0 ? (
             <div className="agent-log-empty">
-              <p>Личный лог агента. Командные задачи появляются и здесь, и в ленте команды сверху.</p>
+              <p>
+                <strong>С чего начать</strong>
+              </p>
+              <ol className="agent-first-steps">
+                <li>При необходимости поправьте инструкцию слева</li>
+                <li>Напишите фразу ниже и нажмите «Отправить»</li>
+                <li>Или переключитесь на «Команда», чтобы дать задачу нескольким сразу</li>
+              </ol>
+              <p className="agent-hint">Каждый вопрос — отдельный прогон без памяти диалога.</p>
             </div>
           ) : (
             session.log.map((line) => (
@@ -649,7 +774,7 @@ export function AgentWorkshop() {
             value={session.input}
             onChange={(e) => patchSession(draft.id, { input: e.target.value })}
             rows={2}
-            placeholder={`Лично → ${draft.name}`}
+            placeholder={`Сообщение → ${draft.name}`}
             onClick={(e) => e.stopPropagation()}
           />
           {busy ? (
@@ -699,7 +824,7 @@ export function AgentWorkshop() {
             {busy ? <span className="agent-busy-dot" title="Идёт запрос" /> : null}
           </div>
           <div className="agent-panel-tools">
-            {!split ? (
+            {!isTeam && !split ? (
               <button
                 type="button"
                 className="ghost-button"
@@ -712,7 +837,8 @@ export function AgentWorkshop() {
               >
                 + Рядом
               </button>
-            ) : (
+            ) : null}
+            {!isTeam && split ? (
               <button
                 type="button"
                 className="ghost-button"
@@ -731,7 +857,7 @@ export function AgentWorkshop() {
               >
                 Закрыть панель
               </button>
-            )}
+            ) : null}
             <button
               type="button"
               className="ghost-button agent-mobile-settings"
@@ -765,13 +891,40 @@ export function AgentWorkshop() {
   };
 
   return (
-    <section className={`agent-workshop${split ? " agent-workshop--split" : ""}`} aria-labelledby={titleId}>
+    <section
+      className={`agent-workshop${split ? " agent-workshop--split" : ""}${
+        isTeam ? " agent-workshop--team" : " agent-workshop--solo"
+      }`}
+      aria-labelledby={titleId}
+    >
       <header className="agent-workshop-top">
         <div className="agent-workshop-title-row">
-          <h2 id={titleId}>Агенты</h2>
-          <p className="agent-workshop-lead">
-            Пачка · цепочка handoff · обсуждение — по практикам multi-agent orchestration
-          </p>
+          <div>
+            <h2 id={titleId}>Агенты</h2>
+            <p className="agent-workshop-lead">
+              {isTeam
+                ? "Одна задача — нескольким агентам. Ответы в ленте команды."
+                : "Соберите агента и задайте вопрос. Каждый вопрос — отдельный прогон без памяти."}
+            </p>
+          </div>
+          <div className="agent-workspace-modes" role="group" aria-label="Режим работы">
+            <button
+              type="button"
+              className="shell-mode-btn"
+              aria-pressed={!isTeam}
+              onClick={() => setMode("solo")}
+            >
+              Один агент
+            </button>
+            <button
+              type="button"
+              className="shell-mode-btn"
+              aria-pressed={isTeam}
+              onClick={() => setMode("team")}
+            >
+              Команда
+            </button>
+          </div>
         </div>
         <div className="agent-presets" role="group" aria-label="Пресеты">
           {AGENT_PRESETS.map((p, i) => (
@@ -785,87 +938,154 @@ export function AgentWorkshop() {
         </div>
       </header>
 
-      <section className="agent-team" aria-label="Задача команде">
-        <div className="agent-team-modes" role="group" aria-label="Режим команды">
-          {(Object.keys(TEAM_MODE_LABEL) as TeamMode[]).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className="shell-mode-btn"
-              aria-pressed={teamMode === mode}
-              onClick={() => setTeamMode(mode)}
-            >
-              {TEAM_MODE_LABEL[mode]}
-            </button>
-          ))}
-        </div>
-        <p className="agent-hint">{TEAM_MODE_HINT[teamMode]}</p>
-        <p className="agent-team-selected">
-          В команде: <strong>{selectedIds.length}</strong>
-          {selectedIds.length
-            ? ` — ${selectedIds
-                .map((id) => draftById(store, id)?.name)
-                .filter(Boolean)
-                .join(", ")}`
-            : " (отметьте чекбоксами слева)"}
-          {" · "}
-          <button type="button" className="text-link" onClick={selectAllFiltered}>
-            все видимые
-          </button>
-          {" · "}
-          <button type="button" className="text-link" onClick={clearSelect}>
-            сбросить
-          </button>
-        </p>
-        <form
-          className="agent-team-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void runTeam();
-          }}
-        >
-          <textarea
-            value={teamTask}
-            onChange={(e) => setTeamTask(e.target.value)}
-            rows={2}
-            placeholder="Задача для пачки агентов…"
-            disabled={teamBusy}
-          />
-          {teamBusy ? (
-            <button type="button" className="agent-send-btn" onClick={stopTeam}>
-              Стоп команды
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="agent-send-btn"
-              disabled={!teamTask.trim() || selectedIds.length < 1}
-            >
-              Запустить команду
-            </button>
-          )}
-        </form>
-        {teamLog.length > 0 ? (
-          <div className="agent-team-log" aria-live="polite">
-            <div className="agent-team-log-head">
-              <strong>Лента команды</strong>
-              <button type="button" className="ghost-button" onClick={() => setTeamLog([])}>
-                Очистить
+      {isTeam ? (
+        <section className="agent-team" aria-label="Задача команде">
+          <div className="agent-team-modes" role="group" aria-label="Как работают вместе">
+            {(Object.keys(TEAM_MODE_LABEL) as TeamMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={teamMode === mode}
+                onClick={() => setTeamMode(mode)}
+                title={TEAM_MODE_HINT[mode]}
+              >
+                <span className="agent-mode-scheme">{TEAM_MODE_SCHEME[mode]}</span>
+                {TEAM_MODE_LABEL[mode]}
               </button>
-            </div>
-            {teamLog.map((ev) => (
-              <article key={ev.id} className={`agent-team-event agent-team-event--${ev.kind}`}>
-                <div className="agent-log-meta">
-                  {ev.tag ? <span className="agent-tag">{ev.tag}</span> : null}
-                  {ev.agentName ? <strong>{ev.agentName}</strong> : null}
-                  {ev.modelId ? <span className="badge">{ev.modelId}</span> : null}
-                </div>
-                <p>{ev.text}</p>
-              </article>
             ))}
           </div>
-        ) : null}
-      </section>
+          <p className="agent-hint">{TEAM_MODE_HINT[teamMode]}</p>
+
+          <div className="agent-team-roster" aria-label="Состав команды">
+            <span className="agent-team-roster-label">Состав</span>
+            {teamOrderedIds.length === 0 ? (
+              <span className="agent-hint">Пока пусто — отметьте агентов слева или добавьте пресет</span>
+            ) : (
+              teamOrderedIds.map((id) => {
+                const d = draftById(store, id);
+                if (!d) return null;
+                const n = teamOrderIndex.get(id);
+                return (
+                  <span key={id} className="agent-team-chip">
+                    {teamMode === "chain" && n ? (
+                      <span className="agent-team-chip-num">{n}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="agent-team-chip-name"
+                      onClick={() => focusAgent(id)}
+                    >
+                      {d.name}
+                    </button>
+                    {teamMode === "chain" ? (
+                      <span className="agent-team-chip-move">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          aria-label="Выше в цепочке"
+                          disabled={n === 1}
+                          onClick={() => moveTeamMember(id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          aria-label="Ниже в цепочке"
+                          disabled={n === teamOrderedIds.length}
+                          onClick={() => moveTeamMember(id, 1)}
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      aria-label={`Убрать ${d.name}`}
+                      onClick={() => toggleSelect(id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })
+            )}
+            {filteredDrafts.some((d) => !selectedIds.includes(d.id)) ? (
+              <select
+                className="agent-team-add"
+                value=""
+                aria-label="Добавить в состав"
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id) toggleSelect(id);
+                }}
+              >
+                <option value="">+ Добавить…</option>
+                {filteredDrafts
+                  .filter((d) => !selectedIds.includes(d.id))
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+              </select>
+            ) : null}
+          </div>
+
+          <form
+            className="agent-team-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void runTeam();
+            }}
+          >
+            <textarea
+              value={teamTask}
+              onChange={(e) => setTeamTask(e.target.value)}
+              rows={2}
+              placeholder="Задача для команды…"
+              disabled={teamBusy}
+            />
+            {teamBusy ? (
+              <button type="button" className="agent-send-btn" onClick={stopTeam}>
+                Стоп
+              </button>
+            ) : (
+              <button type="submit" className="agent-send-btn" disabled={Boolean(teamBlockReason)}>
+                Запустить
+              </button>
+            )}
+          </form>
+          {teamBlockReason && !teamBusy ? (
+            <p className="agent-team-block" role="status">
+              {teamBlockReason}
+            </p>
+          ) : null}
+
+          {teamLog.length > 0 ? (
+            <div className="agent-team-log" aria-live="polite">
+              <div className="agent-team-log-head">
+                <strong>Лента команды</strong>
+                <button type="button" className="ghost-button" onClick={() => setTeamLog([])}>
+                  Очистить
+                </button>
+              </div>
+              {teamLog.map((ev) => (
+                <article key={ev.id} className={`agent-team-event agent-team-event--${ev.kind}`}>
+                  <div className="agent-log-meta">
+                    {ev.tag ? <span className="agent-tag">{ev.tag}</span> : null}
+                    {ev.agentName ? <strong>{ev.agentName}</strong> : null}
+                    {ev.modelId ? <span className="badge">{ev.modelId}</span> : null}
+                  </div>
+                  <p>{ev.text}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="agent-workshop-layout">
         <aside className="agent-rail" aria-label="Список агентов">
@@ -874,7 +1094,7 @@ export function AgentWorkshop() {
               className="agent-rail-search"
               value={libraryQuery}
               onChange={(e) => setLibraryQuery(e.target.value)}
-              placeholder="Найти агента…"
+              placeholder="Найти…"
               aria-label="Поиск агентов"
             />
             <button type="button" className="ghost-button" onClick={() => newDraft()} title="Новый">
@@ -886,16 +1106,22 @@ export function AgentWorkshop() {
               const busy = Boolean(busyIds[d.id]);
               const inPanel = panelIds.includes(d.id);
               const checked = selectedIds.includes(d.id);
+              const order = teamOrderIndex.get(d.id);
               return (
                 <li key={d.id}>
-                  <label className="agent-rail-check">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleSelect(d.id)}
-                      aria-label={`В команду: ${d.name}`}
-                    />
-                  </label>
+                  {isTeam ? (
+                    <label className="agent-rail-check">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(d.id)}
+                        aria-label={`В команду: ${d.name}`}
+                      />
+                      {teamMode === "chain" && order ? (
+                        <span className="agent-rail-order">{order}</span>
+                      ) : null}
+                    </label>
+                  ) : null}
                   <button
                     type="button"
                     className={`agent-rail-item${store.activeId === d.id ? " is-active" : ""}${
@@ -907,7 +1133,7 @@ export function AgentWorkshop() {
                     {busy ? <span className="agent-busy-dot" /> : null}
                   </button>
                   <div className="agent-rail-item-actions">
-                    {split && !inPanel ? (
+                    {!isTeam && split && !inPanel ? (
                       <button
                         type="button"
                         className="ghost-button"
@@ -940,7 +1166,7 @@ export function AgentWorkshop() {
           </ul>
           <p className="agent-rail-foot">
             {store.drafts.length}/{MAX_DRAFTS}
-            {selectedIds.length ? ` · команда ${selectedIds.length}` : ""}
+            {isTeam && teamOrderedIds.length ? ` · в команде ${teamOrderedIds.length}` : ""}
           </p>
         </aside>
 

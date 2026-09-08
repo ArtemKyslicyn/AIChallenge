@@ -9,9 +9,15 @@ export const TEAM_MODE_LABEL: Record<TeamMode, string> = {
 };
 
 export const TEAM_MODE_HINT: Record<TeamMode, string> = {
-  parallel: "Одна задача всем сразу (fan-out). Сравни ответы.",
-  chain: "A → B → C: следующий видит ответ предыдущего (handoff).",
-  roundtable: "Сначала все отвечают параллельно, затем каждый комментирует остальных.",
+  parallel: "Одна задача — всем сразу. Удобно сравнить ответы.",
+  chain: "По очереди: следующий видит ответ предыдущего. Порядок = номера в составе.",
+  roundtable: "Сначала все отвечают, потом каждый коротко комментирует остальных.",
+};
+
+export const TEAM_MODE_SCHEME: Record<TeamMode, string> = {
+  parallel: "A · B · C",
+  chain: "A → B → C",
+  roundtable: "A ↔ B ↔ C",
 };
 
 export function buildChainHandoff(opts: {
