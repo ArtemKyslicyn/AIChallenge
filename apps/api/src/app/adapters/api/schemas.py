@@ -132,11 +132,34 @@ class AgentDefinitionPayload(BaseModel):
 class AgentWorkshopRunRequest(BaseModel):
     definition: AgentDefinitionPayload
     message: str = Field(default="", max_length=MAX_CONTENT_BYTES)
+    #: When set with a visitor id, history lives in Postgres (agent_dialogs).
+    client_draft_id: str | None = Field(default=None, max_length=64)
+    dialog_id: UUID | None = None
+    #: Persist + continue dialog (solo). Team / progon keep false.
+    persist: bool = False
+
+
+class AgentDialogMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    model_id: str | None = None
+    created_at: str
 
 
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
+    dialog_id: UUID | None = None
+    messages: list[AgentDialogMessageResponse] | None = None
+
+
+class AgentDialogResponse(BaseModel):
+    id: UUID
+    client_draft_id: str
+    name: str
+    messages: list[AgentDialogMessageResponse]
+    updated_at: str
 
 
 class ModelCapabilitiesResponse(BaseModel):

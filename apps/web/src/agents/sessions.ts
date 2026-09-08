@@ -15,20 +15,26 @@ export interface AgentSession {
   log: RunLine[];
   input: string;
   status: string;
+  /** Postgres agent_dialogs.id when solo memory is active */
+  dialogId?: string | null;
 }
 
-const KEY = "aichallenge.agent_sessions.v1";
+const KEY = "aichallenge.agent_sessions.v2";
 const MAX_LOG = 80;
 
 type SessionMap = Record<string, AgentSession>;
 
 export function emptySession(): AgentSession {
-  return { log: [], input: "", status: "" };
+  return { log: [], input: "", status: "", dialogId: null };
 }
 
 export function loadSessions(): SessionMap {
   try {
-    const raw = sessionStorage.getItem(KEY);
+    // Prefer localStorage so history UI survives full browser restart;
+    // Postgres remains source of truth and rehydrates on focus.
+    const raw =
+      localStorage.getItem(KEY) ??
+      sessionStorage.getItem("aichallenge.agent_sessions.v1");
     if (!raw) return {};
     const parsed = JSON.parse(raw) as SessionMap;
     if (!parsed || typeof parsed !== "object") return {};
@@ -39,6 +45,7 @@ export function loadSessions(): SessionMap {
         log: Array.isArray(s.log) ? s.log.slice(-MAX_LOG) : [],
         input: typeof s.input === "string" ? s.input : "",
         status: typeof s.status === "string" ? s.status : "",
+        dialogId: typeof s.dialogId === "string" ? s.dialogId : null,
       };
     }
     return out;
@@ -55,9 +62,10 @@ export function saveSessions(map: SessionMap): void {
         log: (s.log || []).slice(-MAX_LOG),
         input: s.input || "",
         status: s.status || "",
+        dialogId: s.dialogId ?? null,
       };
     }
-    sessionStorage.setItem(KEY, JSON.stringify(slim));
+    localStorage.setItem(KEY, JSON.stringify(slim));
   } catch {
     /* quota — ignore */
   }

@@ -65,7 +65,42 @@ async def test_run_agent_assembles_system_and_user() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_agent_disabled() -> None:
+async def test_run_agent_includes_history() -> None:
+    from app.domain.agent_dialog import AgentDialogMessage
+    from datetime import UTC, datetime
+
+    router = _FakeRouter()
+    definition = AgentDefinition(
+        name="N", system_prompt="Remember.", preferred_model="auto"
+    )
+    prior = [
+        AgentDialogMessage(
+            id="1",
+            role="user",
+            content="Меня зовут Влад",
+            created_at=datetime.now(UTC),
+        ),
+        AgentDialogMessage(
+            id="2",
+            role="assistant",
+            content="Приятно познакомиться, Влад.",
+            created_at=datetime.now(UTC),
+            model_id="fake",
+        ),
+    ]
+    await run_agent(
+        definition=definition,
+        message="Как меня зовут?",
+        router=router,  # type: ignore[arg-type]
+        enabled=True,
+        max_message_chars=8000,
+        history=prior,
+    )
+    roles = [m.role.value for m in router.last_messages]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert router.last_messages[1].content == "Меня зовут Влад"
+    assert router.last_messages[3].content == "Как меня зовут?"
+
     with pytest.raises(AgentsRunDisabledError):
         await run_agent(
             definition=AgentDefinition(

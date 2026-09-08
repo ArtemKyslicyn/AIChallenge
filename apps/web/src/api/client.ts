@@ -592,20 +592,86 @@ export interface AgentDefinitionDto {
   max_tokens: number | null;
 }
 
+export interface AgentDialogMessageDto {
+  id: string;
+  role: string;
+  content: string;
+  model_id?: string | null;
+  created_at: string;
+}
+
+export interface AgentWorkshopRunResultDto {
+  content: string;
+  model_id: string;
+  dialog_id?: string | null;
+  messages?: AgentDialogMessageDto[] | null;
+}
+
+export interface AgentDialogDto {
+  id: string;
+  client_draft_id: string;
+  name: string;
+  messages: AgentDialogMessageDto[];
+  updated_at: string;
+}
+
+export interface AgentWorkshopRunOptions {
+  clientDraftId?: string;
+  dialogId?: string | null;
+  /** Persist turns in Postgres and continue with history (solo). */
+  persist?: boolean;
+  signal?: AbortSignal;
+}
+
 /** Day-6 workshop: encapsulated agent run (not `/llm/complete`). */
 export function runAgentWorkshop(
   definition: AgentDefinitionDto,
   message: string,
-  signal?: AbortSignal,
-): Promise<ProbeResultDto> {
-  return request<ProbeResultDto>(
+  options?: AbortSignal | AgentWorkshopRunOptions,
+): Promise<AgentWorkshopRunResultDto> {
+  const opts: AgentWorkshopRunOptions =
+    options && typeof options === "object" && "aborted" in options
+      ? { signal: options as AbortSignal }
+      : (options as AgentWorkshopRunOptions | undefined) ?? {};
+  const body: Record<string, unknown> = { definition, message };
+  if (opts.persist) {
+    body.persist = true;
+    if (opts.clientDraftId) body.client_draft_id = opts.clientDraftId;
+    if (opts.dialogId) body.dialog_id = opts.dialogId;
+  }
+  return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",
     {
       method: "POST",
-      body: JSON.stringify({ definition, message }),
-      signal,
+      body: JSON.stringify(body),
+      signal: opts.signal,
     },
     240_000,
+  );
+}
+
+export async function getAgentDialogByDraft(
+  clientDraftId: string,
+  signal?: AbortSignal,
+): Promise<AgentDialogDto | null> {
+  try {
+    return await request<AgentDialogDto>(
+      `/agent-workshop/dialogs/by-draft/${encodeURIComponent(clientDraftId)}`,
+      { signal },
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+export function clearAgentDialogByDraft(
+  clientDraftId: string,
+  signal?: AbortSignal,
+): Promise<AgentDialogDto> {
+  return request<AgentDialogDto>(
+    `/agent-workshop/dialogs/by-draft/${encodeURIComponent(clientDraftId)}/clear`,
+    { method: "POST", signal },
   );
 }
 

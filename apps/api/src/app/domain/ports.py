@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.agent_dialog import AgentDialog
 from app.domain.cascade import CascadeSummary
 from app.domain.entities import (
     AUTO_MODEL,
@@ -162,6 +163,18 @@ class MediaGenerator(Protocol):
     ) -> MediaArtifact: ...
 
     async def generate_video(self, prompt: str) -> MediaArtifact: ...
+
+
+class AgentDialogRepository(Protocol):
+    """Postgres-backed agent workshop dialogs (JSONB message history)."""
+
+    async def get(self, dialog_id: UUID) -> AgentDialog | None: ...
+
+    async def get_by_client_draft(
+        self, *, client_visitor_id: str, client_draft_id: str
+    ) -> AgentDialog | None: ...
+
+    async def save(self, dialog: AgentDialog) -> AgentDialog: ...
 
 
 class MediaStore(Protocol):

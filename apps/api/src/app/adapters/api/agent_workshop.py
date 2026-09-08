@@ -1,38 +1,44 @@
-"""Ephemeral agent workshop: definition + one user message → LLM result."""
+"""Agent workshop: definition + message → LLM; optional Postgres dialog memory."""
 
 from __future__ import annotations
 
 import logging
 import time
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.adapters.api.schemas import AgentWorkshopRunRequest, AgentWorkshopRunResponse
-from app.application.agent_run import run_agent
+from app.adapters.api.schemas import (
+    AgentDialogMessageResponse,
+    AgentDialogResponse,
+    AgentWorkshopRunRequest,
+    AgentWorkshopRunResponse,
+)
+from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
+from app.application.agent_run import run_agent, run_agent_with_dialog
 from app.application.llm_catalog import generation_from_api
-from app.core.deps import get_container, spawn_detached, visitor_id_header
+from app.core.deps import (
+    ClientVisitorId,
+    DbSession,
+    get_container,
+    resolve_visitor_identity,
+    spawn_detached,
+    visitor_id_header,
+)
 from app.domain.agent_definition import AgentDefinition
+from app.domain.agent_dialog import AgentDialog
 from app.domain.analytics import AnalyticsEvent
 from app.domain.entities import AUTO_MODEL
+from app.domain.errors import MessageValidationError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent-workshop", tags=["agent-workshop"])
 
 
-@router.post("/run", response_model=AgentWorkshopRunResponse)
-async def run_workshop_agent(
-    payload: AgentWorkshopRunRequest,
-    request: Request,
-    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
-) -> AgentWorkshopRunResponse:
-    container = get_container(request)
-    settings = container.settings
-    visitor_key = client_visitor_id or "anonymous"
-    container.agent_run_limiter.check_and_record(visitor_key)
-
-    definition = AgentDefinition(
+def _definition_from_payload(payload: AgentWorkshopRunRequest) -> AgentDefinition:
+    return AgentDefinition(
         name=(payload.definition.name or "").strip(),
         system_prompt=payload.definition.system_prompt,
         preferred_model=(payload.definition.preferred_model or AUTO_MODEL).strip()
@@ -40,6 +46,43 @@ async def run_workshop_agent(
         temperature=payload.definition.temperature,
         max_tokens=payload.definition.max_tokens,
     )
+
+
+def _msg_dto(m) -> AgentDialogMessageResponse:
+    return AgentDialogMessageResponse(
+        id=m.id,
+        role=m.role,
+        content=m.content,
+        model_id=m.model_id,
+        created_at=m.created_at.isoformat(),
+    )
+
+
+def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
+    return AgentDialogResponse(
+        id=dialog.id,
+        client_draft_id=dialog.client_draft_id,
+        name=dialog.name,
+        messages=[_msg_dto(m) for m in dialog.messages],
+        updated_at=(dialog.updated_at or dialog.created_at).isoformat()
+        if dialog.updated_at or dialog.created_at
+        else "",
+    )
+
+
+@router.post("/run", response_model=AgentWorkshopRunResponse)
+async def run_workshop_agent(
+    payload: AgentWorkshopRunRequest,
+    request: Request,
+    db: DbSession,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
+) -> AgentWorkshopRunResponse:
+    container = get_container(request)
+    settings = container.settings
+    visitor_key = client_visitor_id or "anonymous"
+    container.agent_run_limiter.check_and_record(visitor_key)
+
+    definition = _definition_from_payload(payload)
     generation = generation_from_api(
         temperature=payload.definition.temperature,
         max_tokens=payload.definition.max_tokens,
@@ -53,7 +96,47 @@ async def run_workshop_agent(
     status = "ok"
     model_id = ""
     content = ""
+    dialog_id: UUID | None = None
+    messages_out: list[AgentDialogMessageResponse] | None = None
     try:
+        if payload.persist:
+            owner = (client_visitor_id or "").strip().lower()
+            if not owner:
+                raise MessageValidationError(
+                    "Для сохранения диалога нужен заголовок X-Visitor-Id (client id)."
+                )
+            draft_id = (payload.client_draft_id or "").strip()
+            if not draft_id:
+                raise MessageValidationError(
+                    "Для сохранения диалога передайте client_draft_id."
+                )
+            identity = resolve_visitor_identity(request, owner)
+            vhash = identity[0] if identity else None
+            result, dialog = await run_agent_with_dialog(
+                definition=definition,
+                message=payload.message,
+                router=container.router,
+                dialogs=SqlAlchemyAgentDialogRepository(db),
+                client_visitor_id=owner,
+                client_draft_id=draft_id,
+                enabled=settings.agents_run_enabled,
+                max_message_chars=settings.max_message_chars,
+                generation=generation,
+                dialog_id=payload.dialog_id,
+                visitor_hash=vhash,
+            )
+            await db.commit()
+            content = result.content
+            model_id = result.model_id
+            dialog_id = dialog.id
+            messages_out = [_msg_dto(m) for m in dialog.messages]
+            return AgentWorkshopRunResponse(
+                content=content,
+                model_id=model_id,
+                dialog_id=dialog_id,
+                messages=messages_out,
+            )
+
         result = await run_agent(
             definition=definition,
             message=payload.message,
@@ -67,6 +150,7 @@ async def run_workshop_agent(
         return AgentWorkshopRunResponse(content=content, model_id=model_id)
     except Exception:
         status = "error"
+        await db.rollback()
         raise
     finally:
         latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -90,6 +174,9 @@ async def run_workshop_agent(
                                 "agent_name": definition.name or None,
                                 "system_prompt_chars": len(definition.system_prompt or ""),
                                 "message_chars": len(payload.message or ""),
+                                "persist": bool(payload.persist),
+                                "dialog_id": str(dialog_id) if dialog_id else None,
+                                "client_visitor_id": client_visitor_id,
                             },
                         )
                     ]
@@ -98,3 +185,48 @@ async def run_workshop_agent(
                 logger.debug("agent_run analytics failed", exc_info=True)
 
         spawn_detached(_emit())
+
+
+@router.get(
+    "/dialogs/by-draft/{client_draft_id}",
+    response_model=AgentDialogResponse,
+    responses={404: {"description": "no dialog yet"}},
+)
+async def get_dialog_by_draft(
+    client_draft_id: str,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+) -> AgentDialogResponse:
+    """Reload dialog for this browser client id + draft."""
+    key = (client_draft_id or "").strip()
+    if not key:
+        raise MessageValidationError("client_draft_id пуст.")
+    dialog = await SqlAlchemyAgentDialogRepository(db).get_by_client_draft(
+        client_visitor_id=client_visitor_id, client_draft_id=key
+    )
+    if dialog is None:
+        raise HTTPException(status_code=404, detail="Диалог не найден.")
+    return _dialog_dto(dialog)
+
+
+@router.post("/dialogs/by-draft/{client_draft_id}/clear", response_model=AgentDialogResponse)
+async def clear_dialog_by_draft(
+    client_draft_id: str,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+) -> AgentDialogResponse:
+    """Wipe stored turns but keep the dialog row (definition stays)."""
+    from datetime import UTC, datetime
+
+    key = (client_draft_id or "").strip()
+    repo = SqlAlchemyAgentDialogRepository(db)
+    dialog = await repo.get_by_client_draft(
+        client_visitor_id=client_visitor_id, client_draft_id=key
+    )
+    if dialog is None:
+        raise MessageValidationError("Диалог ещё не создан — нечего очищать.")
+    dialog.messages = []
+    dialog.updated_at = datetime.now(UTC)
+    saved = await repo.save(dialog)
+    await db.commit()
+    return _dialog_dto(saved)
