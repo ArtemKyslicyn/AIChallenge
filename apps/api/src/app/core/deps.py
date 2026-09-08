@@ -418,6 +418,18 @@ async def require_visitor_hash(
     return identity[0]
 
 
+async def require_client_visitor_id(
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)],
+) -> str:
+    """Browser client UUID only (no IP) — ownership key for agent dialogs."""
+    if not client_visitor_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Нужен заголовок X-Visitor-Id (UUID из localStorage).",
+        )
+    return client_visitor_id
+
+
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 SessionToken = Annotated[str | None, Depends(session_token)]
 
@@ -489,3 +501,4 @@ async def require_session(
 
 AuthorizedSession = Annotated[Session, Depends(require_session)]
 VisitorHash = Annotated[str, Depends(require_visitor_hash)]
+ClientVisitorId = Annotated[str, Depends(require_client_visitor_id)]

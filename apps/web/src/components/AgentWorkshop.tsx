@@ -2,8 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
+  clearAgentDialogByDraft,
+  getAgentDialogByDraft,
   listModels,
   runAgentWorkshop,
+  type AgentDialogMessageDto,
   type ModelCatalogItemDto,
 } from "../api/client";
 import {
@@ -70,6 +73,18 @@ function uid(): string {
     : String(Date.now()).slice(-8);
 }
 
+function dialogMessagesToLog(messages: AgentDialogMessageDto[]): RunLine[] {
+  return messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      text: m.content,
+      modelId: m.model_id ?? null,
+    }));
+}
+
+
 interface TeamEvent {
   id: string;
   kind: "task" | "reply" | "error" | "status";
@@ -105,6 +120,8 @@ export function AgentWorkshop() {
   const sessionTimer = useRef<number | null>(null);
   const storeRef = useRef(store);
   storeRef.current = store;
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   const active = draftById(store, store.activeId) ?? store.drafts[0];
   const panelIds = store.panelIds.length ? store.panelIds : [store.activeId];
@@ -231,8 +248,11 @@ export function AgentWorkshop() {
   }, []);
 
   useEffect(() => {
-    setSelectedIds((prev) => prev.filter((id) => store.drafts.some((d) => d.id === id)));
-  }, [store.drafts]);
+    if (!isTeam && store.activeId) {
+      void hydrateDialog(store.activeId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boot / mode switch only
+  }, [isTeam, store.activeId]);
 
   const modelOptions = useMemo(() => {
     const ids = new Set(models.map((m) => m.id));
@@ -319,6 +339,7 @@ export function AgentWorkshop() {
       return { ...prev, activeId: id, panelIds: nextPanels };
     });
     setMobileSheet(false);
+    void hydrateDialog(id);
   }
 
   function openSplitWith(id: string) {
@@ -404,8 +425,30 @@ export function AgentWorkshop() {
     });
   }
 
-  function clearLog(id: string) {
-    patchSession(id, { log: [], status: "" });
+  async function clearLog(id: string) {
+    patchSession(id, { log: [], status: "", dialogId: null });
+    if (!isTeam) {
+      try {
+        await clearAgentDialogByDraft(id);
+      } catch {
+        /* no server dialog yet */
+      }
+    }
+  }
+
+  async function hydrateDialog(agentId: string) {
+    if (isTeam) return;
+    try {
+      const dialog = await getAgentDialogByDraft(agentId);
+      if (!dialog) return;
+      patchSession(agentId, {
+        dialogId: dialog.id,
+        log: dialogMessagesToLog(dialog.messages),
+        status: "",
+      });
+    } catch {
+      /* offline / empty */
+    }
   }
 
   /**
@@ -419,6 +462,8 @@ export function AgentWorkshop() {
       signal?: AbortSignal;
       clearInput?: boolean;
       mirror?: "full" | "brief" | "none";
+      /** Solo: save turns in Postgres and continue with history */
+      persist?: boolean;
     },
   ): Promise<{ content: string; model_id: string } | null> {
     const draft = draftById(storeRef.current, agentId);
@@ -464,6 +509,8 @@ export function AgentWorkshop() {
     abortMap.current.set(agentId, controller);
 
     try {
+      const persist = Boolean(opts?.persist);
+      const dialogId = ensureSession(sessionsRef.current, agentId).dialogId ?? null;
       const result = await runAgentWorkshop(
         {
           name: draft.name,
@@ -473,17 +520,31 @@ export function AgentWorkshop() {
           max_tokens: draft.max_tokens,
         },
         message,
-        controller.signal,
+        {
+          signal: controller.signal,
+          persist,
+          clientDraftId: persist ? agentId : undefined,
+          dialogId: persist ? dialogId : undefined,
+        },
       );
       if (mirror === "full") {
-        appendLog(agentId, {
-          id: `a-${Date.now()}-${agentId}`,
-          role: "assistant",
-          text: result.content,
-          modelId: result.model_id,
-          tag,
-          speaker: draft.name,
-        });
+        if (persist && result.messages?.length) {
+          patchSession(agentId, {
+            status: "",
+            dialogId: result.dialog_id ?? dialogId,
+            log: dialogMessagesToLog(result.messages),
+          });
+        } else {
+          appendLog(agentId, {
+            id: `a-${Date.now()}-${agentId}`,
+            role: "assistant",
+            text: result.content,
+            modelId: result.model_id,
+            tag,
+            speaker: draft.name,
+          });
+          patchSession(agentId, { status: "" });
+        }
       } else if (mirror === "brief") {
         appendLog(agentId, {
           id: `a-${Date.now()}-${agentId}`,
@@ -492,8 +553,10 @@ export function AgentWorkshop() {
           modelId: result.model_id,
           tag,
         });
+        patchSession(agentId, { status: "" });
+      } else {
+        patchSession(agentId, { status: "" });
       }
-      patchSession(agentId, { status: "" });
       return result;
     } catch (e) {
       if (controller.signal.aborted) {
@@ -535,7 +598,11 @@ export function AgentWorkshop() {
     const session = ensureSession(sessions, agentId);
     const message = session.input.trim();
     if (!message || busyIds[agentId]) return;
-    await runOne(agentId, message, { clearInput: true, mirror: "full" });
+    await runOne(agentId, message, {
+      clearInput: true,
+      mirror: "full",
+      persist: !isTeam,
+    });
   }
 
   function stop(agentId: string) {
@@ -981,10 +1048,13 @@ export function AgentWorkshop() {
               </p>
               <ol className="agent-first-steps">
                 <li>При необходимости поправьте инструкцию слева</li>
-                <li>Напишите фразу ниже и нажмите «Отправить»</li>
-                <li>Или переключитесь на «Команда», чтобы дать задачу нескольким сразу</li>
+                <li>Напишите фразу ниже — ответ сохранится в Postgres</li>
+                <li>Обновите страницу и продолжите: агент помнит контекст</li>
               </ol>
-              <p className="agent-hint">Каждый вопрос — отдельный прогон без памяти диалога.</p>
+              <p className="agent-hint">
+                Диалог сохраняется в Postgres и восстанавливается после перезапуска (тот же браузер /
+                visitor).
+              </p>
             </div>
           ) : (
             session.log.map((line) => (
@@ -1146,7 +1216,7 @@ export function AgentWorkshop() {
             <p className="agent-workshop-lead">
               {isTeam
                 ? "Команда: fan-out, handoff, прогон. Ответы и склейка — в ленте."
-                : "Соберите агента и задайте вопрос. Каждый вопрос — отдельный прогон без памяти."}
+                : "Соберите агента и ведите диалог — история в Postgres, помнит после перезапуска."}
             </p>
           </div>
           <div className="agent-workspace-modes" role="group" aria-label="Режим работы">

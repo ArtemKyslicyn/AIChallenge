@@ -40,6 +40,15 @@
 
 **UX (Day 6.1 pass):** сегмент **«Один агент» | «Команда»** (default solo). В solo — личный compose, без team bar/чекбоксов. В team — состав chips (+ порядок ↑↓ для цепочки), одна задача, ответы в ленте команды; личный лог только brief-статус. HTTP без изменений.
 
+## Day 6.3 — Dialog memory (Postgres)
+
+Solo mode: `persist=true` + `client_draft_id` → `agent_dialogs` (JSONB `messages`).
+
+- **Owner:** `client_visitor_id` (`X-Visitor-Id`) — память переживает смену IP
+- **Also stored:** `visitor_hash` (тот же HMAC, что у chat sessions: client id + IP) — обновляется на каждом turn для корреляции с чатом/аналитикой
+
+Reload: `GET …/dialogs/by-draft/{id}`. Team/progon ephemeral. Migration `007_agent_dialogs`.
+
 ## Day 6.2 — `/прогон` (implemented)
 
 См. `docs/superpowers/specs/2026-09-08-agent-progon-design.md`: режим **Прогон** (fan-out по temperature/models + Склейщик), optional fan-in для parallel/roundtable, фазы в ленте. Без headless и без нового HTTP.
@@ -50,7 +59,7 @@
 |-------|--------|
 | Scope | Definition + workshop + runs; client team modes (Day 6.1); graph editor — later |
 | Encapsulation | Application `run_agent` + domain `AgentDefinition` (pure validate/clamp only). HTTP не зовёт `/llm/complete` для этой фичи |
-| Dialog semantics | **Stateless runs.** UI transcript = журнал независимых `run` (каждый: definition + один user message). Подпись: «Каждый вопрос — отдельный прогон» |
+| Dialog semantics | **Solo:** multi-turn history in Postgres `agent_dialogs` (JSONB). **Team/progon:** still ephemeral independent runs |
 | Storage | Черновики в **localStorage**; run body = полный `definition` (ephemeral) |
 | Shell UX | Topbar **`Чат \| Агенты`**. В `agents`: **нет** SessionSidebar, **нет** «Новый чат», **нет** float-dock |
 | Models float | Без изменений |

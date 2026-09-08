@@ -144,3 +144,38 @@ class MessageFeedbackRow(Base):
         # Both read paths — the router's window and the export — scan by time.
         Index("ix_message_feedback_created_at", "created_at"),
     )
+
+
+class AgentDialogRow(Base):
+    """Per-client agent workshop dialog; message history in JSONB.
+
+    Owned by browser ``X-Visitor-Id`` (client_visitor_id), not IP-bound
+    visitor_hash — so history survives network / VPN changes.
+    """
+
+    __tablename__ = "agent_dialogs"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    client_visitor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    visitor_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    client_draft_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    preferred_model: Mapped[str] = mapped_column(String(128), nullable=False, default="auto")
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    messages: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "client_visitor_id",
+            "client_draft_id",
+            name="uq_agent_dialogs_visitor_draft",
+        ),
+        Index("ix_agent_dialogs_client_updated", "client_visitor_id", "updated_at"),
+        Index("ix_agent_dialogs_visitor_hash", "visitor_hash"),
+    )
