@@ -788,10 +788,12 @@ async function challenge08(page) {
   console.log("08: C overflow…");
   const limitInput = page.locator(".agent-context-limit input");
   await limitInput.click();
-  await limitInput.fill("");
-  await limitInput.pressSequentially("120", { delay: 40 });
-  await limitInput.blur();
-  await settle(page, 1000);
+  await limitInput.fill("120");
+  await settle(page, 400);
+  await page.waitForFunction(() => {
+    const el = document.querySelector(".agent-context-limit input");
+    return el instanceof HTMLInputElement && el.value === "120";
+  });
   await pauseOn(limitInput, 2000);
   await page
     .locator(".agent-compose textarea")
