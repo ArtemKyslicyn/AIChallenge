@@ -137,6 +137,8 @@ class AgentWorkshopRunRequest(BaseModel):
     dialog_id: UUID | None = None
     #: Persist + continue dialog (solo). Team / progon keep false.
     persist: bool = False
+    #: Context window budget for token fit (Day 8). Lab demos may pass a low value.
+    context_limit: int | None = Field(default=None, ge=64, le=128_000)
 
 
 class AgentDialogMessageResponse(BaseModel):
@@ -147,11 +149,30 @@ class AgentDialogMessageResponse(BaseModel):
     created_at: str
 
 
+class AgentTokenTruncationResponse(BaseModel):
+    applied: bool
+    dropped_messages: int
+    dropped_tokens_est: int
+    context_limit: int
+    budget: int
+
+
+class AgentTokenUsageResponse(BaseModel):
+    request: int
+    history_before: int
+    history_after: int
+    completion: int
+    total: int
+    cost_proxy: float
+    truncation: AgentTokenTruncationResponse
+
+
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
     dialog_id: UUID | None = None
     messages: list[AgentDialogMessageResponse] | None = None
+    tokens: AgentTokenUsageResponse | None = None
 
 
 class AgentDialogResponse(BaseModel):

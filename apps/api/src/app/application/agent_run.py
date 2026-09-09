@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -11,9 +12,22 @@ from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, Messa
 from app.domain.errors import AgentsRunDisabledError, MessageValidationError
 from app.domain.generation import GenerationParams
 from app.domain.ports import AgentDialogRepository, ChatRouter
+from app.domain.token_meter import (
+    TokenBreakdown,
+    build_token_breakdown,
+    fit_history_to_budget,
+    history_to_chat_turns,
+)
 
 #: Soft cap so context / JSONB stay bounded.
 MAX_STORED_MESSAGES = 40
+DEFAULT_CONTEXT_LIMIT = 8192
+
+
+@dataclass(frozen=True, slots=True)
+class AgentRunOutcome:
+    result: CompletionResult
+    tokens: TokenBreakdown
 
 
 async def run_agent(
@@ -25,25 +39,43 @@ async def run_agent(
     max_message_chars: int,
     generation: GenerationParams | None = None,
     history: list[AgentDialogMessage] | None = None,
-) -> CompletionResult:
+    context_limit: int = DEFAULT_CONTEXT_LIMIT,
+) -> AgentRunOutcome:
     if not enabled:
         raise AgentsRunDisabledError("Запуск агентов отключён конфигурацией.")
     validate_agent_run(definition, message=message, max_message_chars=max_message_chars)
 
+    history_before = list(history or [])
+    history_after, truncation = fit_history_to_budget(
+        system_prompt=definition.system_prompt.strip(),
+        history=history_before,
+        user_message=message.strip(),
+        context_limit=context_limit,
+        max_tokens=definition.max_tokens
+        if definition.max_tokens is not None
+        else (generation.max_tokens if generation else None),
+    )
+
     turns: list[ChatMessage] = [
         ChatMessage(role=MessageRole.SYSTEM, content=definition.system_prompt.strip()),
+        *history_to_chat_turns(history_after),
+        ChatMessage(role=MessageRole.USER, content=message.strip()),
     ]
-    for prior in history or []:
-        if prior.role == "user":
-            turns.append(ChatMessage(role=MessageRole.USER, content=prior.content))
-        elif prior.role == "assistant":
-            turns.append(ChatMessage(role=MessageRole.ASSISTANT, content=prior.content))
-    turns.append(ChatMessage(role=MessageRole.USER, content=message.strip()))
 
     preferred = (definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL
-    return await router.complete_chat(
+    result = await router.complete_chat(
         turns, preferred_model=preferred, generation=generation
     )
+    tokens = build_token_breakdown(
+        system_prompt=definition.system_prompt.strip(),
+        history_before=history_before,
+        history_after=history_after,
+        user_message=message.strip(),
+        completion=result.content,
+        model_id=result.model_id,
+        truncation=truncation,
+    )
+    return AgentRunOutcome(result=result, tokens=tokens)
 
 
 async def run_agent_with_dialog(
@@ -59,7 +91,8 @@ async def run_agent_with_dialog(
     generation: GenerationParams | None = None,
     dialog_id: UUID | None = None,
     visitor_hash: str | None = None,
-) -> tuple[CompletionResult, AgentDialog]:
+    context_limit: int = DEFAULT_CONTEXT_LIMIT,
+) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id.
 
     ``visitor_hash`` (same as chat sessions) is stored/refreshed for correlation
@@ -112,7 +145,7 @@ async def run_agent_with_dialog(
             dialog.visitor_hash = vhash
 
     history = list(dialog.messages)
-    result = await run_agent(
+    outcome = await run_agent(
         definition=definition,
         message=message,
         router=router,
@@ -120,6 +153,7 @@ async def run_agent_with_dialog(
         max_message_chars=max_message_chars,
         generation=generation,
         history=history,
+        context_limit=context_limit,
     )
 
     user_msg = AgentDialogMessage(
@@ -132,11 +166,11 @@ async def run_agent_with_dialog(
     assistant_msg = AgentDialogMessage(
         id=str(uuid4()),
         role="assistant",
-        content=result.content,
+        content=outcome.result.content,
         created_at=datetime.now(UTC),
-        model_id=result.model_id,
+        model_id=outcome.result.model_id,
     )
     dialog.messages = [*history, user_msg, assistant_msg][-MAX_STORED_MESSAGES:]
     dialog.updated_at = datetime.now(UTC)
     saved = await dialogs.save(dialog)
-    return result, saved
+    return outcome, saved

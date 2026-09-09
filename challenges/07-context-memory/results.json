@@ -1,0 +1,113 @@
+{
+  "challenge": "07-context-memory",
+  "base_url": "https://aichallenge.arcilite.ru",
+  "ts": "2026-09-08T16:04:37.292222+00:00",
+  "endpoint": "/api/v1/agent-workshop/run?persist=true",
+  "client_draft_id": "challenge-07-artem",
+  "model": "google/gemini-2.5-flash",
+  "cases": {
+    "A_store_facts": {
+      "ok": true,
+      "result": {
+        "content": "Привет, Артем! Подтверждаю:\n1. Ваше имя — Артем.\n2. Ваш любимый язык программирования — Python.",
+        "model_id": "google/gemini-2.5-flash",
+        "dialog_id": "9db66d61-5791-41f5-b844-d8c97c2af9f3",
+        "messages": [
+          {
+            "id": "c8ef3f4d-9b24-41e8-bf05-f3aee6dd842a",
+            "role": "user",
+            "content": "Меня зовут Артем. Запомни два факта для теста памяти: (1) моё имя — Артем; (2) любимый язык программирования — Python. Подтверди кратко оба факта.",
+            "model_id": null,
+            "created_at": "2026-09-08T16:04:33.048627+00:00"
+          },
+          {
+            "id": "cf0aa2b3-e4ee-4fbd-a38f-9f76ee52ccb0",
+            "role": "assistant",
+            "content": "Привет, Артем! Подтверждаю:\n1. Ваше имя — Артем.\n2. Ваш любимый язык программирования — Python.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-08T16:04:33.954644+00:00"
+          }
+        ],
+        "latency_ms": 1344,
+        "tokens_approx": 24,
+        "cost_proxy": 0.4
+      }
+    },
+    "B_recall_after_restart": {
+      "ok": true,
+      "result": {
+        "content": "Имя: Артем\nЯзык: Python",
+        "model_id": "google/gemini-2.5-flash",
+        "dialog_id": "9db66d61-5791-41f5-b844-d8c97c2af9f3",
+        "messages": [
+          {
+            "id": "c8ef3f4d-9b24-41e8-bf05-f3aee6dd842a",
+            "role": "user",
+            "content": "Меня зовут Артем. Запомни два факта для теста памяти: (1) моё имя — Артем; (2) любимый язык программирования — Python. Подтверди кратко оба факта.",
+            "model_id": null,
+            "created_at": "2026-09-08T16:04:33.048627+00:00"
+          },
+          {
+            "id": "cf0aa2b3-e4ee-4fbd-a38f-9f76ee52ccb0",
+            "role": "assistant",
+            "content": "Привет, Артем! Подтверждаю:\n1. Ваше имя — Артем.\n2. Ваш любимый язык программирования — Python.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-08T16:04:33.954644+00:00"
+          },
+          {
+            "id": "5de022f4-916d-44cc-ab62-8fa0dc2854b6",
+            "role": "user",
+            "content": "Проверка после перезапуска. Ответь ровно двумя строками:\nИмя: <только имя>\nЯзык: <только язык>",
+            "model_id": null,
+            "created_at": "2026-09-08T16:04:34.626803+00:00"
+          },
+          {
+            "id": "a8956f47-5d0e-4722-99dd-bace9a2edf03",
+            "role": "assistant",
+            "content": "Имя: Артем\nЯзык: Python",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-08T16:04:35.157603+00:00"
+          }
+        ],
+        "latency_ms": 936,
+        "tokens_approx": 6,
+        "cost_proxy": 0.4
+      }
+    },
+    "C_clear_wipes": {
+      "messages_after_clear": 0,
+      "probe": {
+        "content": "Не знаю.",
+        "model_id": "google/gemini-2.5-flash",
+        "dialog_id": "9db66d61-5791-41f5-b844-d8c97c2af9f3",
+        "messages": [
+          {
+            "id": "db6f3efc-c038-45f9-9d80-eb5dfdaa12cc",
+            "role": "user",
+            "content": "Как меня зовут? Если не знаешь — скажи «не знаю».",
+            "model_id": null,
+            "created_at": "2026-09-08T16:04:36.719074+00:00"
+          },
+          {
+            "id": "9e784bdb-ac11-4896-88cf-81daf36fab79",
+            "role": "assistant",
+            "content": "Не знаю.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-08T16:04:37.452655+00:00"
+          }
+        ],
+        "latency_ms": 1062,
+        "tokens_approx": 2,
+        "cost_proxy": 0.4
+      }
+    }
+  },
+  "message_counts": {
+    "after_A": 2,
+    "after_B": 4,
+    "after_C": 0
+  },
+  "memory_ok": true,
+  "ui": "https://aichallenge.arcilite.ru/?shell=agents",
+  "note": "Postgres agent_dialogs — Артем + Python; clear empties history."
+}

@@ -1,5 +1,5 @@
 /**
- * Record challenge 04 (×T), 05 (Performance Studio), 06 (Agents) against prod.
+ * Record challenges 04–07 against prod.
  * Pins stable models, waits for real answers (no errors), slow-scrolls content → MP4.
  */
 import { chromium } from "playwright";
@@ -36,11 +36,12 @@ async function bumpReadability(page, zoom = 1.2) {
   await page.addStyleTag({
     content: `
       html { zoom: ${zoom} !important; }
-      .temp-studio-frame, .lab-frame, .perf-studio-card {
+      .temp-studio-frame, .lab-frame, .perf-studio-card,
+      .agent-log-line--assistant, .agent-team-event--reply {
         box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.35) !important;
       }
       .temp-studio-frame-body, .lab-frame-body, .perf-studio-answer,
-      .compare-pane .body, .md {
+      .compare-pane .body, .md, .agent-log-line, .agent-team-event p {
         font-size: 15px !important;
         line-height: 1.5 !important;
       }
@@ -57,8 +58,66 @@ async function bumpReadability(page, zoom = 1.2) {
         overflow: auto !important;
         white-space: pre-wrap !important;
       }
+      .agent-log, .agent-team-log {
+        max-height: min(48vh, 520px) !important;
+      }
     `,
   });
+}
+
+async function acceptDialogs(page) {
+  page.on("dialog", (d) => d.accept().catch(() => {}));
+}
+
+async function waitAgentAssistant(page, { minChars = 8, timeout = 180_000 } = {}) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const snap = await page.evaluate(({ minChars: min }) => {
+      const status = [...document.querySelectorAll(".agent-status")]
+        .map((el) => el.textContent || "")
+        .join(" ");
+      const lines = [...document.querySelectorAll(".agent-log-line--assistant")];
+      const last = lines[lines.length - 1];
+      const text = (last?.textContent || "").trim();
+      const badge = last?.querySelector(".badge");
+      const err =
+        /не удалось|unreadable|ошибка|rate limit|слишком много/i.test(status + " " + text);
+      if (err) return { ok: false, err: status || text.slice(0, 160) };
+      if (text.length >= min && badge && (badge.textContent || "").trim()) return { ok: true };
+      if (text.length >= Math.max(min, 60)) return { ok: true };
+      return { ok: false };
+    }, { minChars });
+    if (snap.ok) return;
+    if (snap.err) throw new Error(`agent answer failed: ${snap.err}`);
+    await settle(page, 1000);
+  }
+  throw new Error("waitAgentAssistant timeout");
+}
+
+async function waitTeamAnswers(page, { minAnswers = 2, timeout = 300_000 } = {}) {
+  await page.waitForFunction(
+    ({ minAnswers: min }) => {
+      const ok = [...document.querySelectorAll(".agent-team-event--reply")].filter((el) => {
+        const text = (el.querySelector("p")?.textContent || "").trim();
+        const badge = el.querySelector(".badge");
+        return text.length > 8 && Boolean(badge);
+      });
+      if (ok.length >= min) return true;
+      const send = document.querySelector(".agent-team-form .agent-send-btn");
+      const busy = (send?.textContent || "").includes("Стоп");
+      // Idle with at least one reply — accept partial team runs (rate limits etc.)
+      return !busy && ok.length >= 1;
+    },
+    { minAnswers },
+    { timeout },
+  );
+}
+
+async function pauseOn(locator, ms = 3500) {
+  if ((await locator.count()) > 0) {
+    await locator.first().scrollIntoViewIfNeeded();
+    await settle(locator.page(), ms);
+  }
 }
 
 function toMp4(webmPath) {
@@ -99,17 +158,28 @@ async function withVideo(webmPath, fn) {
     recordVideo: { dir: path.join(__dirname, ".videos"), size: { width: W, height: H } },
   });
   const page = await context.newPage();
+  let ok = false;
   try {
     await fn(page);
+    ok = true;
   } finally {
     const video = page.video();
     await context.close();
     await browser.close();
     if (video) {
       const tmp = await video.path();
-      fs.renameSync(tmp, webmPath);
-      console.log("wrote", webmPath);
-      toMp4(webmPath);
+      if (ok) {
+        fs.renameSync(tmp, webmPath);
+        console.log("wrote", webmPath);
+        toMp4(webmPath);
+      } else {
+        try {
+          fs.unlinkSync(tmp);
+        } catch {
+          /* ignore */
+        }
+        console.warn("discarded failed take", tmp);
+      }
     }
   }
 }
@@ -339,63 +409,420 @@ async function challenge05(page) {
   await settle(page, 2000);
 }
 
-async function challenge06(page) {
-  const prompt06 = fs
-    .readFileSync(path.join(__dirname, "../06-first-agent/prompt.txt"), "utf8")
-    .trim();
-  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
-  await bumpReadability(page, 1.15);
+const AGENT_STRONG = process.env.CHALLENGE_AGENT_MODEL || "google/gemini-2.5-flash";
+
+const STRING_THEORY_CAST = [
+  {
+    name: "Алкаш",
+    system:
+      "Ты Алкаш — простой парень из бара. Говоришь коротко, по-житейски, с лёгкой иронией. " +
+      "Сложные темы (типа теории струн) объясняешь через пиво, гитарные струны и «ну всё типа вибрирует». " +
+      "Без жёсткого мата. Ответ: 2–4 предложения, оставайся в роли.",
+    temperature: "0.9",
+    maxTokens: "400",
+  },
+  {
+    name: "Аристотель",
+    system:
+      "Ты Аристотель. Говоришь торжественно, ясно, через причины и категории (форма, материя, цель). " +
+      "Теорию струн связываешь с идеей первооснов мира, но без псевдонаучного бреда. " +
+      "Ответ: 3–5 предложений, оставайся в роли.",
+    temperature: "0.5",
+    maxTokens: "500",
+  },
+  {
+    name: "Программист",
+    system:
+      "Ты сеньор-программист. Объясняешь физику аналогиями из кода и инженерии: " +
+      "волны, спектры, размерности как слои абстракции, «модель vs реализация». " +
+      "Чётко, без воды. Ответ: 3–5 предложений, оставайся в роли.",
+    temperature: "0.4",
+    maxTokens: "500",
+  },
+];
+
+const TEAM_TOPIC =
+  "Обсудите теорию струн: что это такое простыми словами и зачем она физикам. Каждый — в своём характере, коротко (2–5 предложений).";
+
+async function fillActiveBuilder(page, persona) {
+  const builder = page.locator(".agent-workshop-builder .agent-builder, .agent-builder").first();
+  await builder.waitFor({ timeout: 15_000 });
+  const nameInput = builder.locator("label.agent-field").filter({ hasText: /^Имя/ }).locator("input");
+  await nameInput.fill(persona.name);
+  await settle(page, 400);
+  const instr = builder
+    .locator("label.agent-field")
+    .filter({ hasText: /Инструкция/ })
+    .locator("textarea");
+  await instr.fill(persona.system);
+  await settle(page, 400);
+  const modelSelect = builder.locator("fieldset.agent-how select").first();
+  await selectOptionContaining(modelSelect, AGENT_STRONG);
+  await settle(page, 300);
+  const temp = builder.locator("label.agent-field").filter({ hasText: /^Temp/ }).locator("input");
+  if ((await temp.count()) > 0) {
+    await temp.fill(persona.temperature);
+  }
+  const maxTok = builder
+    .locator("label.agent-field")
+    .filter({ hasText: /Max tokens/i })
+    .locator("input");
+  if ((await maxTok.count()) > 0) {
+    await maxTok.fill(persona.maxTokens);
+  }
+  await settle(page, 600);
+}
+
+/** Prefer preset chip; otherwise +Пустой and fill definition (works without redeploy). */
+async function ensurePersona(page, persona) {
+  const chip = page.getByRole("button", { name: new RegExp(`\\+?\\s*${persona.name}`, "i") });
+  if ((await chip.count()) > 0) {
+    await chip.first().click();
+    await settle(page, 900);
+    // Pin strong model even if preset already set
+    await fillActiveBuilder(page, persona).catch(() => {});
+    return;
+  }
+  await page.getByRole("button", { name: /\+?\s*Пустой/i }).first().click();
+  await settle(page, 900);
+  await fillActiveBuilder(page, persona);
+}
+
+async function selectTeamAll(page) {
+  const checks = page.locator(".agent-rail-check input[type=checkbox]");
+  const n = await checks.count();
+  for (let i = 0; i < n; i++) {
+    const c = checks.nth(i);
+    if (!(await c.isChecked())) {
+      await c.check().catch(() => {});
+      await settle(page, 250);
+    }
+  }
+}
+
+/** Check agents in given name order (for chain handoff). */
+async function selectTeamByNames(page, names) {
+  const items = page.locator(".agent-rail-list > li");
+  const count = await items.count();
+  // Clear selection
+  for (let i = 0; i < count; i++) {
+    const box = items.nth(i).locator("input[type=checkbox]");
+    if ((await box.count()) && (await box.isChecked())) {
+      await box.uncheck().catch(() => {});
+      await settle(page, 200);
+    }
+  }
+  for (const name of names) {
+    for (let i = 0; i < count; i++) {
+      const li = items.nth(i);
+      const label = await li.locator(".agent-rail-name").innerText().catch(() => "");
+      if (new RegExp(name, "i").test(label)) {
+        const box = li.locator("input[type=checkbox]");
+        if (!(await box.isChecked())) {
+          await box.check();
+          await settle(page, 300);
+        }
+        break;
+      }
+    }
+  }
+}
+
+async function setFanIn(page, on) {
+  const box = page.locator(".agent-fanin-toggle input[type=checkbox]");
+  if ((await box.count()) === 0) return;
+  const checked = await box.first().isChecked();
+  if (checked !== on) {
+    await box.first().setChecked(on);
+    await settle(page, 400);
+  }
+}
+
+async function runTeamMode(page, modeLabel, task, { minAnswers = 2, fanIn = true, names = null } = {}) {
+  await page.getByRole("button", { name: new RegExp(modeLabel, "i") }).first().click();
+  await settle(page, 1200);
+  if (names?.length) {
+    await selectTeamByNames(page, names);
+  } else {
+    await selectTeamAll(page);
+  }
+  await setFanIn(page, fanIn);
+  await pauseOn(page.locator(".agent-team"), 2000);
+  const teamBox = page.locator(".agent-team-form textarea");
+  await teamBox.fill(task);
+  await settle(page, 1000);
+  await page.locator(".agent-team-form .agent-send-btn").click();
+  console.log(`06: team ${modeLabel} — waiting…`);
+  await waitTeamAnswers(page, { minAnswers, timeout: 360_000 });
   await settle(page, 1500);
+  const replies = page.locator(".agent-team-event--reply");
+  const n = await replies.count();
+  for (let i = Math.max(0, n - Math.min(n, 5)); i < n; i++) {
+    await pauseOn(replies.nth(i), 3200);
+  }
+}
+
+async function challenge06(page) {
+  const soloAsk =
+    fs.readFileSync(path.join(__dirname, "../06-first-agent/prompt.txt"), "utf8").trim() ||
+    TEAM_TOPIC;
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1600);
 
   await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
-  await settle(page, 800);
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 1000);
 
-  // Apply editor preset if visible
-  const preset = page.getByRole("button", { name: /Краткий редактор/i });
-  if ((await preset.count()) > 0) {
-    page.once("dialog", (d) => d.accept().catch(() => {}));
-    await preset.first().click();
+  console.log("06: create cast — Алкаш, Аристотель, Программист @", AGENT_STRONG);
+  for (const persona of STRING_THEORY_CAST) {
+    await ensurePersona(page, persona);
+    await pauseOn(page.locator(".agent-builder").first(), 2200);
+  }
+
+  // Solo: Аристотель explains string theory
+  await page.locator(".agent-rail-item").filter({ hasText: /Аристотель/i }).first().click();
+  await settle(page, 800);
+  await pauseOn(page.locator(".agent-builder").first(), 2500);
+
+  const box = page.locator(".agent-compose textarea").first();
+  await box.fill(
+    "Кейс · Один агент: в трёх предложениях объясни теорию струн так, будто слушатель умный, но не физик.",
+  );
+  await settle(page, 1200);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  console.log("06: solo Аристотель…");
+  await waitAgentAssistant(page, { minChars: 40, timeout: 240_000 });
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 5500);
+
+  // Team modes with the same clear topic
+  await page.getByRole("button", { name: /^Команда$/i }).click();
+  await settle(page, 1400);
+  const castNames = STRING_THEORY_CAST.map((p) => p.name);
+  await selectTeamByNames(page, castNames);
+  await pauseOn(page.locator(".agent-team-roster"), 2500);
+
+  await runTeamMode(page, "Параллельно", `Кейс · Параллельно.\n${TEAM_TOPIC}`, {
+    minAnswers: 2,
+    fanIn: true,
+    names: castNames,
+  });
+
+  await runTeamMode(
+    page,
+    "Цепочка",
+    `Кейс · Цепочка (Алкаш → Аристотель → Программист).\n${TEAM_TOPIC}\nКаждый улучшает мысль предыдущего.`,
+    { minAnswers: 2, fanIn: false, names: castNames },
+  );
+
+  await runTeamMode(
+    page,
+    "Обсуждение",
+    `Кейс · Обсуждение / roundtable.\n${TEAM_TOPIC}\nПотом коротко покритикуйте друг друга.`,
+    { minAnswers: 2, fanIn: true, names: castNames },
+  );
+
+  await page.getByRole("button", { name: /Прогон/i }).first().click();
+  await settle(page, 1000);
+  // Прогон: один базовый — Аристотель
+  await selectTeamByNames(page, ["Аристотель"]);
+  await pauseOn(page.locator(".agent-progon-controls"), 2800);
+  await setFanIn(page, true);
+  await page
+    .locator(".agent-team-form textarea")
+    .fill(
+      `/прогон Кейс · Прогон temperature: одним абзацем — что такое теория струн и зачем она нужна.`,
+    );
+  await settle(page, 1000);
+  await page.locator(".agent-team-form .agent-send-btn").click();
+  console.log("06: progon…");
+  await waitTeamAnswers(page, { minAnswers: 2, timeout: 360_000 });
+  const progonReplies = page.locator(".agent-team-event--reply");
+  const pn = await progonReplies.count();
+  for (let i = Math.max(0, pn - 5); i < pn; i++) {
+    await pauseOn(progonReplies.nth(i), 3000);
+  }
+  await settle(page, 2000);
+}
+
+async function challenge07(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1600);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 900);
+
+  // Dedicated memory tester agent
+  await ensurePersona(page, {
+    name: "Тестер памяти",
+    system:
+      "Ты тестовый агент памяти (День 7). Кратко подтверждай факты о пользователе. " +
+      "Когда просят формат ответа — соблюдай его буквально, без лишнего текста.",
+    temperature: "0.2",
+    maxTokens: "256",
+  });
+  await pauseOn(page.locator(".agent-builder").first(), 2800);
+
+  const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
+  if ((await clearBtn.count()) > 0) {
+    await clearBtn.first().click();
+    await settle(page, 1000);
+  }
+
+  const intro =
+    fs.readFileSync(path.join(__dirname, "../07-context-memory/prompt.txt"), "utf8").trim() ||
+    "Меня зовут Артем. Любимый язык — Python.";
+
+  console.log("07: A — store Артем + Python…");
+  await page.locator(".agent-compose textarea").first().fill(intro);
+  await settle(page, 1400);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 10, timeout: 240_000 });
+  await pauseOn(page.locator(".agent-log-line--user").last(), 3500);
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 5000);
+
+  console.log("07: B — reload (restart)…");
+  await page.reload({ waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 2000);
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 1200);
+
+  await page.waitForFunction(
+    () => {
+      const users = [...document.querySelectorAll(".agent-log-line--user")];
+      return users.some((el) => /Артем|Python/i.test(el.textContent || ""));
+    },
+    { timeout: 60_000 },
+  );
+  await pauseOn(
+    page.locator(".agent-log-line--user").filter({ hasText: /Артем|Python/i }).first(),
+    4000,
+  );
+
+  const recall =
+    "Кейс B · после перезапуска. Ответь ровно двумя строками:\nИмя: <только имя>\nЯзык: <только язык>";
+  await page.locator(".agent-compose textarea").first().fill(recall);
+  await settle(page, 1200);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  console.log("07: B — recall…");
+  await waitAgentAssistant(page, { minChars: 5, timeout: 240_000 });
+  const last = page.locator(".agent-log-line--assistant").last();
+  const text = await last.innerText();
+  if (!/артем/i.test(text) || !/python/i.test(text)) {
+    throw new Error(`07 B fail — expected Артем+Python in: ${text.slice(0, 240)}`);
+  }
+  await pauseOn(last, 6500);
+
+  console.log("07: C — clear wipes memory…");
+  await page.getByRole("button", { name: /Очистить лог/i }).first().click();
+  await settle(page, 2000);
+  await pauseOn(page.locator(".agent-log-empty, .agent-log").first(), 3000);
+
+  await page
+    .locator(".agent-compose textarea")
+    .first()
+    .fill("Кейс C · после очистки. Как меня зовут? Если не знаешь из истории — скажи «не знаю».");
+  await settle(page, 1000);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 3, timeout: 180_000 });
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 5000);
+  await settle(page, 2000);
+}
+
+async function challenge08(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1600);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 900);
+
+  await ensurePersona(page, {
+    name: "Токен-метр",
+    system:
+      "Ты агент учёта токенов. Отвечай коротко (1–3 предложения), без списков.",
+    temperature: "0.2",
+    maxTokens: "160",
+  });
+  await pauseOn(page.locator(".agent-builder").first(), 2200);
+
+  const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
+  if ((await clearBtn.count()) > 0) {
+    await clearBtn.first().click();
     await settle(page, 800);
   }
 
-  const box = page.locator(".agent-compose textarea");
-  await box.fill(prompt06);
-  await settle(page, 800);
-  await page.locator(".agent-send-btn").click();
-
-  console.log("06: waiting for agent answer + model badge…");
-  await page.waitForFunction(
-    () => {
-      const lines = document.querySelectorAll(".agent-log-line--assistant");
-      if (!lines.length) return false;
-      const last = lines[lines.length - 1];
-      const text = (last.textContent || "").trim();
-      const badge = last.querySelector(".badge");
-      return text.length > 8 && Boolean(badge && (badge.textContent || "").trim());
-    },
-    { timeout: 180_000 },
+  // Default limit — short dialog
+  console.log("08: A short…");
+  await page.locator(".agent-compose textarea").first().fill(
+    "Кейс A · короткий: что такое токен в LLM? Одним предложением.",
   );
-  await settle(page, 1500);
+  await settle(page, 1000);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 10, timeout: 180_000 });
+  await pauseOn(page.locator(".agent-token-meter").last(), 4500);
 
-  const answer = page.locator(".agent-log-line--assistant").last();
-  await answer.scrollIntoViewIfNeeded();
-  await settle(page, 4000);
-  await page.locator(".agent-builder, .agent-workshop-builder").first().scrollIntoViewIfNeeded().catch(() => {});
-  await settle(page, 2500);
-  await answer.scrollIntoViewIfNeeded();
-  await settle(page, 3000);
+  // Grow history
+  console.log("08: B long…");
+  const fat = "яблоко ".repeat(35);
+  for (let i = 1; i <= 3; i++) {
+    await page
+      .locator(".agent-compose textarea")
+      .first()
+      .fill(`Кейс B · блок ${i}: запомни «${fat}». Подтверди номер ${i}.`);
+    await settle(page, 700);
+    await page.locator(".agent-workshop--solo .agent-send-btn").click();
+    await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+    await pauseOn(page.locator(".agent-token-meter").last(), 3200);
+  }
+
+  // Overflow
+  console.log("08: C overflow…");
+  const limitInput = page.locator(".agent-context-limit input");
+  await limitInput.fill("160");
+  await settle(page, 800);
+  await pauseOn(limitInput, 2000);
+  await page
+    .locator(".agent-compose textarea")
+    .first()
+    .fill(
+      "Кейс C · переполнение: что было в блоке 1? Если контекст обрезан — скажи об этом прямо.",
+    );
+  await settle(page, 900);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+  await page.waitForSelector(".agent-token-trunc", { timeout: 30_000 });
+  await pauseOn(page.locator(".agent-token-trunc").last(), 5000);
+  await pauseOn(page.locator(".agent-token-meter").last(), 4500);
+  await settle(page, 2000);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
+const out07 = path.join(__dirname, "../07-context-memory/challenge-07.webm");
+const out08 = path.join(__dirname, "../08-tokens/challenge-08.webm");
 
-async function withRetries(label, fn, attempts = 2) {
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/** Retry outside withVideo so failed waits do not bloat the take. */
+async function recordChallenge(label, outPath, fn, attempts = 2) {
   let last;
   for (let i = 1; i <= attempts; i++) {
     try {
       console.log(`${label}: attempt ${i}/${attempts}`);
-      await fn();
+      await withVideo(outPath, fn);
       return;
     } catch (err) {
       last = err;
@@ -406,21 +833,24 @@ async function withRetries(label, fn, attempts = 2) {
   throw last;
 }
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 if (ONLY.includes("04")) {
   console.log("Recording challenge 04 against", BASE, "model=", TEMP_MODEL);
-  await withVideo(out04, (page) => withRetries("04", () => challenge04(page)));
+  await recordChallenge("04", out04, (page) => challenge04(page));
 }
 if (ONLY.includes("05")) {
   console.log("Recording challenge 05 against", BASE);
-  await withVideo(out05, (page) => withRetries("05", () => challenge05(page)));
+  await recordChallenge("05", out05, (page) => challenge05(page));
 }
 if (ONLY.includes("06")) {
   console.log("Recording challenge 06 against", BASE);
-  await withVideo(out06, (page) => withRetries("06", () => challenge06(page)));
+  await recordChallenge("06", out06, (page) => challenge06(page));
+}
+if (ONLY.includes("07")) {
+  console.log("Recording challenge 07 against", BASE);
+  await recordChallenge("07", out07, (page) => challenge07(page));
+}
+if (ONLY.includes("08")) {
+  console.log("Recording challenge 08 against", BASE);
+  await recordChallenge("08", out08, (page) => challenge08(page));
 }
 console.log("done");

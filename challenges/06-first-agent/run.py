@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Challenge 06 — first encapsulated agent against prod agent-workshop API."""
+"""Challenge 06 — first encapsulated agent (persona cast / strong model)."""
 
 from __future__ import annotations
 
@@ -14,26 +14,26 @@ sys.path.insert(0, str(ROOT))
 from _lib.prod_client import DEFAULT_BASE, agent_run, write_json  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-
+STRONG = os.environ.get("CHALLENGE_AGENT_MODEL", "google/gemini-2.5-flash")
 SYSTEM = (
-    "Ты краткий редактор текста. Правишь стиль и ясность, не меняя смысл. "
-    "Отвечай только отредактированным текстом без предисловий."
+    "Ты Аристотель. Говоришь торжественно, ясно, через причины и категории. "
+    "Теорию струн объясняй просто, без псевдонауки. 3–5 предложений, оставайся в роли."
 )
 
 
 def main() -> int:
     base = os.environ.get("BASE_URL", DEFAULT_BASE).rstrip("/")
     prompt = (HERE / "prompt.txt").read_text(encoding="utf-8").strip()
-    print(f"==> challenge 06 first agent @ {base}")
+    print(f"==> challenge 06 first agent @ {base} model={STRONG}")
 
     result = agent_run(
         base,
-        prompt,
+        "В трёх предложениях объясни теорию струн так, будто слушатель умный, но не физик.",
         system_prompt=SYSTEM,
-        name="Краткий редактор",
-        preferred_model="auto",
-        temperature=0.3,
-        max_tokens=512,
+        name="Аристотель",
+        preferred_model=STRONG,
+        temperature=0.5,
+        max_tokens=500,
         timeout=180.0,
     )
     print(
@@ -47,33 +47,29 @@ def main() -> int:
         "ts": datetime.now(timezone.utc).isoformat(),
         "endpoint": "/api/v1/agent-workshop/run",
         "definition": {
-            "name": "Краткий редактор",
+            "name": "Аристотель",
             "system_prompt": SYSTEM,
-            "preferred_model": "auto",
-            "temperature": 0.3,
-            "max_tokens": 512,
+            "preferred_model": STRONG,
+            "temperature": 0.5,
+            "max_tokens": 500,
         },
-        "message": prompt,
+        "cast": ["Алкаш", "Аристотель", "Программист"],
+        "topic": prompt,
         "result": result,
         "ui": "https://aichallenge.arcilite.ru/?shell=agents",
-        "note": "Encapsulated agent run — not /llm/complete and not Session chat.",
+        "note": "Encapsulated agent — string-theory persona cast on strong model.",
     }
     write_json(str(HERE / "results.json"), payload)
 
     md = [
-        "# Challenge 06 — First Agent",
+        "# Challenge 06 — First Agent (теория струн)",
         "",
         f"Prod: `{base}` · {payload['ts']}",
         "",
-        f"- Endpoint: `{payload['endpoint']}`",
+        f"- Cast: Алкаш · Аристотель · Программист",
+        f"- Solo probe: **Аристотель** @ `{STRONG}`",
         f"- `model_id`: `{result['model_id']}`",
         f"- latency: {result['latency_ms']} ms",
-        f"- tokens≈: {result['tokens_approx']}",
-        f"- cost≈: {result['cost_proxy']}",
-        "",
-        "## Message",
-        "",
-        prompt,
         "",
         "## Answer",
         "",
