@@ -55,8 +55,10 @@ async def test_run_agent_assembles_system_and_user() -> None:
         max_message_chars=8000,
         generation=gen,
     )
-    assert result.content == "ok-answer"
-    assert result.model_id == "fake-model"
+    assert result.result.content == "ok-answer"
+    assert result.result.model_id == "fake-model"
+    assert result.tokens.completion >= 1
+    assert result.tokens.truncation.applied is False
     assert [m.role.value for m in router.last_messages] == ["system", "user"]
     assert router.last_messages[0].content == "Be brief."
     assert router.last_messages[1].content == "Hello"
@@ -111,3 +113,52 @@ async def test_run_agent_includes_history() -> None:
             enabled=False,
             max_message_chars=8000,
         )
+
+
+@pytest.mark.asyncio
+async def test_run_agent_truncates_history_under_low_context_limit() -> None:
+    from datetime import UTC, datetime
+
+    from app.domain.agent_dialog import AgentDialogMessage
+
+    router = _FakeRouter()
+    blob = "z" * 400
+    prior = [
+        AgentDialogMessage(
+            id="1", role="user", content=blob, created_at=datetime.now(UTC)
+        ),
+        AgentDialogMessage(
+            id="2",
+            role="assistant",
+            content=blob,
+            created_at=datetime.now(UTC),
+            model_id="fake",
+        ),
+        AgentDialogMessage(
+            id="3", role="user", content="short", created_at=datetime.now(UTC)
+        ),
+        AgentDialogMessage(
+            id="4",
+            role="assistant",
+            content="ok",
+            created_at=datetime.now(UTC),
+            model_id="fake",
+        ),
+    ]
+    outcome = await run_agent(
+        definition=AgentDefinition(
+            name="N", system_prompt="S", preferred_model="auto", max_tokens=32
+        ),
+        message="NOW",
+        router=router,  # type: ignore[arg-type]
+        enabled=True,
+        max_message_chars=8000,
+        history=prior,
+        context_limit=96,
+    )
+    assert outcome.tokens.truncation.applied is True
+    assert outcome.tokens.history_before > outcome.tokens.history_after
+    # LLM must not see the huge blob turns if they were dropped.
+    joined = " ".join(m.content for m in router.last_messages)
+    assert blob not in joined or outcome.tokens.truncation.dropped_messages >= 1
+    assert router.last_messages[-1].content == "NOW"

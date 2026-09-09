@@ -9,7 +9,8 @@ import urllib.request
 from typing import Any
 
 DEFAULT_BASE = "https://aichallenge.arcilite.ru"
-VISITOR = "aichallenge-challenge-runner"
+# Must be a UUID — server normalize_visitor_id rejects free-form strings.
+VISITOR = "a1c4a11e-c4a1-4e07-9c06-c0a1e11e07e0"
 
 
 def estimate_tokens(text: str) -> int:
@@ -145,23 +146,36 @@ def agent_run(
     temperature: float | None = 0.3,
     max_tokens: int | None = 512,
     timeout: float = 120.0,
+    persist: bool = False,
+    client_draft_id: str | None = None,
+    dialog_id: str | None = None,
+    context_limit: int | None = None,
 ) -> dict[str, Any]:
-    """POST /api/v1/agent-workshop/run — Day 6 encapsulated agent."""
+    """POST /api/v1/agent-workshop/run — Day 6 encapsulated agent (+ Day 7/8)."""
+    body: dict[str, Any] = {
+        "definition": {
+            "name": name,
+            "system_prompt": system_prompt,
+            "preferred_model": preferred_model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        "message": message,
+    }
+    if persist:
+        body["persist"] = True
+        if client_draft_id:
+            body["client_draft_id"] = client_draft_id
+        if dialog_id:
+            body["dialog_id"] = dialog_id
+    if context_limit is not None:
+        body["context_limit"] = int(context_limit)
     t0 = time.perf_counter()
     data = request_json(
         base,
         "/api/v1/agent-workshop/run",
         method="POST",
-        body={
-            "definition": {
-                "name": name,
-                "system_prompt": system_prompt,
-                "preferred_model": preferred_model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            },
-            "message": message,
-        },
+        body=body,
         timeout=timeout,
         retries=1,
     )
@@ -173,10 +187,31 @@ def agent_run(
     return {
         "content": content,
         "model_id": model_id,
+        "dialog_id": data.get("dialog_id"),
+        "messages": data.get("messages"),
+        "tokens": data.get("tokens"),
         "latency_ms": latency_ms,
         "tokens_approx": estimate_tokens(content),
         "cost_proxy": estimate_cost_proxy(str(model_id)),
     }
+
+
+def agent_dialog_get(base: str, client_draft_id: str, *, timeout: float = 30.0) -> dict[str, Any] | None:
+    """GET /api/v1/agent-workshop/dialogs/by-draft/{id} — 404 → None."""
+    path = f"/api/v1/agent-workshop/dialogs/by-draft/{client_draft_id}"
+    try:
+        data = request_json(base, path, timeout=timeout, retries=0)
+    except RuntimeError as exc:
+        if "HTTP 404" in str(exc):
+            return None
+        raise
+    return data if isinstance(data, dict) else None
+
+
+def agent_dialog_clear(base: str, client_draft_id: str, *, timeout: float = 30.0) -> dict[str, Any] | None:
+    path = f"/api/v1/agent-workshop/dialogs/by-draft/{client_draft_id}/clear"
+    data = request_json(base, path, method="POST", body={}, timeout=timeout, retries=0)
+    return data if isinstance(data, dict) else None
 
 
 def list_models(base: str) -> list[dict[str, Any]]:

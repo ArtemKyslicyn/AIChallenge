@@ -510,7 +510,9 @@ export function AgentWorkshop() {
 
     try {
       const persist = Boolean(opts?.persist);
-      const dialogId = ensureSession(sessionsRef.current, agentId).dialogId ?? null;
+      const sess = ensureSession(sessionsRef.current, agentId);
+      const dialogId = sess.dialogId ?? null;
+      const contextLimit = sess.contextLimit ?? null;
       const result = await runAgentWorkshop(
         {
           name: draft.name,
@@ -525,14 +527,24 @@ export function AgentWorkshop() {
           persist,
           clientDraftId: persist ? agentId : undefined,
           dialogId: persist ? dialogId : undefined,
+          contextLimit,
         },
       );
+      const tokenMeter = result.tokens ?? null;
       if (mirror === "full") {
         if (persist && result.messages?.length) {
+          const log = dialogMessagesToLog(result.messages);
+          // Attach meter to the latest assistant line from this turn.
+          for (let i = log.length - 1; i >= 0; i--) {
+            if (log[i].role === "assistant") {
+              log[i] = { ...log[i], tokens: tokenMeter };
+              break;
+            }
+          }
           patchSession(agentId, {
             status: "",
             dialogId: result.dialog_id ?? dialogId,
-            log: dialogMessagesToLog(result.messages),
+            log,
           });
         } else {
           appendLog(agentId, {
@@ -542,6 +554,7 @@ export function AgentWorkshop() {
             modelId: result.model_id,
             tag,
             speaker: draft.name,
+            tokens: tokenMeter,
           });
           patchSession(agentId, { status: "" });
         }
@@ -1066,6 +1079,44 @@ export function AgentWorkshop() {
                   ) : null}
                 </div>
                 <p>{line.text}</p>
+                {line.role === "assistant" && line.tokens ? (
+                  <div className="agent-token-meter" aria-label="Токены">
+                    {line.tokens.truncation.applied ? (
+                      <p className="agent-token-trunc" role="status">
+                        История обрезана: −{line.tokens.truncation.dropped_messages} сообщ. (~
+                        {line.tokens.truncation.dropped_tokens_est} tok), budget{" "}
+                        {line.tokens.truncation.budget}/{line.tokens.truncation.context_limit}
+                      </p>
+                    ) : null}
+                    <dl className="agent-token-grid">
+                      <div>
+                        <dt>Запрос</dt>
+                        <dd>{line.tokens.request}</dd>
+                      </div>
+                      <div>
+                        <dt>История</dt>
+                        <dd>
+                          {line.tokens.history_after}
+                          {line.tokens.history_before !== line.tokens.history_after
+                            ? ` ← ${line.tokens.history_before}`
+                            : ""}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Ответ</dt>
+                        <dd>{line.tokens.completion}</dd>
+                      </div>
+                      <div>
+                        <dt>Всего</dt>
+                        <dd>{line.tokens.total}</dd>
+                      </div>
+                      <div>
+                        <dt>cost≈</dt>
+                        <dd>{line.tokens.cost_proxy}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                ) : null}
               </article>
             ))
           )}
@@ -1082,6 +1133,26 @@ export function AgentWorkshop() {
             void send(draft.id);
           }}
         >
+          <label className="agent-context-limit">
+            <span>Лимит контекста</span>
+            <input
+              type="number"
+              min={64}
+              max={128000}
+              step={64}
+              placeholder="8192"
+              value={session.contextLimit ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                const n = raw === "" ? null : Number(raw);
+                patchSession(draft.id, {
+                  contextLimit: n != null && Number.isFinite(n) && n >= 64 ? n : null,
+                });
+              }}
+              onClick={(e) => e.stopPropagation()}
+              title="Примерно токены (len/4). Низкое значение — демо обрезки истории."
+            />
+          </label>
           <textarea
             value={session.input}
             onChange={(e) => patchSession(draft.id, { input: e.target.value })}

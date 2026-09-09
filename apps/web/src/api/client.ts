@@ -605,6 +605,21 @@ export interface AgentWorkshopRunResultDto {
   model_id: string;
   dialog_id?: string | null;
   messages?: AgentDialogMessageDto[] | null;
+  tokens?: {
+    request: number;
+    history_before: number;
+    history_after: number;
+    completion: number;
+    total: number;
+    cost_proxy: number;
+    truncation: {
+      applied: boolean;
+      dropped_messages: number;
+      dropped_tokens_est: number;
+      context_limit: number;
+      budget: number;
+    };
+  } | null;
 }
 
 export interface AgentDialogDto {
@@ -620,6 +635,8 @@ export interface AgentWorkshopRunOptions {
   dialogId?: string | null;
   /** Persist turns in Postgres and continue with history (solo). */
   persist?: boolean;
+  /** Day-8 context window budget override (approx tokens). */
+  contextLimit?: number | null;
   signal?: AbortSignal;
 }
 
@@ -638,6 +655,9 @@ export function runAgentWorkshop(
     body.persist = true;
     if (opts.clientDraftId) body.client_draft_id = opts.clientDraftId;
     if (opts.dialogId) body.dialog_id = opts.dialogId;
+  }
+  if (opts.contextLimit != null && opts.contextLimit >= 64) {
+    body.context_limit = opts.contextLimit;
   }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",

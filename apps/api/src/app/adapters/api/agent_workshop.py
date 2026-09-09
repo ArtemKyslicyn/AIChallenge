@@ -12,11 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.adapters.api.schemas import (
     AgentDialogMessageResponse,
     AgentDialogResponse,
+    AgentTokenTruncationResponse,
+    AgentTokenUsageResponse,
     AgentWorkshopRunRequest,
     AgentWorkshopRunResponse,
 )
 from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
-from app.application.agent_run import run_agent, run_agent_with_dialog
+from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
 from app.application.llm_catalog import generation_from_api
 from app.core.deps import (
     ClientVisitorId,
@@ -31,6 +33,7 @@ from app.domain.agent_dialog import AgentDialog
 from app.domain.analytics import AnalyticsEvent
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
+from app.domain.token_meter import TokenBreakdown
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +73,31 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
     )
 
 
+def _tokens_dto(tokens: TokenBreakdown) -> AgentTokenUsageResponse:
+    t = tokens.truncation
+    return AgentTokenUsageResponse(
+        request=tokens.request,
+        history_before=tokens.history_before,
+        history_after=tokens.history_after,
+        completion=tokens.completion,
+        total=tokens.total,
+        cost_proxy=tokens.cost_proxy,
+        truncation=AgentTokenTruncationResponse(
+            applied=t.applied,
+            dropped_messages=t.dropped_messages,
+            dropped_tokens_est=t.dropped_tokens_est,
+            context_limit=t.context_limit,
+            budget=t.budget,
+        ),
+    )
+
+
+def _resolve_context_limit(raw: int | None) -> int:
+    if raw is None:
+        return DEFAULT_CONTEXT_LIMIT
+    return max(64, min(128_000, int(raw)))
+
+
 @router.post("/run", response_model=AgentWorkshopRunResponse)
 async def run_workshop_agent(
     payload: AgentWorkshopRunRequest,
@@ -98,6 +126,8 @@ async def run_workshop_agent(
     content = ""
     dialog_id: UUID | None = None
     messages_out: list[AgentDialogMessageResponse] | None = None
+    tokens_out: AgentTokenUsageResponse | None = None
+    ctx_limit = _resolve_context_limit(payload.context_limit)
     try:
         if payload.persist:
             owner = (client_visitor_id or "").strip().lower()
@@ -112,7 +142,7 @@ async def run_workshop_agent(
                 )
             identity = resolve_visitor_identity(request, owner)
             vhash = identity[0] if identity else None
-            result, dialog = await run_agent_with_dialog(
+            outcome, dialog = await run_agent_with_dialog(
                 definition=definition,
                 message=payload.message,
                 router=container.router,
@@ -124,30 +154,37 @@ async def run_workshop_agent(
                 generation=generation,
                 dialog_id=payload.dialog_id,
                 visitor_hash=vhash,
+                context_limit=ctx_limit,
             )
             await db.commit()
-            content = result.content
-            model_id = result.model_id
+            content = outcome.result.content
+            model_id = outcome.result.model_id
             dialog_id = dialog.id
             messages_out = [_msg_dto(m) for m in dialog.messages]
+            tokens_out = _tokens_dto(outcome.tokens)
             return AgentWorkshopRunResponse(
                 content=content,
                 model_id=model_id,
                 dialog_id=dialog_id,
                 messages=messages_out,
+                tokens=tokens_out,
             )
 
-        result = await run_agent(
+        outcome = await run_agent(
             definition=definition,
             message=payload.message,
             router=container.router,
             enabled=settings.agents_run_enabled,
             max_message_chars=settings.max_message_chars,
             generation=generation,
+            context_limit=ctx_limit,
         )
-        content = result.content
-        model_id = result.model_id
-        return AgentWorkshopRunResponse(content=content, model_id=model_id)
+        content = outcome.result.content
+        model_id = outcome.result.model_id
+        tokens_out = _tokens_dto(outcome.tokens)
+        return AgentWorkshopRunResponse(
+            content=content, model_id=model_id, tokens=tokens_out
+        )
     except Exception:
         status = "error"
         await db.rollback()
@@ -160,24 +197,30 @@ async def run_workshop_agent(
                 name = (
                     "agent_run_completed" if status == "ok" else "agent_run_failed"
                 )
+                props = {
+                    "status": status,
+                    "model_id": model_id or None,
+                    "preferred_model": definition.preferred_model,
+                    "latency_ms": latency_ms,
+                    "answer_chars": len(content),
+                    "agent_name": definition.name or None,
+                    "system_prompt_chars": len(definition.system_prompt or ""),
+                    "message_chars": len(payload.message or ""),
+                    "persist": bool(payload.persist),
+                    "dialog_id": str(dialog_id) if dialog_id else None,
+                    "client_visitor_id": client_visitor_id,
+                    "context_limit": ctx_limit,
+                }
+                if tokens_out is not None:
+                    props["tokens_total"] = tokens_out.total
+                    props["tokens_request"] = tokens_out.request
+                    props["truncated"] = tokens_out.truncation.applied
                 await container.analytics.capture(
                     [
                         AnalyticsEvent(
                             name=name,
                             distinct_id=visitor_key,
-                            properties={
-                                "status": status,
-                                "model_id": model_id or None,
-                                "preferred_model": definition.preferred_model,
-                                "latency_ms": latency_ms,
-                                "answer_chars": len(content),
-                                "agent_name": definition.name or None,
-                                "system_prompt_chars": len(definition.system_prompt or ""),
-                                "message_chars": len(payload.message or ""),
-                                "persist": bool(payload.persist),
-                                "dialog_id": str(dialog_id) if dialog_id else None,
-                                "client_visitor_id": client_visitor_id,
-                            },
+                            properties=props,
                         )
                     ]
                 )
