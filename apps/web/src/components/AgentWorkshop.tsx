@@ -284,16 +284,22 @@ export function AgentWorkshop() {
   }
 
   function patchSession(id: string, patch: Partial<AgentSession>) {
-    setSessions((prev) => ({
-      ...prev,
-      [id]: { ...ensureSession(prev, id), ...patch },
-    }));
+    setSessions((prev) => {
+      const next = {
+        ...prev,
+        [id]: { ...ensureSession(prev, id), ...patch },
+      };
+      sessionsRef.current = next;
+      return next;
+    });
   }
 
   function appendLog(id: string, line: RunLine) {
     setSessions((prev) => {
       const cur = ensureSession(prev, id);
-      return { ...prev, [id]: { ...cur, log: [...cur.log, line] } };
+      const next = { ...prev, [id]: { ...cur, log: [...cur.log, line] } };
+      sessionsRef.current = next;
+      return next;
     });
   }
 
@@ -1144,6 +1150,13 @@ export function AgentWorkshop() {
               value={session.contextLimit ?? ""}
               onChange={(e) => {
                 const raw = e.target.value.trim();
+                const n = raw === "" ? null : Number(raw);
+                patchSession(draft.id, {
+                  contextLimit: n != null && Number.isFinite(n) && n >= 64 ? n : null,
+                });
+              }}
+              onInput={(e) => {
+                const raw = (e.target as HTMLInputElement).value.trim();
                 const n = raw === "" ? null : Number(raw);
                 patchSession(draft.id, {
                   contextLimit: n != null && Number.isFinite(n) && n >= 64 ? n : null,
