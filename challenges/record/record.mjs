@@ -772,8 +772,8 @@ async function challenge08(page) {
 
   // Grow history
   console.log("08: B long…");
-  const fat = "яблоко ".repeat(35);
-  for (let i = 1; i <= 3; i++) {
+  const fat = "яблоко ".repeat(40);
+  for (let i = 1; i <= 4; i++) {
     await page
       .locator(".agent-compose textarea")
       .first()
@@ -781,14 +781,17 @@ async function challenge08(page) {
     await settle(page, 700);
     await page.locator(".agent-workshop--solo .agent-send-btn").click();
     await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
-    await pauseOn(page.locator(".agent-token-meter").last(), 3200);
+    await pauseOn(page.locator(".agent-token-meter").last(), 2800);
   }
 
-  // Overflow
+  // Overflow — force React-controlled input update
   console.log("08: C overflow…");
   const limitInput = page.locator(".agent-context-limit input");
-  await limitInput.fill("160");
-  await settle(page, 800);
+  await limitInput.click();
+  await limitInput.fill("");
+  await limitInput.pressSequentially("120", { delay: 40 });
+  await limitInput.blur();
+  await settle(page, 1000);
   await pauseOn(limitInput, 2000);
   await page
     .locator(".agent-compose textarea")
@@ -799,9 +802,17 @@ async function challenge08(page) {
   await settle(page, 900);
   await page.locator(".agent-workshop--solo .agent-send-btn").click();
   await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
-  await page.waitForSelector(".agent-token-trunc", { timeout: 30_000 });
-  await pauseOn(page.locator(".agent-token-trunc").last(), 5000);
-  await pauseOn(page.locator(".agent-token-meter").last(), 4500);
+  await page.waitForFunction(
+    () => {
+      const trunc = document.querySelector(".agent-token-trunc");
+      if (trunc) return true;
+      const meters = [...document.querySelectorAll(".agent-token-meter")];
+      const last = meters[meters.length - 1];
+      return last && /←|обрезан/i.test(last.textContent || "");
+    },
+    { timeout: 60_000 },
+  );
+  await pauseOn(page.locator(".agent-token-meter").last(), 5500);
   await settle(page, 2000);
 }
 

@@ -1,0 +1,257 @@
+{
+  "challenge": "08-tokens",
+  "base_url": "https://aichallenge.arcilite.ru",
+  "ts": "2026-09-09T15:38:09.242123+00:00",
+  "model": "google/gemini-2.5-flash",
+  "cases": {
+    "A_short": {
+      "tokens": {
+        "request": 31,
+        "history_before": 0,
+        "history_after": 0,
+        "completion": 29,
+        "total": 60,
+        "cost_proxy": 0.4,
+        "truncation": {
+          "applied": false,
+          "dropped_messages": 0,
+          "dropped_tokens_est": 0,
+          "context_limit": 8192,
+          "budget": 8072
+        }
+      },
+      "result": {
+        "content": "Токен в LLM — это базовая единица текста, на которую модель разбивает входные данные для обработки и генерации ответа.",
+        "model_id": "google/gemini-2.5-flash",
+        "dialog_id": "e1a06b2a-47e2-4b64-9d95-bb7bfa6740f6",
+        "messages": [
+          {
+            "id": "cf3e0762-0364-44a4-9729-fdbf3a84d343",
+            "role": "user",
+            "content": "Короткий вопрос: что такое токен в LLM? Одним предложением.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:04.211129+00:00"
+          },
+          {
+            "id": "add86421-aab9-4eb9-9346-a8afa1db05e3",
+            "role": "assistant",
+            "content": "Токен в LLM — это базовая единица текста, на которую модель разбивает входные данные для обработки и генерации ответа.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:05.275396+00:00"
+          }
+        ],
+        "tokens": {
+          "request": 31,
+          "history_before": 0,
+          "history_after": 0,
+          "completion": 29,
+          "total": 60,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": false,
+            "dropped_messages": 0,
+            "dropped_tokens_est": 0,
+            "context_limit": 8192,
+            "budget": 8072
+          }
+        },
+        "latency_ms": 1386,
+        "tokens_approx": 30,
+        "cost_proxy": 0.4
+      }
+    },
+    "B_long": {
+      "tokens_series": [
+        {
+          "request": 141,
+          "history_before": 43,
+          "history_after": 43,
+          "completion": 4,
+          "total": 145,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": false,
+            "dropped_messages": 0,
+            "dropped_tokens_est": 0,
+            "context_limit": 8192,
+            "budget": 8112
+          }
+        },
+        {
+          "request": 226,
+          "history_before": 128,
+          "history_after": 128,
+          "completion": 4,
+          "total": 230,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": false,
+            "dropped_messages": 0,
+            "dropped_tokens_est": 0,
+            "context_limit": 8192,
+            "budget": 8112
+          }
+        },
+        {
+          "request": 311,
+          "history_before": 213,
+          "history_after": 213,
+          "completion": 4,
+          "total": 315,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": false,
+            "dropped_messages": 0,
+            "dropped_tokens_est": 0,
+            "context_limit": 8192,
+            "budget": 8112
+          }
+        },
+        {
+          "request": 396,
+          "history_before": 298,
+          "history_after": 298,
+          "completion": 4,
+          "total": 400,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": false,
+            "dropped_messages": 0,
+            "dropped_tokens_est": 0,
+            "context_limit": 8192,
+            "budget": 8112
+          }
+        }
+      ],
+      "grew": true
+    },
+    "C_overflow": {
+      "tokens": {
+        "request": 126,
+        "history_before": 383,
+        "history_after": 89,
+        "completion": 4,
+        "total": 130,
+        "cost_proxy": 0.4,
+        "truncation": {
+          "applied": true,
+          "dropped_messages": 7,
+          "dropped_tokens_est": 294,
+          "context_limit": 200,
+          "budget": 150
+        }
+      },
+      "result": {
+        "content": "Контекст обрезан.",
+        "model_id": "google/gemini-2.5-flash",
+        "dialog_id": "e1a06b2a-47e2-4b64-9d95-bb7bfa6740f6",
+        "messages": [
+          {
+            "id": "cf3e0762-0364-44a4-9729-fdbf3a84d343",
+            "role": "user",
+            "content": "Короткий вопрос: что такое токен в LLM? Одним предложением.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:04.211129+00:00"
+          },
+          {
+            "id": "add86421-aab9-4eb9-9346-a8afa1db05e3",
+            "role": "assistant",
+            "content": "Токен в LLM — это базовая единица текста, на которую модель разбивает входные данные для обработки и генерации ответа.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:05.275396+00:00"
+          },
+          {
+            "id": "f1b9337d-eba5-4032-bfa2-6c0c016237b0",
+            "role": "user",
+            "content": "Запомни блок 1: факт-яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко. Подтверди номер блока.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:05.575863+00:00"
+          },
+          {
+            "id": "e22d75a5-14ee-43e6-afc3-9d71d81eef6b",
+            "role": "assistant",
+            "content": "Блок 1 запомнен.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:06.083011+00:00"
+          },
+          {
+            "id": "f980be9a-3755-479c-906a-beee7b944f1c",
+            "role": "user",
+            "content": "Запомни блок 2: факт-яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко. Подтверди номер блока.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:06.392702+00:00"
+          },
+          {
+            "id": "f2e792fa-6a93-432c-aed9-83dee8d6d4d3",
+            "role": "assistant",
+            "content": "Блок 2 запомнен.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:06.831465+00:00"
+          },
+          {
+            "id": "55667f99-1a2f-4311-97e8-d9e5dd2c867c",
+            "role": "user",
+            "content": "Запомни блок 3: факт-яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко. Подтверди номер блока.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:07.343767+00:00"
+          },
+          {
+            "id": "60d29d79-528d-4710-a02b-8cf1e2c881be",
+            "role": "assistant",
+            "content": "Блок 3 запомнен.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:07.754990+00:00"
+          },
+          {
+            "id": "f62e39c6-a2cd-487b-a384-deb0710d33d6",
+            "role": "user",
+            "content": "Запомни блок 4: факт-яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко яблоко. Подтверди номер блока.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:08.061677+00:00"
+          },
+          {
+            "id": "5dfd8977-3659-46da-a8c3-25a6985264f2",
+            "role": "assistant",
+            "content": "Блок 4 запомнен.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:08.568764+00:00"
+          },
+          {
+            "id": "32bfbfb7-8768-4910-9e56-5f89f5adf2f5",
+            "role": "user",
+            "content": "Что ты помнишь из самых первых блоков? Если забыла — скажи, что контекст обрезан.",
+            "model_id": null,
+            "created_at": "2026-09-09T15:38:08.894509+00:00"
+          },
+          {
+            "id": "9032e387-5b46-4f1a-91d0-8f51fc131b4a",
+            "role": "assistant",
+            "content": "Контекст обрезан.",
+            "model_id": "google/gemini-2.5-flash",
+            "created_at": "2026-09-09T15:38:09.324117+00:00"
+          }
+        ],
+        "tokens": {
+          "request": 126,
+          "history_before": 383,
+          "history_after": 89,
+          "completion": 4,
+          "total": 130,
+          "cost_proxy": 0.4,
+          "truncation": {
+            "applied": true,
+            "dropped_messages": 7,
+            "dropped_tokens_est": 294,
+            "context_limit": 200,
+            "budget": 150
+          }
+        },
+        "latency_ms": 756,
+        "tokens_approx": 4,
+        "cost_proxy": 0.4
+      }
+    }
+  },
+  "ok": true,
+  "ui": "https://aichallenge.arcilite.ru/?shell=agents"
+}
