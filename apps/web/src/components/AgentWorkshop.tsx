@@ -1145,22 +1145,20 @@ export function AgentWorkshop() {
               type="number"
               min={64}
               max={128000}
-              step={64}
+              step={1}
               placeholder="8192"
               value={session.contextLimit ?? ""}
               onChange={(e) => {
                 const raw = e.target.value.trim();
-                const n = raw === "" ? null : Number(raw);
-                patchSession(draft.id, {
-                  contextLimit: n != null && Number.isFinite(n) && n >= 64 ? n : null,
-                });
-              }}
-              onInput={(e) => {
-                const raw = (e.target as HTMLInputElement).value.trim();
-                const n = raw === "" ? null : Number(raw);
-                patchSession(draft.id, {
-                  contextLimit: n != null && Number.isFinite(n) && n >= 64 ? n : null,
-                });
+                if (raw === "") {
+                  patchSession(draft.id, { contextLimit: null });
+                  return;
+                }
+                const n = Number(raw);
+                // Keep intermediate digits while typing (e.g. "1" of "120");
+                // API still ignores values &lt; 64.
+                if (!Number.isFinite(n) || n < 0) return;
+                patchSession(draft.id, { contextLimit: Math.floor(n) });
               }}
               onClick={(e) => e.stopPropagation()}
               title="Примерно токены (len/4). Низкое значение — демо обрезки истории."
