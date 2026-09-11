@@ -1,0 +1,115 @@
+{
+  "challenge": "10-context-strategies",
+  "ts": "2026-09-11T13:13:53.308219+00:00",
+  "base_url": "https://aichallenge.arcilite.ru",
+  "model": "google/gemini-2.5-flash",
+  "results": {
+    "sliding": {
+      "tokens": {
+        "request": 86,
+        "history_before": 39,
+        "history_after": 39,
+        "completion": 29,
+        "total": 115,
+        "cost_proxy": 0.4,
+        "truncation": {
+          "applied": false,
+          "dropped_messages": 0,
+          "dropped_tokens_est": 0,
+          "context_limit": 8192,
+          "budget": 8092
+        }
+      },
+      "context_strategy": {
+        "mode": "sliding",
+        "recent_kept": 4,
+        "dropped": 12,
+        "facts": {},
+        "facts_updated": false,
+        "tokens_raw_est": 186,
+        "tokens_strategy_est": 86,
+        "summary_used": false,
+        "summary_refreshed": false,
+        "summary_text": "",
+        "covered_by_summary": 0
+      },
+      "content": "Цель: Разработка и деплой приложения для управления задачами.\nСтек: Python, FastAPI, PostgreSQL, Docker, Kubernetes."
+    },
+    "facts": {
+      "tokens": {
+        "request": 179,
+        "history_before": 39,
+        "history_after": 39,
+        "completion": 17,
+        "total": 196,
+        "cost_proxy": 0.4,
+        "truncation": {
+          "applied": false,
+          "dropped_messages": 0,
+          "dropped_tokens_est": 0,
+          "context_limit": 8192,
+          "budget": 8092
+        }
+      },
+      "context_strategy": {
+        "mode": "facts",
+        "recent_kept": 4,
+        "dropped": 12,
+        "facts": {
+          "Стек": "FastAPI + React + Postgres",
+          "Решение": "хранить диалоги агента в Postgres",
+          "Ограничения": "анонимные сессии, без медицинской терминологии, не трогать Reality/xray при деплое",
+          "Дедлайн демо": "две недели",
+          "Предпочтения": "SSE стриминг ответов",
+          "Цель продукта": "чат-платформа для AIChallenge",
+          "Договорённость": "каждый ответ показывает model_id"
+        },
+        "facts_updated": true,
+        "tokens_raw_est": 186,
+        "tokens_strategy_est": 179,
+        "summary_used": false,
+        "summary_refreshed": false,
+        "summary_text": "",
+        "covered_by_summary": 0
+      },
+      "content": "Цель: чат-платформа для AIChallenge\nСтек: FastAPI + React + Postgres"
+    },
+    "compress": {
+      "tokens": {
+        "request": 180,
+        "history_before": 39,
+        "history_after": 39,
+        "completion": 17,
+        "total": 197,
+        "cost_proxy": 0.4,
+        "truncation": {
+          "applied": false,
+          "dropped_messages": 0,
+          "dropped_tokens_est": 0,
+          "context_limit": 8192,
+          "budget": 8092
+        }
+      },
+      "context_strategy": {
+        "mode": "compress",
+        "recent_kept": 4,
+        "dropped": 12,
+        "facts": {},
+        "facts_updated": false,
+        "tokens_raw_est": 186,
+        "tokens_strategy_est": 180,
+        "summary_used": true,
+        "summary_refreshed": true,
+        "summary_text": "**Факты:**\n*   **Цель продукта:** чат-платформа для AIChallenge.\n*   **Стек:** FastAPI + React + Postgres.\n*   **Ограничения:** анонимные сессии, без медицинской терминологии.\n*   **Дедлайн демо:** две недели.\n*   **Предпочтение:** SSE стриминг ответов.\n\n**Решения:**\n*   Хранить диалоги агента в Postgres.\n\n**Открытые вопросы:**\n*   Нет.",
+        "covered_by_summary": 12
+      },
+      "content": "Цель: чат-платформа для AIChallenge.\nСтек: FastAPI + React + Postgres."
+    },
+    "branching": {
+      "a": "Ок. Приоритет — мобильный UI.",
+      "b": "Ок. Приоритет — desktop analytics.",
+      "checkpoint": "3fa83ee7-ae5d-45d5-954b-397c519efa2a"
+    }
+  },
+  "ok": true
+}
