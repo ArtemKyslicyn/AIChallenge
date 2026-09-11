@@ -13,10 +13,18 @@ from app.domain.context_compress import (
     DEFAULT_SUMMARIZE_EVERY,
     CompressionInfo,
     build_summarizer_prompt,
-    estimate_compressed_request_tokens,
-    estimate_raw_request_tokens,
-    merge_system_with_summary,
-    plan_compression,
+)
+from app.domain.context_strategies import (
+    ContextMode,
+    ContextState,
+    StrategyMeta,
+    assemble_context,
+    resolve_context_mode,
+)
+from app.domain.context_strategies.facts import (
+    build_facts_extract_prompt,
+    merge_facts,
+    parse_facts_json,
 )
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, MessageRole
 from app.domain.errors import AgentsRunDisabledError, MessageValidationError
@@ -38,12 +46,25 @@ SUMMARIZER_SYSTEM = (
     "Сохраняй факты, имена, решения и открытые вопросы. Без преамбулы."
 )
 
+FACTS_EXTRACT_SYSTEM = (
+    "Ты обновляешь словарь фактов диалога. Отвечай только JSON-объектом, без markdown."
+)
+
 
 @dataclass(frozen=True, slots=True)
 class AgentRunOutcome:
     result: CompletionResult
     tokens: TokenBreakdown
     compression: CompressionInfo | None = None
+    strategy: StrategyMeta | None = None
+
+
+def merge_system_extra(system_prompt: str, system_extra: str) -> str:
+    sys = system_prompt.strip()
+    extra = (system_extra or "").strip()
+    if not extra:
+        return sys
+    return f"{sys}\n\n---\n{extra}"
 
 
 async def run_agent(
@@ -56,15 +77,13 @@ async def run_agent(
     generation: GenerationParams | None = None,
     history: list[AgentDialogMessage] | None = None,
     context_limit: int = DEFAULT_CONTEXT_LIMIT,
-    context_summary: str = "",
+    system_extra: str = "",
 ) -> AgentRunOutcome:
     if not enabled:
         raise AgentsRunDisabledError("Запуск агентов отключён конфигурацией.")
     validate_agent_run(definition, message=message, max_message_chars=max_message_chars)
 
-    system_for_llm = merge_system_with_summary(
-        definition.system_prompt.strip(), context_summary
-    )
+    system_for_llm = merge_system_extra(definition.system_prompt.strip(), system_extra)
     history_before = list(history or [])
     history_after, truncation = fit_history_to_budget(
         system_prompt=system_for_llm,
@@ -117,6 +136,25 @@ async def _refresh_summary(
     return (result.content or "").strip()
 
 
+async def _extract_facts(
+    *,
+    router: ChatRouter,
+    preferred_model: str,
+    prior: dict[str, str],
+    user_message: str,
+) -> dict[str, str] | None:
+    prompt = build_facts_extract_prompt(prior=prior, user_message=user_message)
+    turns = [
+        ChatMessage(role=MessageRole.SYSTEM, content=FACTS_EXTRACT_SYSTEM),
+        ChatMessage(role=MessageRole.USER, content=prompt),
+    ]
+    gen = GenerationParams(temperature=0.1, max_tokens=400)
+    result = await router.complete_chat(
+        turns, preferred_model=preferred_model, generation=gen
+    )
+    return parse_facts_json(result.content or "")
+
+
 async def run_agent_with_dialog(
     *,
     definition: AgentDefinition,
@@ -131,9 +169,10 @@ async def run_agent_with_dialog(
     dialog_id: UUID | None = None,
     visitor_hash: str | None = None,
     context_limit: int = DEFAULT_CONTEXT_LIMIT,
-    compress: bool = False,
-    recent_keep: int = DEFAULT_RECENT_KEEP,
-    summarize_every: int = DEFAULT_SUMMARIZE_EVERY,
+    context_mode: str | None = None,
+    compress: bool | None = None,
+    recent_keep: int | None = None,
+    summarize_every: int | None = None,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -145,6 +184,7 @@ async def run_agent_with_dialog(
     if not owner:
         raise MessageValidationError("client_visitor_id обязателен для сохранения диалога.")
     vhash = (visitor_hash or "").strip() or None
+    mode = resolve_context_mode(context_mode=context_mode, compress=compress)
 
     now = datetime.now(UTC)
     dialog: AgentDialog | None = None
@@ -170,6 +210,7 @@ async def run_agent_with_dialog(
             messages=[],
             summary_text="",
             summary_until_count=0,
+            facts={},
             created_at=now,
             updated_at=now,
         )
@@ -185,53 +226,93 @@ async def run_agent_with_dialog(
             dialog.visitor_hash = vhash
 
     history = list(dialog.messages)
-    compression: CompressionInfo | None = None
-    llm_history = history
-    context_summary = ""
+    state = ContextState(
+        summary_text=dialog.summary_text or "",
+        summary_until_count=int(dialog.summary_until_count or 0),
+        facts=dict(dialog.facts or {}),
+    )
 
-    if compress:
-        plan = plan_compression(
+    facts_updated = False
+    if mode == ContextMode.FACTS:
+        patch = await _extract_facts(
+            router=router,
+            preferred_model=dialog.preferred_model,
+            prior=state.facts,
+            user_message=message.strip(),
+        )
+        if patch is not None:
+            state.facts = merge_facts(state.facts, patch)
+            dialog.facts = dict(state.facts)
+            facts_updated = True
+
+    keep = recent_keep if recent_keep is not None else (
+        DEFAULT_RECENT_KEEP if mode == ContextMode.COMPRESS else None
+    )
+    every = (
+        summarize_every
+        if summarize_every is not None
+        else (DEFAULT_SUMMARIZE_EVERY if mode == ContextMode.COMPRESS else None)
+    )
+
+    assembly = assemble_context(
+        history,
+        mode=mode,
+        state=state,
+        system_prompt=definition.system_prompt.strip(),
+        user_message=message.strip(),
+        recent_keep=keep,
+        summarize_every=every,
+        facts_updated=facts_updated,
+    )
+
+    if mode == ContextMode.COMPRESS and assembly.needs_summary_refresh:
+        summary_text = await _refresh_summary(
+            router=router,
+            preferred_model=dialog.preferred_model,
+            prior_summary=state.summary_text,
+            chunk=list(assembly.summary_chunk),
+        )
+        covered = len(history) - len(assembly.history)
+        dialog.summary_text = summary_text
+        dialog.summary_until_count = covered
+        state.summary_text = summary_text
+        state.summary_until_count = covered
+        assembly = assemble_context(
             history,
-            summary_until_count=dialog.summary_until_count,
-            recent_keep=recent_keep,
-            summarize_every=summarize_every,
-        )
-        refreshed = False
-        summary_text = dialog.summary_text or ""
-        covered = dialog.summary_until_count
-        if plan.needs_refresh and plan.to_summarize:
-            summary_text = await _refresh_summary(
-                router=router,
-                preferred_model=dialog.preferred_model,
-                prior_summary=summary_text,
-                chunk=plan.to_summarize,
-            )
-            covered = len(history) - len(plan.recent)
-            dialog.summary_text = summary_text
-            dialog.summary_until_count = covered
-            refreshed = True
-        llm_history = plan.recent
-        context_summary = summary_text
-        raw_est = estimate_raw_request_tokens(
+            mode=mode,
+            state=state,
             system_prompt=definition.system_prompt.strip(),
-            messages=history,
             user_message=message.strip(),
+            recent_keep=keep,
+            summarize_every=every,
         )
-        compressed_est = estimate_compressed_request_tokens(
-            system_prompt=definition.system_prompt.strip(),
+        meta = StrategyMeta(
+            mode=assembly.meta.mode,
+            recent_kept=assembly.meta.recent_kept,
+            dropped=assembly.meta.dropped,
+            facts=dict(assembly.meta.facts),
+            facts_updated=assembly.meta.facts_updated,
+            summary_used=bool(summary_text.strip()),
+            summary_refreshed=True,
+            tokens_raw_est=assembly.meta.tokens_raw_est,
+            tokens_strategy_est=assembly.meta.tokens_strategy_est,
+            covered_by_summary=covered,
             summary_text=summary_text,
-            recent=llm_history,
-            user_message=message.strip(),
         )
+    else:
+        meta = assembly.meta
+
+    compression: CompressionInfo | None = None
+    if mode == ContextMode.COMPRESS:
         compression = CompressionInfo(
             enabled=True,
-            summary_used=bool(summary_text.strip()),
-            summary_refreshed=refreshed,
-            summary_text=summary_text,
-            recent_kept=len(llm_history),
-            covered_by_summary=covered,
-            tokens_raw_est=raw_est,
-            tokens_compressed_est=compressed_est,
+            summary_used=meta.summary_used,
+            summary_refreshed=meta.summary_refreshed,
+            summary_text=meta.summary_text,
+            recent_kept=meta.recent_kept,
+            covered_by_summary=meta.covered_by_summary,
+            tokens_raw_est=meta.tokens_raw_est,
+            tokens_compressed_est=meta.tokens_strategy_est,
         )
 
     outcome = await run_agent(
@@ -241,16 +322,16 @@ async def run_agent_with_dialog(
         enabled=enabled,
         max_message_chars=max_message_chars,
         generation=generation,
-        history=llm_history,
+        history=assembly.history,
         context_limit=context_limit,
-        context_summary=context_summary,
+        system_extra=assembly.system_extra,
     )
-    if compression is not None:
-        outcome = AgentRunOutcome(
-            result=outcome.result,
-            tokens=outcome.tokens,
-            compression=compression,
-        )
+    outcome = AgentRunOutcome(
+        result=outcome.result,
+        tokens=outcome.tokens,
+        compression=compression,
+        strategy=meta if mode != ContextMode.NONE else meta,
+    )
 
     user_msg = AgentDialogMessage(
         id=str(uuid4()),

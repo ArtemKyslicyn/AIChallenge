@@ -33,5 +33,10 @@ class AgentDialog:
     #: Rolling LLM summary of messages[:summary_until_count].
     summary_text: str = ""
     summary_until_count: int = 0
+    #: Sticky key-value facts for context_mode=facts.
+    facts: dict[str, str] = field(default_factory=dict)
+    parent_dialog_id: UUID | None = None
+    branch_label: str | None = None
+    forked_from_message_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

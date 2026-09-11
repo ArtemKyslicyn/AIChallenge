@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.adapters.api.schemas import (
     AgentCompressionResponse,
+    AgentContextStrategyResponse,
+    AgentDialogForkRequest,
     AgentDialogMessageResponse,
     AgentDialogResponse,
     AgentTokenTruncationResponse,
@@ -20,6 +22,7 @@ from app.adapters.api.schemas import (
 )
 from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
 from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
+from app.application.dialog_fork import fork_agent_dialog
 from app.application.llm_catalog import generation_from_api
 from app.core.deps import (
     ClientVisitorId,
@@ -32,11 +35,8 @@ from app.core.deps import (
 from app.domain.agent_definition import AgentDefinition
 from app.domain.agent_dialog import AgentDialog
 from app.domain.analytics import AnalyticsEvent
-from app.domain.context_compress import (
-    DEFAULT_RECENT_KEEP,
-    DEFAULT_SUMMARIZE_EVERY,
-    CompressionInfo,
-)
+from app.domain.context_compress import CompressionInfo
+from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
 from app.domain.token_meter import TokenBreakdown
@@ -78,6 +78,10 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
         else "",
         summary_text=dialog.summary_text or "",
         summary_until_count=int(dialog.summary_until_count or 0),
+        facts=dict(dialog.facts or {}),
+        parent_dialog_id=dialog.parent_dialog_id,
+        branch_label=dialog.branch_label,
+        forked_from_message_id=dialog.forked_from_message_id,
     )
 
 
@@ -110,6 +114,22 @@ def _compression_dto(info: CompressionInfo) -> AgentCompressionResponse:
         covered_by_summary=info.covered_by_summary,
         tokens_raw_est=info.tokens_raw_est,
         tokens_compressed_est=info.tokens_compressed_est,
+    )
+
+
+def _strategy_dto(meta: StrategyMeta) -> AgentContextStrategyResponse:
+    return AgentContextStrategyResponse(
+        mode=meta.mode.value,
+        recent_kept=meta.recent_kept,
+        dropped=meta.dropped,
+        facts=dict(meta.facts or {}),
+        facts_updated=meta.facts_updated,
+        tokens_raw_est=meta.tokens_raw_est,
+        tokens_strategy_est=meta.tokens_strategy_est,
+        summary_used=meta.summary_used,
+        summary_refreshed=meta.summary_refreshed,
+        summary_text=meta.summary_text,
+        covered_by_summary=meta.covered_by_summary,
     )
 
 
@@ -149,6 +169,7 @@ async def run_workshop_agent(
     messages_out: list[AgentDialogMessageResponse] | None = None
     tokens_out: AgentTokenUsageResponse | None = None
     compression_out: AgentCompressionResponse | None = None
+    strategy_out: AgentContextStrategyResponse | None = None
     ctx_limit = _resolve_context_limit(payload.context_limit)
     try:
         if payload.persist:
@@ -177,13 +198,10 @@ async def run_workshop_agent(
                 dialog_id=payload.dialog_id,
                 visitor_hash=vhash,
                 context_limit=ctx_limit,
-                compress=bool(payload.compress),
-                recent_keep=payload.recent_keep
-                if payload.recent_keep is not None
-                else DEFAULT_RECENT_KEEP,
-                summarize_every=payload.summarize_every
-                if payload.summarize_every is not None
-                else DEFAULT_SUMMARIZE_EVERY,
+                context_mode=payload.context_mode,
+                compress=bool(payload.compress) if payload.compress else None,
+                recent_keep=payload.recent_keep,
+                summarize_every=payload.summarize_every,
             )
             await db.commit()
             content = outcome.result.content
@@ -193,6 +211,8 @@ async def run_workshop_agent(
             tokens_out = _tokens_dto(outcome.tokens)
             if outcome.compression is not None:
                 compression_out = _compression_dto(outcome.compression)
+            if outcome.strategy is not None:
+                strategy_out = _strategy_dto(outcome.strategy)
             return AgentWorkshopRunResponse(
                 content=content,
                 model_id=model_id,
@@ -200,6 +220,7 @@ async def run_workshop_agent(
                 messages=messages_out,
                 tokens=tokens_out,
                 compression=compression_out,
+                context_strategy=strategy_out,
             )
 
         outcome = await run_agent(
@@ -303,7 +324,34 @@ async def clear_dialog_by_draft(
     dialog.messages = []
     dialog.summary_text = ""
     dialog.summary_until_count = 0
+    dialog.facts = {}
     dialog.updated_at = datetime.now(UTC)
     saved = await repo.save(dialog)
     await db.commit()
     return _dialog_dto(saved)
+
+
+@router.post(
+    "/dialogs/{dialog_id}/fork",
+    response_model=AgentDialogResponse,
+)
+async def fork_dialog(
+    dialog_id: UUID,
+    payload: AgentDialogForkRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+) -> AgentDialogResponse:
+    """Checkpoint → new dialog with copied prefix (+ facts/summary)."""
+    repo = SqlAlchemyAgentDialogRepository(db)
+    source = await repo.get(dialog_id)
+    if source is None or source.client_visitor_id != client_visitor_id:
+        raise HTTPException(status_code=404, detail="Диалог не найден.")
+    child = await fork_agent_dialog(
+        dialogs=repo,
+        source=source,
+        from_message_id=payload.from_message_id,
+        client_draft_id=payload.client_draft_id,
+        branch_label=payload.label,
+    )
+    await db.commit()
+    return _dialog_dto(child)

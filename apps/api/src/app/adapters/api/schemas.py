@@ -139,7 +139,9 @@ class AgentWorkshopRunRequest(BaseModel):
     persist: bool = False
     #: Context window budget for token fit (Day 8). Lab demos may pass a low value.
     context_limit: int | None = Field(default=None, ge=64, le=128_000)
-    #: Day 9: rolling LLM summary + recent-N window.
+    #: Day 10: mutually exclusive context mode (none|compress|sliding|facts).
+    context_mode: str | None = Field(default=None, max_length=32)
+    #: Day 9 compat: true without context_mode → compress.
     compress: bool = False
     recent_keep: int | None = Field(default=None, ge=0, le=40)
     summarize_every: int | None = Field(default=None, ge=2, le=100)
@@ -182,6 +184,20 @@ class AgentCompressionResponse(BaseModel):
     tokens_compressed_est: int
 
 
+class AgentContextStrategyResponse(BaseModel):
+    mode: str
+    recent_kept: int = 0
+    dropped: int = 0
+    facts: dict[str, str] = Field(default_factory=dict)
+    facts_updated: bool = False
+    tokens_raw_est: int = 0
+    tokens_strategy_est: int = 0
+    summary_used: bool = False
+    summary_refreshed: bool = False
+    summary_text: str = ""
+    covered_by_summary: int = 0
+
+
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
@@ -189,6 +205,7 @@ class AgentWorkshopRunResponse(BaseModel):
     messages: list[AgentDialogMessageResponse] | None = None
     tokens: AgentTokenUsageResponse | None = None
     compression: AgentCompressionResponse | None = None
+    context_strategy: AgentContextStrategyResponse | None = None
 
 
 class AgentDialogResponse(BaseModel):
@@ -199,6 +216,16 @@ class AgentDialogResponse(BaseModel):
     updated_at: str
     summary_text: str = ""
     summary_until_count: int = 0
+    facts: dict[str, str] = Field(default_factory=dict)
+    parent_dialog_id: UUID | None = None
+    branch_label: str | None = None
+    forked_from_message_id: str | None = None
+
+
+class AgentDialogForkRequest(BaseModel):
+    from_message_id: str = Field(min_length=1, max_length=64)
+    client_draft_id: str = Field(min_length=1, max_length=64)
+    label: str | None = Field(default=None, max_length=80)
 
 
 class ModelCapabilitiesResponse(BaseModel):

@@ -171,6 +171,14 @@ class AgentDialogRow(Base):
     summary_until_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    facts: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    parent_dialog_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("agent_dialogs.id", ondelete="SET NULL"), nullable=True
+    )
+    branch_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    forked_from_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

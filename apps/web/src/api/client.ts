@@ -630,6 +630,19 @@ export interface AgentWorkshopRunResultDto {
     tokens_raw_est: number;
     tokens_compressed_est: number;
   } | null;
+  context_strategy?: {
+    mode: string;
+    recent_kept: number;
+    dropped: number;
+    facts: Record<string, string>;
+    facts_updated: boolean;
+    tokens_raw_est: number;
+    tokens_strategy_est: number;
+    summary_used?: boolean;
+    summary_refreshed?: boolean;
+    summary_text?: string;
+    covered_by_summary?: number;
+  } | null;
 }
 
 export interface AgentDialogDto {
@@ -640,6 +653,10 @@ export interface AgentDialogDto {
   updated_at: string;
   summary_text?: string;
   summary_until_count?: number;
+  facts?: Record<string, string>;
+  parent_dialog_id?: string | null;
+  branch_label?: string | null;
+  forked_from_message_id?: string | null;
 }
 
 export interface AgentWorkshopRunOptions {
@@ -649,7 +666,9 @@ export interface AgentWorkshopRunOptions {
   persist?: boolean;
   /** Day-8 context window budget override (approx tokens). */
   contextLimit?: number | null;
-  /** Day-9 rolling summary compression. */
+  /** Day-10 mutually exclusive mode. */
+  contextMode?: "none" | "compress" | "sliding" | "facts";
+  /** Day-9 compat alias → compress */
   compress?: boolean;
   recentKeep?: number | null;
   summarizeEvery?: number | null;
@@ -675,10 +694,15 @@ export function runAgentWorkshop(
   if (opts.contextLimit != null && opts.contextLimit >= 64) {
     body.context_limit = opts.contextLimit;
   }
-  if (opts.compress) {
-    body.compress = true;
+  const mode = opts.contextMode ?? (opts.compress ? "compress" : "none");
+  if (mode && mode !== "none") {
+    body.context_mode = mode;
+  }
+  if (mode === "compress" || mode === "sliding" || mode === "facts") {
     if (opts.recentKeep != null) body.recent_keep = opts.recentKeep;
-    if (opts.summarizeEvery != null) body.summarize_every = opts.summarizeEvery;
+  }
+  if (mode === "compress" && opts.summarizeEvery != null) {
+    body.summarize_every = opts.summarizeEvery;
   }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",
@@ -688,6 +712,21 @@ export function runAgentWorkshop(
       signal: opts.signal,
     },
     240_000,
+  );
+}
+
+export async function forkAgentDialog(
+  dialogId: string,
+  body: { from_message_id: string; client_draft_id: string; label?: string },
+  signal?: AbortSignal,
+): Promise<AgentDialogDto> {
+  return request<AgentDialogDto>(
+    `/agent-workshop/dialogs/${encodeURIComponent(dialogId)}/fork`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal,
+    },
   );
 }
 
