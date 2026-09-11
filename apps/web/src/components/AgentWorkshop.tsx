@@ -1192,7 +1192,8 @@ export function AgentWorkshop() {
                       className="ghost-button agent-fork-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const label = window.prompt("Имя ветки", "A") || "A";
+                        const n = (session.branches?.length || 0) + 1;
+                        const label = String.fromCharCode(64 + Math.min(n, 26));
                         void forkBranch(draft.id, line.messageId!, label);
                       }}
                     >
