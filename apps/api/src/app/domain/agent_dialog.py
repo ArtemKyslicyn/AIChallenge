@@ -30,5 +30,8 @@ class AgentDialog:
     #: Chat-aligned HMAC (client id + IP digest); refreshed each turn, not ownership.
     visitor_hash: str | None = None
     messages: list[AgentDialogMessage] = field(default_factory=list)
+    #: Rolling LLM summary of messages[:summary_until_count].
+    summary_text: str = ""
+    summary_until_count: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None

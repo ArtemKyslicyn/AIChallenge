@@ -818,13 +818,146 @@ async function challenge08(page) {
   await settle(page, 2000);
 }
 
+async function challenge09(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1600);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 900);
+
+  await ensurePersona(page, {
+    name: "Компрессия",
+    system:
+      "Ты ассистент с памятью фактов. Отвечай коротко (1–3 предложения). " +
+      "Если спрашивают имя или язык — используй факты из диалога или сводки.",
+    temperature: "0.2",
+    maxTokens: "120",
+  });
+  await pauseOn(page.locator(".agent-builder").first(), 2000);
+
+  const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
+  if ((await clearBtn.count()) > 0) {
+    await clearBtn.first().click();
+    await settle(page, 800);
+  }
+
+  // Ensure compress is OFF for case A
+  const compressToggle = page.locator(".agent-compress-toggle input[type=checkbox]");
+  await compressToggle.waitFor({ timeout: 15_000 });
+  if (await compressToggle.isChecked()) {
+    await compressToggle.uncheck();
+    await settle(page, 400);
+  }
+  await pauseOn(page.locator(".agent-compress-toggle"), 2200);
+
+  const facts = [
+    "Меня зовут Артем.",
+    "Любимый язык — Python.",
+    "Работаю в AIChallenge.",
+    "Любимый цвет — синий.",
+    "Живу у моря.",
+    "Пью зелёный чай.",
+  ];
+
+  console.log("09: A without compress…");
+  for (let i = 0; i < facts.length; i++) {
+    await page
+      .locator(".agent-compose textarea")
+      .first()
+      .fill(`Кейс A · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`);
+    await settle(page, 600);
+    await page.locator(".agent-workshop--solo .agent-send-btn").click();
+    await waitAgentAssistant(page, { minChars: 2, timeout: 180_000 });
+    await pauseOn(page.locator(".agent-token-meter").last(), 2200);
+  }
+
+  await page
+    .locator(".agent-compose textarea")
+    .first()
+    .fill(
+      "Кейс A · recall без сжатия. Две строки:\nИмя: <имя>\nЯзык: <язык>",
+    );
+  await settle(page, 900);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4500);
+  await pauseOn(page.locator(".agent-token-meter").last(), 3500);
+
+  console.log("09: B enable compress + new dialog…");
+  await clearBtn.first().click();
+  await settle(page, 1000);
+  if (!(await compressToggle.isChecked())) {
+    await compressToggle.check();
+    await settle(page, 400);
+  }
+  // Demo-friendly thresholds so summary appears after ~6 facts
+  const recentInput = page.locator(".agent-compose-tools label").filter({ hasText: /^recent$/i }).locator("input");
+  const everyInput = page.locator(".agent-compose-tools label").filter({ hasText: /^every$/i }).locator("input");
+  await recentInput.fill("4");
+  await everyInput.fill("6");
+  await settle(page, 400);
+  await pauseOn(page.locator(".agent-compress-toggle"), 2500);
+
+  for (let i = 0; i < facts.length; i++) {
+    await page
+      .locator(".agent-compose textarea")
+      .first()
+      .fill(`Кейс B · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`);
+    await settle(page, 600);
+    await page.locator(".agent-workshop--solo .agent-send-btn").click();
+    await waitAgentAssistant(page, { minChars: 2, timeout: 180_000 });
+    // After enough turns, compression meter / summary may appear
+    const compressMeter = page.locator(".agent-token-compress").last();
+    if ((await compressMeter.count()) > 0) {
+      await pauseOn(compressMeter, 2800);
+    } else {
+      await pauseOn(page.locator(".agent-token-meter").last(), 2000);
+    }
+  }
+
+  // Wait for summary panel if present
+  const summary = page.locator(".agent-summary-panel");
+  if ((await summary.count()) > 0) {
+    await summary.first().click();
+    await settle(page, 600);
+    await pauseOn(summary.first(), 4500);
+  }
+
+  await page
+    .locator(".agent-compose textarea")
+    .first()
+    .fill(
+      "Кейс B · recall со сжатием. Две строки:\nИмя: <имя>\nЯзык: <язык>",
+    );
+  await settle(page, 900);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+  const last = page.locator(".agent-log-line--assistant").last();
+  const text = await last.innerText();
+  if (!/артем/i.test(text) || !/python/i.test(text)) {
+    throw new Error(`09 B fail — expected Артем+Python in: ${text.slice(0, 240)}`);
+  }
+  await pauseOn(last, 5000);
+  const compressLine = page.locator(".agent-token-compress").last();
+  if ((await compressLine.count()) > 0) {
+    await pauseOn(compressLine, 4500);
+  } else {
+    await pauseOn(page.locator(".agent-token-meter").last(), 3500);
+  }
+  await settle(page, 2000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
 const out07 = path.join(__dirname, "../07-context-memory/challenge-07.webm");
 const out08 = path.join(__dirname, "../08-tokens/challenge-08.webm");
+const out09 = path.join(__dirname, "../09-compression/challenge-09.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -865,5 +998,9 @@ if (ONLY.includes("07")) {
 if (ONLY.includes("08")) {
   console.log("Recording challenge 08 against", BASE);
   await recordChallenge("08", out08, (page) => challenge08(page));
+}
+if (ONLY.includes("09")) {
+  console.log("Recording challenge 09 against", BASE);
+  await recordChallenge("09", out09, (page) => challenge09(page));
 }
 console.log("done");

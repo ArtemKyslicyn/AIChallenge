@@ -16,6 +16,17 @@ export interface TokenMeter {
   };
 }
 
+export interface CompressionMeter {
+  enabled: boolean;
+  summary_used: boolean;
+  summary_refreshed: boolean;
+  summary_text: string;
+  recent_kept: number;
+  covered_by_summary: number;
+  tokens_raw_est: number;
+  tokens_compressed_est: number;
+}
+
 export interface RunLine {
   id: string;
   role: "user" | "assistant" | "error" | "status";
@@ -27,6 +38,8 @@ export interface RunLine {
   speaker?: string;
   /** Day-8 approximate token meter (assistant lines). */
   tokens?: TokenMeter | null;
+  /** Day-9 compression stats (assistant lines). */
+  compression?: CompressionMeter | null;
 }
 
 export interface AgentSession {
@@ -37,6 +50,12 @@ export interface AgentSession {
   dialogId?: string | null;
   /** Optional context window override (tok approx) for Day-8 demos */
   contextLimit?: number | null;
+  /** Day-9: compress older history into LLM summary */
+  compress?: boolean;
+  recentKeep?: number | null;
+  summarizeEvery?: number | null;
+  /** Last known rolling summary for UI */
+  summaryText?: string | null;
 }
 
 const KEY = "aichallenge.agent_sessions.v2";
@@ -45,13 +64,21 @@ const MAX_LOG = 80;
 type SessionMap = Record<string, AgentSession>;
 
 export function emptySession(): AgentSession {
-  return { log: [], input: "", status: "", dialogId: null, contextLimit: null };
+  return {
+    log: [],
+    input: "",
+    status: "",
+    dialogId: null,
+    contextLimit: null,
+    compress: false,
+    recentKeep: 6,
+    summarizeEvery: 10,
+    summaryText: null,
+  };
 }
 
 export function loadSessions(): SessionMap {
   try {
-    // Prefer localStorage so history UI survives full browser restart;
-    // Postgres remains source of truth and rehydrates on focus.
     const raw =
       localStorage.getItem(KEY) ??
       sessionStorage.getItem("aichallenge.agent_sessions.v1");
@@ -70,6 +97,14 @@ export function loadSessions(): SessionMap {
           typeof s.contextLimit === "number" && s.contextLimit >= 64
             ? s.contextLimit
             : null,
+        compress: Boolean(s.compress),
+        recentKeep:
+          typeof s.recentKeep === "number" && s.recentKeep >= 0 ? s.recentKeep : 6,
+        summarizeEvery:
+          typeof s.summarizeEvery === "number" && s.summarizeEvery >= 2
+            ? s.summarizeEvery
+            : 10,
+        summaryText: typeof s.summaryText === "string" ? s.summaryText : null,
       };
     }
     return out;
@@ -88,6 +123,10 @@ export function saveSessions(map: SessionMap): void {
         status: s.status || "",
         dialogId: s.dialogId ?? null,
         contextLimit: s.contextLimit ?? null,
+        compress: Boolean(s.compress),
+        recentKeep: s.recentKeep ?? 6,
+        summarizeEvery: s.summarizeEvery ?? 10,
+        summaryText: s.summaryText ?? null,
       };
     }
     localStorage.setItem(KEY, JSON.stringify(slim));

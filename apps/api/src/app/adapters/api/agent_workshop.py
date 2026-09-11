@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.adapters.api.schemas import (
+    AgentCompressionResponse,
     AgentDialogMessageResponse,
     AgentDialogResponse,
     AgentTokenTruncationResponse,
@@ -31,6 +32,11 @@ from app.core.deps import (
 from app.domain.agent_definition import AgentDefinition
 from app.domain.agent_dialog import AgentDialog
 from app.domain.analytics import AnalyticsEvent
+from app.domain.context_compress import (
+    DEFAULT_RECENT_KEEP,
+    DEFAULT_SUMMARIZE_EVERY,
+    CompressionInfo,
+)
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
 from app.domain.token_meter import TokenBreakdown
@@ -70,6 +76,8 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
         updated_at=(dialog.updated_at or dialog.created_at).isoformat()
         if dialog.updated_at or dialog.created_at
         else "",
+        summary_text=dialog.summary_text or "",
+        summary_until_count=int(dialog.summary_until_count or 0),
     )
 
 
@@ -89,6 +97,19 @@ def _tokens_dto(tokens: TokenBreakdown) -> AgentTokenUsageResponse:
             context_limit=t.context_limit,
             budget=t.budget,
         ),
+    )
+
+
+def _compression_dto(info: CompressionInfo) -> AgentCompressionResponse:
+    return AgentCompressionResponse(
+        enabled=info.enabled,
+        summary_used=info.summary_used,
+        summary_refreshed=info.summary_refreshed,
+        summary_text=info.summary_text,
+        recent_kept=info.recent_kept,
+        covered_by_summary=info.covered_by_summary,
+        tokens_raw_est=info.tokens_raw_est,
+        tokens_compressed_est=info.tokens_compressed_est,
     )
 
 
@@ -127,6 +148,7 @@ async def run_workshop_agent(
     dialog_id: UUID | None = None
     messages_out: list[AgentDialogMessageResponse] | None = None
     tokens_out: AgentTokenUsageResponse | None = None
+    compression_out: AgentCompressionResponse | None = None
     ctx_limit = _resolve_context_limit(payload.context_limit)
     try:
         if payload.persist:
@@ -155,6 +177,13 @@ async def run_workshop_agent(
                 dialog_id=payload.dialog_id,
                 visitor_hash=vhash,
                 context_limit=ctx_limit,
+                compress=bool(payload.compress),
+                recent_keep=payload.recent_keep
+                if payload.recent_keep is not None
+                else DEFAULT_RECENT_KEEP,
+                summarize_every=payload.summarize_every
+                if payload.summarize_every is not None
+                else DEFAULT_SUMMARIZE_EVERY,
             )
             await db.commit()
             content = outcome.result.content
@@ -162,12 +191,15 @@ async def run_workshop_agent(
             dialog_id = dialog.id
             messages_out = [_msg_dto(m) for m in dialog.messages]
             tokens_out = _tokens_dto(outcome.tokens)
+            if outcome.compression is not None:
+                compression_out = _compression_dto(outcome.compression)
             return AgentWorkshopRunResponse(
                 content=content,
                 model_id=model_id,
                 dialog_id=dialog_id,
                 messages=messages_out,
                 tokens=tokens_out,
+                compression=compression_out,
             )
 
         outcome = await run_agent(
@@ -269,6 +301,8 @@ async def clear_dialog_by_draft(
     if dialog is None:
         raise MessageValidationError("Диалог ещё не создан — нечего очищать.")
     dialog.messages = []
+    dialog.summary_text = ""
+    dialog.summary_until_count = 0
     dialog.updated_at = datetime.now(UTC)
     saved = await repo.save(dialog)
     await db.commit()
