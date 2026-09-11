@@ -1,0 +1,53 @@
+{
+  "challenge": "09-compression",
+  "ts": "2026-09-11T07:53:35.491624+00:00",
+  "base_url": "https://aichallenge.arcilite.ru",
+  "model": "google/gemini-2.5-flash",
+  "off": {
+    "tokens": {
+      "request": 140,
+      "history_before": 90,
+      "history_after": 90,
+      "completion": 5,
+      "total": 145,
+      "cost_proxy": 0.4,
+      "truncation": {
+        "applied": false,
+        "dropped_messages": 0,
+        "dropped_tokens_est": 0,
+        "context_limit": 8192,
+        "budget": 8112
+      }
+    },
+    "content": "Имя: Артем\nЯзык: Python"
+  },
+  "on": {
+    "tokens": {
+      "request": 117,
+      "history_before": 29,
+      "history_after": 29,
+      "completion": 5,
+      "total": 122,
+      "cost_proxy": 0.4,
+      "truncation": {
+        "applied": false,
+        "dropped_messages": 0,
+        "dropped_tokens_est": 0,
+        "context_limit": 8192,
+        "budget": 8112
+      }
+    },
+    "compression": {
+      "enabled": true,
+      "summary_used": true,
+      "summary_refreshed": false,
+      "summary_text": "**Факты:**\n* Имя пользователя: Артем.\n* Любимый язык пользователя: Python.\n* Место работы пользователя: AIChallenge.",
+      "recent_kept": 4,
+      "covered_by_summary": 6,
+      "tokens_raw_est": 140,
+      "tokens_compressed_est": 117
+    },
+    "content": "Имя: Артем\nЯзык: Python"
+  },
+  "ok": true
+}
