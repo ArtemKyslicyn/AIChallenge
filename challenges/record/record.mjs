@@ -1064,16 +1064,10 @@ async function challenge10(page) {
   }
   const forkBtn = page.locator(".agent-fork-btn").first();
   await forkBtn.waitFor({ timeout: 15_000 });
-  page.once("dialog", async (d) => {
-    await d.accept("A");
-  });
   await forkBtn.click();
-  await settle(page, 1500);
-  page.once("dialog", async (d) => {
-    await d.accept("B");
-  });
+  await settle(page, 2000);
   await page.locator(".agent-fork-btn").nth(1).click();
-  await settle(page, 1500);
+  await settle(page, 2000);
   await pauseOn(page.locator(".agent-branches"), 4000);
   const branchA = page.locator(".agent-branch-btn").filter({ hasText: /^A$/i }).first();
   if ((await branchA.count()) > 0) {
