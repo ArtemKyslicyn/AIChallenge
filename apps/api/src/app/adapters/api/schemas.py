@@ -139,6 +139,10 @@ class AgentWorkshopRunRequest(BaseModel):
     persist: bool = False
     #: Context window budget for token fit (Day 8). Lab demos may pass a low value.
     context_limit: int | None = Field(default=None, ge=64, le=128_000)
+    #: Day 9: rolling LLM summary + recent-N window.
+    compress: bool = False
+    recent_keep: int | None = Field(default=None, ge=0, le=40)
+    summarize_every: int | None = Field(default=None, ge=2, le=100)
 
 
 class AgentDialogMessageResponse(BaseModel):
@@ -167,12 +171,24 @@ class AgentTokenUsageResponse(BaseModel):
     truncation: AgentTokenTruncationResponse
 
 
+class AgentCompressionResponse(BaseModel):
+    enabled: bool
+    summary_used: bool
+    summary_refreshed: bool
+    summary_text: str = ""
+    recent_kept: int
+    covered_by_summary: int
+    tokens_raw_est: int
+    tokens_compressed_est: int
+
+
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
     dialog_id: UUID | None = None
     messages: list[AgentDialogMessageResponse] | None = None
     tokens: AgentTokenUsageResponse | None = None
+    compression: AgentCompressionResponse | None = None
 
 
 class AgentDialogResponse(BaseModel):
@@ -181,6 +197,8 @@ class AgentDialogResponse(BaseModel):
     name: str
     messages: list[AgentDialogMessageResponse]
     updated_at: str
+    summary_text: str = ""
+    summary_until_count: int = 0
 
 
 class ModelCapabilitiesResponse(BaseModel):

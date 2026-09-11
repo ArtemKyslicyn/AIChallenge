@@ -432,7 +432,7 @@ export function AgentWorkshop() {
   }
 
   async function clearLog(id: string) {
-    patchSession(id, { log: [], status: "", dialogId: null });
+    patchSession(id, { log: [], status: "", dialogId: null, summaryText: null });
     if (!isTeam) {
       try {
         await clearAgentDialogByDraft(id);
@@ -451,6 +451,7 @@ export function AgentWorkshop() {
         dialogId: dialog.id,
         log: dialogMessagesToLog(dialog.messages),
         status: "",
+        summaryText: dialog.summary_text || null,
       });
     } catch {
       /* offline / empty */
@@ -534,16 +535,19 @@ export function AgentWorkshop() {
           clientDraftId: persist ? agentId : undefined,
           dialogId: persist ? dialogId : undefined,
           contextLimit,
+          compress: persist ? Boolean(sess.compress) : false,
+          recentKeep: sess.recentKeep ?? 6,
+          summarizeEvery: sess.summarizeEvery ?? 10,
         },
       );
       const tokenMeter = result.tokens ?? null;
+      const compressionMeter = result.compression ?? null;
       if (mirror === "full") {
         if (persist && result.messages?.length) {
           const log = dialogMessagesToLog(result.messages);
-          // Attach meter to the latest assistant line from this turn.
           for (let i = log.length - 1; i >= 0; i--) {
             if (log[i].role === "assistant") {
-              log[i] = { ...log[i], tokens: tokenMeter };
+              log[i] = { ...log[i], tokens: tokenMeter, compression: compressionMeter };
               break;
             }
           }
@@ -551,6 +555,7 @@ export function AgentWorkshop() {
             status: "",
             dialogId: result.dialog_id ?? dialogId,
             log,
+            summaryText: compressionMeter?.summary_text || sess.summaryText || null,
           });
         } else {
           appendLog(agentId, {
@@ -561,8 +566,12 @@ export function AgentWorkshop() {
             tag,
             speaker: draft.name,
             tokens: tokenMeter,
+            compression: compressionMeter,
           });
-          patchSession(agentId, { status: "" });
+          patchSession(agentId, {
+            status: "",
+            summaryText: compressionMeter?.summary_text || sess.summaryText || null,
+          });
         }
       } else if (mirror === "brief") {
         appendLog(agentId, {
@@ -1094,6 +1103,16 @@ export function AgentWorkshop() {
                         {line.tokens.truncation.budget}/{line.tokens.truncation.context_limit}
                       </p>
                     ) : null}
+                    {line.compression?.enabled ? (
+                      <p className="agent-token-compress" role="status">
+                        Сжатие: {line.compression.tokens_raw_est} →{" "}
+                        {line.compression.tokens_compressed_est} tok
+                        {line.compression.summary_refreshed ? " · сводка обновлена" : ""}
+                        {line.compression.summary_used
+                          ? ` · recent ${line.compression.recent_kept}`
+                          : ""}
+                      </p>
+                    ) : null}
                     <dl className="agent-token-grid">
                       <div>
                         <dt>Запрос</dt>
@@ -1127,6 +1146,12 @@ export function AgentWorkshop() {
             ))
           )}
         </div>
+        {session.summaryText ? (
+          <details className="agent-summary-panel">
+            <summary>Сводка истории</summary>
+            <p>{session.summaryText}</p>
+          </details>
+        ) : null}
         {session.status ? (
           <p className="agent-status" role="status">
             {session.status}
@@ -1139,31 +1164,79 @@ export function AgentWorkshop() {
             void send(draft.id);
           }}
         >
-          <label className="agent-context-limit">
-            <span>Лимит контекста</span>
-            <input
-              type="number"
-              min={64}
-              max={128000}
-              step={1}
-              placeholder="8192"
-              value={session.contextLimit ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value.trim();
-                if (raw === "") {
-                  patchSession(draft.id, { contextLimit: null });
-                  return;
-                }
-                const n = Number(raw);
-                // Keep intermediate digits while typing (e.g. "1" of "120");
-                // API still ignores values &lt; 64.
-                if (!Number.isFinite(n) || n < 0) return;
-                patchSession(draft.id, { contextLimit: Math.floor(n) });
-              }}
-              onClick={(e) => e.stopPropagation()}
-              title="Примерно токены (len/4). Низкое значение — демо обрезки истории."
-            />
-          </label>
+          <div className="agent-compose-tools">
+            <label className="agent-compress-toggle">
+              <input
+                type="checkbox"
+                checked={Boolean(session.compress)}
+                onChange={(e) => patchSession(draft.id, { compress: e.target.checked })}
+                onClick={(e) => e.stopPropagation()}
+              />
+              Сжимать историю
+            </label>
+            {session.compress ? (
+              <>
+                <label className="agent-context-limit" title="Сколько последних реплик оставить без сжатия">
+                  <span>recent</span>
+                  <input
+                    type="number"
+                    min={2}
+                    max={40}
+                    step={1}
+                    value={session.recentKeep ?? 6}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (!Number.isFinite(n) || n < 0) return;
+                      patchSession(draft.id, { recentKeep: Math.floor(n) });
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </label>
+                <label
+                  className="agent-context-limit"
+                  title="Обновить сводку, когда накопилось столько старых реплик"
+                >
+                  <span>every</span>
+                  <input
+                    type="number"
+                    min={2}
+                    max={100}
+                    step={1}
+                    value={session.summarizeEvery ?? 10}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (!Number.isFinite(n) || n < 2) return;
+                      patchSession(draft.id, { summarizeEvery: Math.floor(n) });
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </label>
+              </>
+            ) : null}
+            <label className="agent-context-limit">
+              <span>Лимит контекста</span>
+              <input
+                type="number"
+                min={64}
+                max={128000}
+                step={1}
+                placeholder="8192"
+                value={session.contextLimit ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  if (raw === "") {
+                    patchSession(draft.id, { contextLimit: null });
+                    return;
+                  }
+                  const n = Number(raw);
+                  if (!Number.isFinite(n) || n < 0) return;
+                  patchSession(draft.id, { contextLimit: Math.floor(n) });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                title="Примерно токены (len/4). Низкое значение — демо обрезки истории."
+              />
+            </label>
+          </div>
           <textarea
             value={session.input}
             onChange={(e) => patchSession(draft.id, { input: e.target.value })}

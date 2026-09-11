@@ -72,6 +72,8 @@ def _to_domain(row: AgentDialogRow) -> AgentDialog:
         temperature=row.temperature,
         max_tokens=row.max_tokens,
         messages=_parse_messages(list(row.messages or [])),
+        summary_text=getattr(row, "summary_text", "") or "",
+        summary_until_count=int(getattr(row, "summary_until_count", 0) or 0),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -109,6 +111,8 @@ class SqlAlchemyAgentDialogRepository:
                 temperature=dialog.temperature,
                 max_tokens=dialog.max_tokens,
                 messages=_dump_messages(dialog.messages),
+                summary_text=dialog.summary_text or "",
+                summary_until_count=int(dialog.summary_until_count or 0),
                 created_at=dialog.created_at,
                 updated_at=dialog.updated_at,
             )
@@ -121,6 +125,8 @@ class SqlAlchemyAgentDialogRepository:
             row.max_tokens = dialog.max_tokens
             row.visitor_hash = dialog.visitor_hash
             row.messages = _dump_messages(dialog.messages)
+            row.summary_text = dialog.summary_text or ""
+            row.summary_until_count = int(dialog.summary_until_count or 0)
             row.updated_at = dialog.updated_at
         await self._db.flush()
         return _to_domain(row)

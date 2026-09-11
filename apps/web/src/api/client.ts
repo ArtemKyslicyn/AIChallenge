@@ -620,6 +620,16 @@ export interface AgentWorkshopRunResultDto {
       budget: number;
     };
   } | null;
+  compression?: {
+    enabled: boolean;
+    summary_used: boolean;
+    summary_refreshed: boolean;
+    summary_text: string;
+    recent_kept: number;
+    covered_by_summary: number;
+    tokens_raw_est: number;
+    tokens_compressed_est: number;
+  } | null;
 }
 
 export interface AgentDialogDto {
@@ -628,6 +638,8 @@ export interface AgentDialogDto {
   name: string;
   messages: AgentDialogMessageDto[];
   updated_at: string;
+  summary_text?: string;
+  summary_until_count?: number;
 }
 
 export interface AgentWorkshopRunOptions {
@@ -637,6 +649,10 @@ export interface AgentWorkshopRunOptions {
   persist?: boolean;
   /** Day-8 context window budget override (approx tokens). */
   contextLimit?: number | null;
+  /** Day-9 rolling summary compression. */
+  compress?: boolean;
+  recentKeep?: number | null;
+  summarizeEvery?: number | null;
   signal?: AbortSignal;
 }
 
@@ -658,6 +674,11 @@ export function runAgentWorkshop(
   }
   if (opts.contextLimit != null && opts.contextLimit >= 64) {
     body.context_limit = opts.contextLimit;
+  }
+  if (opts.compress) {
+    body.compress = true;
+    if (opts.recentKeep != null) body.recent_keep = opts.recentKeep;
+    if (opts.summarizeEvery != null) body.summarize_every = opts.summarizeEvery;
   }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",

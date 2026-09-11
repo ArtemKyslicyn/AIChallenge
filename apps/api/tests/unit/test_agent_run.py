@@ -158,7 +158,96 @@ async def test_run_agent_truncates_history_under_low_context_limit() -> None:
     )
     assert outcome.tokens.truncation.applied is True
     assert outcome.tokens.history_before > outcome.tokens.history_after
-    # LLM must not see the huge blob turns if they were dropped.
     joined = " ".join(m.content for m in router.last_messages)
     assert blob not in joined or outcome.tokens.truncation.dropped_messages >= 1
     assert router.last_messages[-1].content == "NOW"
+
+
+@pytest.mark.asyncio
+async def test_compress_refreshes_summary_and_shrinks_prompt() -> None:
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from app.application.agent_run import run_agent_with_dialog
+    from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
+
+    class _MemRepo:
+        def __init__(self) -> None:
+            self.dialog: AgentDialog | None = None
+
+        async def get(self, dialog_id):  # noqa: ANN001
+            return self.dialog if self.dialog and self.dialog.id == dialog_id else None
+
+        async def get_by_client_draft(self, *, client_visitor_id, client_draft_id):  # noqa: ANN001
+            if (
+                self.dialog
+                and self.dialog.client_visitor_id == client_visitor_id
+                and self.dialog.client_draft_id == client_draft_id
+            ):
+                return self.dialog
+            return None
+
+        async def save(self, dialog: AgentDialog) -> AgentDialog:
+            self.dialog = dialog
+            return dialog
+
+    fat = "факт " * 30
+    msgs = []
+    for i in range(12):
+        msgs.append(
+            AgentDialogMessage(
+                id=str(i * 2),
+                role="user",
+                content=f"U{i} {fat}",
+                created_at=datetime.now(UTC),
+            )
+        )
+        msgs.append(
+            AgentDialogMessage(
+                id=str(i * 2 + 1),
+                role="assistant",
+                content=f"A{i} {fat}",
+                created_at=datetime.now(UTC),
+                model_id="fake",
+            )
+        )
+    repo = _MemRepo()
+    repo.dialog = AgentDialog(
+        id=uuid4(),
+        client_visitor_id="a1c4a11e-c4a1-4e07-9c06-c0a1e11e07e0",
+        client_draft_id="draft-c",
+        name="C",
+        system_prompt="Be brief.",
+        preferred_model="auto",
+        temperature=0.2,
+        max_tokens=100,
+        messages=msgs,
+        summary_text="",
+        summary_until_count=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    router = _FakeRouter()
+    outcome, saved = await run_agent_with_dialog(
+        definition=AgentDefinition(
+            name="C", system_prompt="Be brief.", preferred_model="auto", max_tokens=100
+        ),
+        message="Что помнишь?",
+        router=router,  # type: ignore[arg-type]
+        dialogs=repo,  # type: ignore[arg-type]
+        client_visitor_id="a1c4a11e-c4a1-4e07-9c06-c0a1e11e07e0",
+        client_draft_id="draft-c",
+        enabled=True,
+        max_message_chars=8000,
+        compress=True,
+        recent_keep=4,
+        summarize_every=8,
+    )
+    assert outcome.compression is not None
+    assert outcome.compression.enabled is True
+    assert outcome.compression.summary_refreshed is True
+    assert outcome.compression.tokens_compressed_est < outcome.compression.tokens_raw_est
+    assert saved.summary_text
+    assert saved.summary_until_count > 0
+    # Main call should include summary in system and only recent turns
+    assert any("Сводка" in m.content for m in router.last_messages if m.role.value == "system")

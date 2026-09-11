@@ -150,8 +150,11 @@ def agent_run(
     client_draft_id: str | None = None,
     dialog_id: str | None = None,
     context_limit: int | None = None,
+    compress: bool = False,
+    recent_keep: int | None = None,
+    summarize_every: int | None = None,
 ) -> dict[str, Any]:
-    """POST /api/v1/agent-workshop/run — Day 6 encapsulated agent (+ Day 7/8)."""
+    """POST /api/v1/agent-workshop/run — Day 6–9 agent helpers."""
     body: dict[str, Any] = {
         "definition": {
             "name": name,
@@ -170,6 +173,12 @@ def agent_run(
             body["dialog_id"] = dialog_id
     if context_limit is not None:
         body["context_limit"] = int(context_limit)
+    if compress:
+        body["compress"] = True
+        if recent_keep is not None:
+            body["recent_keep"] = int(recent_keep)
+        if summarize_every is not None:
+            body["summarize_every"] = int(summarize_every)
     t0 = time.perf_counter()
     data = request_json(
         base,
@@ -190,6 +199,7 @@ def agent_run(
         "dialog_id": data.get("dialog_id"),
         "messages": data.get("messages"),
         "tokens": data.get("tokens"),
+        "compression": data.get("compression"),
         "latency_ms": latency_ms,
         "tokens_approx": estimate_tokens(content),
         "cost_proxy": estimate_cost_proxy(str(model_id)),
