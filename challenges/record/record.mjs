@@ -94,6 +94,34 @@ async function waitAgentAssistant(page, { minChars = 8, timeout = 180_000 } = {}
   throw new Error("waitAgentAssistant timeout");
 }
 
+/** Wait until a *new* assistant line appears (avoids accepting the previous short «ок»). */
+async function waitAgentAssistantAfter(page, prevCount, opts = {}) {
+  const { minChars = 8, timeout = 180_000 } = opts;
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const n = await page.locator(".agent-log-line--assistant").count();
+    if (n > prevCount) {
+      await waitAgentAssistant(page, { minChars, timeout: Math.max(5_000, deadline - Date.now()) });
+      return;
+    }
+    const status = await page.locator(".agent-status").allTextContents().catch(() => []);
+    const joined = status.join(" ");
+    if (/не удалось|unreadable|ошибка|rate limit|слишком много/i.test(joined)) {
+      throw new Error(`agent answer failed: ${joined.slice(0, 160)}`);
+    }
+    await settle(page, 800);
+  }
+  throw new Error("waitAgentAssistantAfter timeout");
+}
+
+async function sendSoloAndWait(page, text, { minChars = 8, timeout = 180_000 } = {}) {
+  const prev = await page.locator(".agent-log-line--assistant").count();
+  await page.locator(".agent-compose textarea").first().fill(text);
+  await settle(page, 700);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  await waitAgentAssistantAfter(page, prev, { minChars, timeout });
+}
+
 async function waitTeamAnswers(page, { minAnswers = 2, timeout = 300_000 } = {}) {
   await page.waitForFunction(
     ({ minAnswers: min }) => {
@@ -864,25 +892,19 @@ async function challenge09(page) {
 
   console.log("09: A without compress…");
   for (let i = 0; i < facts.length; i++) {
-    await page
-      .locator(".agent-compose textarea")
-      .first()
-      .fill(`Кейс A · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`);
-    await settle(page, 600);
-    await page.locator(".agent-workshop--solo .agent-send-btn").click();
-    await waitAgentAssistant(page, { minChars: 2, timeout: 180_000 });
+    await sendSoloAndWait(
+      page,
+      `Кейс A · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`,
+      { minChars: 2, timeout: 180_000 },
+    );
     await pauseOn(page.locator(".agent-token-meter").last(), 2200);
   }
 
-  await page
-    .locator(".agent-compose textarea")
-    .first()
-    .fill(
-      "Кейс A · recall без сжатия. Две строки:\nИмя: <имя>\nЯзык: <язык>",
-    );
-  await settle(page, 900);
-  await page.locator(".agent-workshop--solo .agent-send-btn").click();
-  await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+  await sendSoloAndWait(
+    page,
+    "Кейс A · recall без сжатия. Две строки:\nИмя: <имя>\nЯзык: <язык>",
+    { minChars: 8, timeout: 180_000 },
+  );
   await pauseOn(page.locator(".agent-log-line--assistant").last(), 4500);
   await pauseOn(page.locator(".agent-token-meter").last(), 3500);
 
@@ -902,14 +924,11 @@ async function challenge09(page) {
   await pauseOn(page.locator(".agent-compress-toggle"), 2500);
 
   for (let i = 0; i < facts.length; i++) {
-    await page
-      .locator(".agent-compose textarea")
-      .first()
-      .fill(`Кейс B · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`);
-    await settle(page, 600);
-    await page.locator(".agent-workshop--solo .agent-send-btn").click();
-    await waitAgentAssistant(page, { minChars: 2, timeout: 180_000 });
-    // After enough turns, compression meter / summary may appear
+    await sendSoloAndWait(
+      page,
+      `Кейс B · факт ${i + 1}: запомни «${facts[i]}». Подтверди «ок».`,
+      { minChars: 2, timeout: 180_000 },
+    );
     const compressMeter = page.locator(".agent-token-compress").last();
     if ((await compressMeter.count()) > 0) {
       await pauseOn(compressMeter, 2800);
@@ -926,15 +945,11 @@ async function challenge09(page) {
     await pauseOn(summary.first(), 4500);
   }
 
-  await page
-    .locator(".agent-compose textarea")
-    .first()
-    .fill(
-      "Кейс B · recall со сжатием. Две строки:\nИмя: <имя>\nЯзык: <язык>",
-    );
-  await settle(page, 900);
-  await page.locator(".agent-workshop--solo .agent-send-btn").click();
-  await waitAgentAssistant(page, { minChars: 5, timeout: 180_000 });
+  await sendSoloAndWait(
+    page,
+    "Кейс B · recall со сжатием. Две строки:\nИмя: <имя>\nЯзык: <язык>",
+    { minChars: 8, timeout: 180_000 },
+  );
   const last = page.locator(".agent-log-line--assistant").last();
   const text = await last.innerText();
   if (!/артем/i.test(text) || !/python/i.test(text)) {
