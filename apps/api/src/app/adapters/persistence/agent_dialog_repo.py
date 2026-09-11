@@ -60,6 +60,18 @@ def _dump_messages(messages: list[AgentDialogMessage]) -> list[dict]:
     ]
 
 
+def _normalize_facts(raw: object) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        key = str(k).strip()
+        if not key:
+            continue
+        out[key] = "" if v is None else str(v).strip()
+    return out
+
+
 def _to_domain(row: AgentDialogRow) -> AgentDialog:
     return AgentDialog(
         id=row.id,
@@ -74,6 +86,10 @@ def _to_domain(row: AgentDialogRow) -> AgentDialog:
         messages=_parse_messages(list(row.messages or [])),
         summary_text=getattr(row, "summary_text", "") or "",
         summary_until_count=int(getattr(row, "summary_until_count", 0) or 0),
+        facts=_normalize_facts(getattr(row, "facts", None) or {}),
+        parent_dialog_id=getattr(row, "parent_dialog_id", None),
+        branch_label=getattr(row, "branch_label", None),
+        forked_from_message_id=getattr(row, "forked_from_message_id", None),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -113,6 +129,10 @@ class SqlAlchemyAgentDialogRepository:
                 messages=_dump_messages(dialog.messages),
                 summary_text=dialog.summary_text or "",
                 summary_until_count=int(dialog.summary_until_count or 0),
+                facts=dict(dialog.facts or {}),
+                parent_dialog_id=dialog.parent_dialog_id,
+                branch_label=dialog.branch_label,
+                forked_from_message_id=dialog.forked_from_message_id,
                 created_at=dialog.created_at,
                 updated_at=dialog.updated_at,
             )
@@ -127,6 +147,10 @@ class SqlAlchemyAgentDialogRepository:
             row.messages = _dump_messages(dialog.messages)
             row.summary_text = dialog.summary_text or ""
             row.summary_until_count = int(dialog.summary_until_count or 0)
+            row.facts = dict(dialog.facts or {})
+            row.parent_dialog_id = dialog.parent_dialog_id
+            row.branch_label = dialog.branch_label
+            row.forked_from_message_id = dialog.forked_from_message_id
             row.updated_at = dialog.updated_at
         await self._db.flush()
         return _to_domain(row)

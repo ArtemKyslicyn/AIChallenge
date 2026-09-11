@@ -1,4 +1,4 @@
-# Challenges (Days 4–9)
+# Challenges (Days 4–10)
 
 Автопрогон заданий челленджа через **prod** API платформы AIChallenge.
 
@@ -9,16 +9,17 @@
 | [`06-first-agent/`](06-first-agent/) | Первый агент + команда | Topbar **Агенты** |
 | [`07-context-memory/`](07-context-memory/) | Память диалога | **Агенты** → reload |
 | [`08-tokens/`](08-tokens/) | Токены / обрезка контекста | **Агенты** → лимит + метр |
-| [`09-compression/`](09-compression/) | Сжатие истории (LLM summary) | **Агенты** → «Сжимать историю» |
+| [`09-compression/`](09-compression/) | Сжатие истории (LLM summary) | **Агенты** → Контекст: Сжатие |
+| [`10-context-strategies/`](10-context-strategies/) | Sliding / Facts / Branching | **Агенты** → selector + ветки |
 
 ## Прогон (prod)
 
 ```bash
-python3 challenges/09-compression/run.py
+python3 challenges/10-context-strategies/run.py
 ```
 
 ## Видео UI
 
 ```bash
-cd challenges/record && RECORD_ONLY=09 npm run record
+cd challenges/record && RECORD_ONLY=10 npm run record
 ```

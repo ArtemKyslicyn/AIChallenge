@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   clearAgentDialogByDraft,
+  forkAgentDialog,
   getAgentDialogByDraft,
   listModels,
   runAgentWorkshop,
@@ -46,8 +47,16 @@ import {
   loadSessions,
   saveSessions,
   type AgentSession,
+  type ContextMode,
   type RunLine,
 } from "../agents/sessions";
+
+const CONTEXT_MODE_LABELS: Record<ContextMode, string> = {
+  none: "Без эффектов",
+  compress: "Сжатие",
+  sliding: "Окно",
+  facts: "Facts",
+};
 
 type WorkspaceMode = "solo" | "team";
 
@@ -78,6 +87,7 @@ function dialogMessagesToLog(messages: AgentDialogMessageDto[]): RunLine[] {
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => ({
       id: m.id,
+      messageId: m.id,
       role: m.role as "user" | "assistant",
       text: m.content,
       modelId: m.model_id ?? null,
@@ -432,7 +442,14 @@ export function AgentWorkshop() {
   }
 
   async function clearLog(id: string) {
-    patchSession(id, { log: [], status: "", dialogId: null, summaryText: null });
+    patchSession(id, {
+      log: [],
+      status: "",
+      dialogId: null,
+      summaryText: null,
+      facts: null,
+      branchDraftId: null,
+    });
     if (!isTeam) {
       try {
         await clearAgentDialogByDraft(id);
@@ -452,9 +469,63 @@ export function AgentWorkshop() {
         log: dialogMessagesToLog(dialog.messages),
         status: "",
         summaryText: dialog.summary_text || null,
+        facts: dialog.facts && Object.keys(dialog.facts).length ? dialog.facts : null,
       });
     } catch {
       /* offline / empty */
+    }
+  }
+
+  async function forkBranch(agentId: string, messageId: string, label: string) {
+    const sess = ensureSession(sessionsRef.current, agentId);
+    const dialogId = sess.dialogId;
+    if (!dialogId) {
+      patchSession(agentId, { status: "Сначала отправьте сообщение — нужен dialog." });
+      return;
+    }
+    const draftId = `${agentId}__${label.toLowerCase().replace(/\s+/g, "-").slice(0, 24)}-${Date.now().toString(36)}`;
+    try {
+      const child = await forkAgentDialog(dialogId, {
+        from_message_id: messageId,
+        client_draft_id: draftId.slice(0, 64),
+        label,
+      });
+      const branches = [
+        ...(sess.branches || []),
+        {
+          draftId: child.client_draft_id,
+          dialogId: child.id,
+          label: child.branch_label || label,
+          parentDialogId: child.parent_dialog_id,
+        },
+      ];
+      patchSession(agentId, {
+        status: `Ветка «${label}» создана — переключитесь ниже.`,
+        branches,
+      });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : "Не удалось создать ветку.";
+      patchSession(agentId, { status: msg });
+    }
+  }
+
+  async function switchBranch(agentId: string, draftId: string, dialogId: string) {
+    try {
+      const dialog = await getAgentDialogByDraft(draftId);
+      if (!dialog) {
+        patchSession(agentId, { status: "Ветка не найдена." });
+        return;
+      }
+      patchSession(agentId, {
+        dialogId: dialogId || dialog.id,
+        log: dialogMessagesToLog(dialog.messages),
+        summaryText: dialog.summary_text || null,
+        facts: dialog.facts && Object.keys(dialog.facts).length ? dialog.facts : null,
+        status: `Активна ветка · ${dialog.branch_label || draftId}`,
+        branchDraftId: draftId,
+      });
+    } catch {
+      patchSession(agentId, { status: "Не удалось переключить ветку." });
     }
   }
 
@@ -520,6 +591,10 @@ export function AgentWorkshop() {
       const sess = ensureSession(sessionsRef.current, agentId);
       const dialogId = sess.dialogId ?? null;
       const contextLimit = sess.contextLimit ?? null;
+      const contextMode = sess.contextMode ?? "none";
+      const clientDraftId = persist
+        ? sess.branchDraftId || agentId
+        : undefined;
       const result = await runAgentWorkshop(
         {
           name: draft.name,
@@ -532,22 +607,28 @@ export function AgentWorkshop() {
         {
           signal: controller.signal,
           persist,
-          clientDraftId: persist ? agentId : undefined,
+          clientDraftId,
           dialogId: persist ? dialogId : undefined,
           contextLimit,
-          compress: persist ? Boolean(sess.compress) : false,
-          recentKeep: sess.recentKeep ?? 6,
+          contextMode: persist ? contextMode : "none",
+          recentKeep: sess.recentKeep ?? 8,
           summarizeEvery: sess.summarizeEvery ?? 10,
         },
       );
       const tokenMeter = result.tokens ?? null;
       const compressionMeter = result.compression ?? null;
+      const strategyMeter = result.context_strategy ?? null;
       if (mirror === "full") {
         if (persist && result.messages?.length) {
           const log = dialogMessagesToLog(result.messages);
           for (let i = log.length - 1; i >= 0; i--) {
             if (log[i].role === "assistant") {
-              log[i] = { ...log[i], tokens: tokenMeter, compression: compressionMeter };
+              log[i] = {
+                ...log[i],
+                tokens: tokenMeter,
+                compression: compressionMeter,
+                contextStrategy: strategyMeter,
+              };
               break;
             }
           }
@@ -555,7 +636,15 @@ export function AgentWorkshop() {
             status: "",
             dialogId: result.dialog_id ?? dialogId,
             log,
-            summaryText: compressionMeter?.summary_text || sess.summaryText || null,
+            summaryText:
+              strategyMeter?.summary_text ||
+              compressionMeter?.summary_text ||
+              sess.summaryText ||
+              null,
+            facts:
+              strategyMeter?.facts && Object.keys(strategyMeter.facts).length
+                ? strategyMeter.facts
+                : sess.facts || null,
           });
         } else {
           appendLog(agentId, {
@@ -567,10 +656,15 @@ export function AgentWorkshop() {
             speaker: draft.name,
             tokens: tokenMeter,
             compression: compressionMeter,
+            contextStrategy: strategyMeter,
           });
           patchSession(agentId, {
             status: "",
-            summaryText: compressionMeter?.summary_text || sess.summaryText || null,
+            summaryText:
+              strategyMeter?.summary_text ||
+              compressionMeter?.summary_text ||
+              sess.summaryText ||
+              null,
           });
         }
       } else if (mirror === "brief") {
@@ -1092,6 +1186,19 @@ export function AgentWorkshop() {
                   {line.role === "assistant" && line.modelId ? (
                     <span className="badge">{line.modelId}</span>
                   ) : null}
+                  {line.messageId && session.dialogId ? (
+                    <button
+                      type="button"
+                      className="ghost-button agent-fork-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const label = window.prompt("Имя ветки", "A") || "A";
+                        void forkBranch(draft.id, line.messageId!, label);
+                      }}
+                    >
+                      Checkpoint → ветка
+                    </button>
+                  ) : null}
                 </div>
                 <p>{line.text}</p>
                 {line.role === "assistant" && line.tokens ? (
@@ -1103,14 +1210,22 @@ export function AgentWorkshop() {
                         {line.tokens.truncation.budget}/{line.tokens.truncation.context_limit}
                       </p>
                     ) : null}
-                    {line.compression?.enabled ? (
+                    {line.contextStrategy && line.contextStrategy.mode !== "none" ? (
+                      <p className="agent-token-compress" role="status">
+                        {CONTEXT_MODE_LABELS[line.contextStrategy.mode as ContextMode] ||
+                          line.contextStrategy.mode}
+                        : {line.contextStrategy.tokens_raw_est} →{" "}
+                        {line.contextStrategy.tokens_strategy_est} tok
+                        {line.contextStrategy.dropped
+                          ? ` · −${line.contextStrategy.dropped}`
+                          : ""}
+                        {line.contextStrategy.summary_refreshed ? " · сводка" : ""}
+                        {line.contextStrategy.facts_updated ? " · facts↑" : ""}
+                      </p>
+                    ) : line.compression?.enabled ? (
                       <p className="agent-token-compress" role="status">
                         Сжатие: {line.compression.tokens_raw_est} →{" "}
                         {line.compression.tokens_compressed_est} tok
-                        {line.compression.summary_refreshed ? " · сводка обновлена" : ""}
-                        {line.compression.summary_used
-                          ? ` · recent ${line.compression.recent_kept}`
-                          : ""}
                       </p>
                     ) : null}
                     <dl className="agent-token-grid">
@@ -1152,6 +1267,49 @@ export function AgentWorkshop() {
             <p>{session.summaryText}</p>
           </details>
         ) : null}
+        {session.facts && Object.keys(session.facts).length ? (
+          <details className="agent-summary-panel agent-facts-panel" open>
+            <summary>Facts</summary>
+            <ul className="agent-facts-list">
+              {Object.entries(session.facts).map(([k, v]) => (
+                <li key={k}>
+                  <strong>{k}</strong>: {v}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {session.branches && session.branches.length > 0 ? (
+          <div className="agent-branches" role="navigation" aria-label="Ветки диалога">
+            <span className="agent-branches-label">Ветки</span>
+            {session.branches.map((b) => (
+              <button
+                key={b.draftId}
+                type="button"
+                className={
+                  session.branchDraftId === b.draftId
+                    ? "ghost-button agent-branch-btn is-active"
+                    : "ghost-button agent-branch-btn"
+                }
+                onClick={() => void switchBranch(draft.id, b.draftId, b.dialogId)}
+              >
+                {b.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="ghost-button agent-branch-btn"
+              onClick={() =>
+                patchSession(draft.id, {
+                  branchDraftId: null,
+                  status: "Вернулись к основной ветке (draft агента).",
+                })
+              }
+            >
+              Основная
+            </button>
+          </div>
+        ) : null}
         {session.status ? (
           <p className="agent-status" role="status">
             {session.status}
@@ -1165,53 +1323,59 @@ export function AgentWorkshop() {
           }}
         >
           <div className="agent-compose-tools">
-            <label className="agent-compress-toggle">
-              <input
-                type="checkbox"
-                checked={Boolean(session.compress)}
-                onChange={(e) => patchSession(draft.id, { compress: e.target.checked })}
+            <label className="agent-context-mode">
+              <span>Контекст</span>
+              <select
+                value={session.contextMode ?? "none"}
+                onChange={(e) =>
+                  patchSession(draft.id, {
+                    contextMode: e.target.value as ContextMode,
+                  })
+                }
                 onClick={(e) => e.stopPropagation()}
-              />
-              Сжимать историю
+              >
+                {(Object.keys(CONTEXT_MODE_LABELS) as ContextMode[]).map((m) => (
+                  <option key={m} value={m}>
+                    {CONTEXT_MODE_LABELS[m]}
+                  </option>
+                ))}
+              </select>
             </label>
-            {session.compress ? (
-              <>
-                <label className="agent-context-limit" title="Сколько последних реплик оставить без сжатия">
-                  <span>recent</span>
-                  <input
-                    type="number"
-                    min={2}
-                    max={40}
-                    step={1}
-                    value={session.recentKeep ?? 6}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      if (!Number.isFinite(n) || n < 0) return;
-                      patchSession(draft.id, { recentKeep: Math.floor(n) });
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </label>
-                <label
-                  className="agent-context-limit"
-                  title="Обновить сводку, когда накопилось столько старых реплик"
-                >
-                  <span>every</span>
-                  <input
-                    type="number"
-                    min={2}
-                    max={100}
-                    step={1}
-                    value={session.summarizeEvery ?? 10}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      if (!Number.isFinite(n) || n < 2) return;
-                      patchSession(draft.id, { summarizeEvery: Math.floor(n) });
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </label>
-              </>
+            {(session.contextMode ?? "none") !== "none" ? (
+              <label className="agent-context-limit" title="Последние N реплик">
+                <span>recent</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={40}
+                  step={1}
+                  value={session.recentKeep ?? 8}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (!Number.isFinite(n) || n < 0) return;
+                    patchSession(draft.id, { recentKeep: Math.floor(n) });
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </label>
+            ) : null}
+            {(session.contextMode ?? "none") === "compress" ? (
+              <label className="agent-context-limit" title="Порог обновления сводки">
+                <span>every</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={100}
+                  step={1}
+                  value={session.summarizeEvery ?? 10}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (!Number.isFinite(n) || n < 2) return;
+                    patchSession(draft.id, { summarizeEvery: Math.floor(n) });
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </label>
             ) : null}
             <label className="agent-context-limit">
               <span>Лимит контекста</span>

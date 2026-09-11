@@ -873,13 +873,11 @@ async function challenge09(page) {
   }
 
   // Ensure compress is OFF for case A
-  const compressToggle = page.locator(".agent-compress-toggle input[type=checkbox]");
-  await compressToggle.waitFor({ timeout: 15_000 });
-  if (await compressToggle.isChecked()) {
-    await compressToggle.uncheck();
-    await settle(page, 400);
-  }
-  await pauseOn(page.locator(".agent-compress-toggle"), 2200);
+  const modeSelect = page.locator(".agent-context-mode select");
+  await modeSelect.waitFor({ timeout: 15_000 });
+  await modeSelect.selectOption("none");
+  await settle(page, 400);
+  await pauseOn(page.locator(".agent-context-mode"), 2200);
 
   const facts = [
     "Меня зовут Артем.",
@@ -911,17 +909,15 @@ async function challenge09(page) {
   console.log("09: B enable compress + new dialog…");
   await clearBtn.first().click();
   await settle(page, 1000);
-  if (!(await compressToggle.isChecked())) {
-    await compressToggle.check();
-    await settle(page, 400);
-  }
+  await modeSelect.selectOption("compress");
+  await settle(page, 400);
   // Demo-friendly thresholds so summary appears after ~6 facts
   const recentInput = page.locator(".agent-compose-tools label").filter({ hasText: /^recent$/i }).locator("input");
   const everyInput = page.locator(".agent-compose-tools label").filter({ hasText: /^every$/i }).locator("input");
   await recentInput.fill("4");
   await everyInput.fill("6");
   await settle(page, 400);
-  await pauseOn(page.locator(".agent-compress-toggle"), 2500);
+  await pauseOn(page.locator(".agent-context-mode"), 2500);
 
   for (let i = 0; i < facts.length; i++) {
     await sendSoloAndWait(
@@ -965,14 +961,143 @@ async function challenge09(page) {
   await settle(page, 2000);
 }
 
+async function challenge10(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1600);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 900);
+
+  await ensurePersona(page, {
+    name: "Стратегии",
+    system:
+      "Ты помощник по сбору ТЗ. Отвечай коротко. Запоминай цель и стек.",
+    temperature: "0.2",
+    maxTokens: "120",
+  });
+  await pauseOn(page.locator(".agent-builder").first(), 1800);
+
+  const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
+  if ((await clearBtn.count()) > 0) {
+    await clearBtn.first().click();
+    await settle(page, 800);
+  }
+
+  const modeSelect = page.locator(".agent-context-mode select");
+  await modeSelect.waitFor({ timeout: 15_000 });
+
+  const facts = [
+    "Цель: чат-платформа AIChallenge.",
+    "Стек: FastAPI + React + Postgres.",
+    "Ограничение: анонимные сессии.",
+    "Дедлайн: две недели.",
+    "Предпочтение: SSE.",
+    "Решение: диалоги в Postgres.",
+  ];
+
+  console.log("10: A sliding…");
+  await modeSelect.selectOption("sliding");
+  const recentInput = page
+    .locator(".agent-compose-tools label")
+    .filter({ hasText: /^recent$/i })
+    .locator("input");
+  await recentInput.fill("4");
+  await pauseOn(page.locator(".agent-context-mode"), 2500);
+  for (let i = 0; i < facts.length; i++) {
+    await sendSoloAndWait(
+      page,
+      `Факт ${i + 1}: ${facts[i]} Подтверди «ок».`,
+      { minChars: 2, timeout: 180_000 },
+    );
+    await pauseOn(page.locator(".agent-token-meter").last(), 1800);
+  }
+  await sendSoloAndWait(
+    page,
+    "Цель и стек? Две строки: Цель: … / Стек: …",
+    { minChars: 8, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4000);
+
+  console.log("10: B facts…");
+  await clearBtn.first().click();
+  await settle(page, 1000);
+  await modeSelect.selectOption("facts");
+  await recentInput.fill("4");
+  await pauseOn(page.locator(".agent-context-mode"), 2200);
+  for (let i = 0; i < facts.length; i++) {
+    await sendSoloAndWait(
+      page,
+      `Факт ${i + 1}: ${facts[i]} Подтверди «ок».`,
+      { minChars: 2, timeout: 180_000 },
+    );
+    const factsPanel = page.locator(".agent-facts-panel");
+    if ((await factsPanel.count()) > 0) {
+      await pauseOn(factsPanel.first(), 2200);
+    }
+  }
+  await sendSoloAndWait(
+    page,
+    "Цель и стек? Две строки: Цель: … / Стек: …",
+    { minChars: 8, timeout: 180_000 },
+  );
+  const factsAnswer = page.locator(".agent-log-line--assistant").last();
+  const text = await factsAnswer.innerText();
+  if (!/fastapi|react|чат|aichallenge/i.test(text)) {
+    console.warn("10 facts recall weak:", text.slice(0, 200));
+  }
+  await pauseOn(factsAnswer, 4500);
+
+  console.log("10: C branching…");
+  await clearBtn.first().click();
+  await settle(page, 800);
+  await modeSelect.selectOption("none");
+  await settle(page, 400);
+  for (let i = 0; i < 4; i++) {
+    await sendSoloAndWait(
+      page,
+      `Факт ${i + 1}: ${facts[i]} Подтверди «ок».`,
+      { minChars: 2, timeout: 180_000 },
+    );
+  }
+  const forkBtn = page.locator(".agent-fork-btn").first();
+  await forkBtn.waitFor({ timeout: 15_000 });
+  page.once("dialog", async (d) => {
+    await d.accept("A");
+  });
+  await forkBtn.click();
+  await settle(page, 1500);
+  page.once("dialog", async (d) => {
+    await d.accept("B");
+  });
+  await page.locator(".agent-fork-btn").nth(1).click();
+  await settle(page, 1500);
+  await pauseOn(page.locator(".agent-branches"), 4000);
+  const branchA = page.locator(".agent-branch-btn").filter({ hasText: /^A$/i }).first();
+  if ((await branchA.count()) > 0) {
+    await branchA.click();
+    await settle(page, 1000);
+  }
+  await sendSoloAndWait(
+    page,
+    "В ветке A приоритет — mobile. Какой приоритет?",
+    { minChars: 4, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4000);
+  await settle(page, 2000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
 const out07 = path.join(__dirname, "../07-context-memory/challenge-07.webm");
 const out08 = path.join(__dirname, "../08-tokens/challenge-08.webm");
 const out09 = path.join(__dirname, "../09-compression/challenge-09.webm");
+const out10 = path.join(__dirname, "../10-context-strategies/challenge-10.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1017,5 +1142,9 @@ if (ONLY.includes("08")) {
 if (ONLY.includes("09")) {
   console.log("Recording challenge 09 against", BASE);
   await recordChallenge("09", out09, (page) => challenge09(page));
+}
+if (ONLY.includes("10")) {
+  console.log("Recording challenge 10 against", BASE);
+  await recordChallenge("10", out10, (page) => challenge10(page));
 }
 console.log("done");
