@@ -11,17 +11,18 @@
 
 Visual constructor of agent nodes and edges (n8n/Langflow-like canvas). Workshop under **Агенты** unchanged.
 
-## v1 scope (this iteration)
+## v1 scope (shipped)
 
 - Shell tab + infinite canvas (`@xyflow/react`)
 - Nodes: Start, Agent, Merge, End
 - Drag from palette, connect, delete, pan/zoom
 - LocalStorage persist
-- Templates stub (chain / parallel→merge)
-- No backend execute yet (Phase 3)
+- Templates: chain / parallel→merge
+- **Run:** `POST /api/v1/agent-studio/run` SSE (`graph_start` / `node_start` / `node_end` / `done`) + UI highlight + run dock
 
-## Non-goals (v1)
+## Non-goals (later)
 
-- Graph run API / SSE
+- Graph CRUD in Postgres
 - LLM assistant builder
 - Replacing Agents workshop
+- Router / conditional branch nodes
