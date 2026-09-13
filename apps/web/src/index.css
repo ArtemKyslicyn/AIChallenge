@@ -3998,6 +3998,14 @@ textarea {
   align-items: center;
 }
 
+.bench-board-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .bench-section-title {
   margin: 0 0 var(--space-2);
   font-size: 0.9rem;
