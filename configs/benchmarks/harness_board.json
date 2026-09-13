@@ -1,0 +1,163 @@
+{
+  "task_set": "v0.16.0",
+  "total_tasks": 391,
+  "source_url": "https://github.com/ai-forever/harness-bench-fast",
+  "landing_url": "https://ai-forever.github.io/harness-bench-fast/",
+  "updated_at": "2026-09-13T19:23:33Z",
+  "rows": [
+    {
+      "harness": "Kimi CLI",
+      "profile": null,
+      "model_label": "Kimi K3",
+      "passed": 390,
+      "total": 391,
+      "pct": 99.7,
+      "steps": null,
+      "tokens": null,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "Pi",
+      "profile": null,
+      "model_label": "DeepSeek V4 Flash 0731 (high)",
+      "passed": 387,
+      "total": 391,
+      "pct": 99.0,
+      "steps": 1694,
+      "tokens": 10004355,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "Claude Code CLI",
+      "profile": null,
+      "model_label": "Claude Haiku 4.5",
+      "passed": 380,
+      "total": 391,
+      "pct": 97.2,
+      "steps": 1645,
+      "tokens": 176430286,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "opencode",
+      "profile": null,
+      "model_label": "GLM-5.2 (self-hosted)",
+      "passed": 362,
+      "total": 391,
+      "pct": 92.6,
+      "steps": null,
+      "tokens": null,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "GigaChat",
+      "model_label": "GigaChat 3.5",
+      "passed": 340,
+      "total": 391,
+      "pct": 87.0,
+      "steps": 3316,
+      "tokens": 4319421,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "GigaChat",
+      "model_label": "GigaChat 3 Ultra",
+      "passed": 340,
+      "total": 391,
+      "pct": 87.0,
+      "steps": 3258,
+      "tokens": 4415043,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "DeepSeek V4 Flash",
+      "passed": 320,
+      "total": 391,
+      "pct": 81.8,
+      "steps": 5048,
+      "tokens": 61715547,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "GigaChat 3 Ultra",
+      "passed": 312,
+      "total": 391,
+      "pct": 79.8,
+      "steps": 3591,
+      "tokens": 7994643,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "GigaChat 3.5",
+      "passed": 302,
+      "total": 391,
+      "pct": 77.2,
+      "steps": 3542,
+      "tokens": 7371576,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "Qwen3 Coder 30B-A3B",
+      "passed": 284,
+      "total": 391,
+      "pct": 72.6,
+      "steps": 5467,
+      "tokens": 90234558,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "GigaChat",
+      "model_label": "GigaChat 3 Pro",
+      "passed": 241,
+      "total": 391,
+      "pct": 61.6,
+      "steps": 2993,
+      "tokens": 3975672,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "GPT-OSS-20B",
+      "passed": 193,
+      "total": 391,
+      "pct": 49.4,
+      "steps": 2727,
+      "tokens": 29137983,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "none",
+      "model_label": "GPT-OSS-120B",
+      "passed": 186,
+      "total": 391,
+      "pct": 47.6,
+      "steps": 2193,
+      "tokens": 23831283,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    },
+    {
+      "harness": "deepagents",
+      "profile": "GigaChat",
+      "model_label": "GigaChat 3 Lightning",
+      "passed": 178,
+      "total": 391,
+      "pct": 45.5,
+      "steps": 2520,
+      "tokens": 2275821,
+      "source": "https://github.com/ai-forever/harness-bench-fast"
+    }
+  ]
+}

@@ -26,6 +26,42 @@ def test_health(api: TestClient) -> None:
     assert api.get("/api/v1/health").json() == {"status": "ok"}
 
 
+def test_harness_leaderboard_for_connected_models(tmp_path: Any) -> None:
+    board = {
+        "task_set": "v0.16.0",
+        "total_tasks": 391,
+        "source_url": "https://example.test",
+        "landing_url": "https://example.test/l",
+        "updated_at": "2026-09-13T00:00:00Z",
+        "rows": [
+            {
+                "harness": "deepagents",
+                "profile": "none",
+                "model_label": "DeepSeek V4 Flash",
+                "passed": 320,
+                "total": 391,
+                "pct": 81.8,
+                "steps": 10,
+                "tokens": 20,
+            }
+        ],
+    }
+    path = tmp_path / "harness_board.json"
+    path.write_text(__import__("json").dumps(board), encoding="utf-8")
+    with client(
+        llm_model_chain="deepseek/deepseek-v4-flash,google/gemini-2.5-flash",
+        benchmarks_dir=str(tmp_path),
+    ) as api:
+        response = api.get("/api/v1/benchmarks/leaderboard")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["task_set"] == "v0.16.0"
+    assert body["rows"][0]["matched"] is True
+    assert body["rows"][0]["rank"] == 1
+    assert body["rows"][0]["passed"] == 320
+    assert any(r["model_id"] == "google/gemini-2.5-flash" and not r["matched"] for r in body["rows"])
+
+
 def test_probe_reports_the_model_that_answered(api: TestClient) -> None:
     response = api.post("/api/v1/llm/complete", json={"prompt": "ping"})
     assert response.status_code == 200

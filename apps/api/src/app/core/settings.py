@@ -33,6 +33,7 @@ def _repo_root(start: Path) -> Path:
 REPO_ROOT = _repo_root(Path(__file__).resolve())
 DEFAULT_SCENARIOS_DIR = REPO_ROOT / "configs" / "scenarios"
 DEFAULT_LAB_DIR = REPO_ROOT / "configs" / "lab"
+DEFAULT_BENCHMARKS_DIR = REPO_ROOT / "configs" / "benchmarks"
 
 
 def _csv(raw: str) -> list[str]:
@@ -141,6 +142,7 @@ class Settings(BaseSettings):
 
     scenarios_dir: str = ""
     lab_dir: str = ""
+    benchmarks_dir: str = ""
     log_level: str = "INFO"
     visitor_hash_salt: str = "aichallenge-visitor-v1"
 
@@ -224,6 +226,12 @@ class Settings(BaseSettings):
 
     def lab_path(self) -> Path:
         return Path(self.lab_dir) if self.lab_dir else DEFAULT_LAB_DIR
+
+    def benchmarks_path(self) -> Path:
+        return Path(self.benchmarks_dir) if self.benchmarks_dir else DEFAULT_BENCHMARKS_DIR
+
+    def benchmarks_board_path(self) -> Path:
+        return self.benchmarks_path() / "harness_board.json"
 
     def media_path(self) -> Path:
         if self.media_dir:
