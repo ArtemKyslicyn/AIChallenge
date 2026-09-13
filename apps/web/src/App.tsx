@@ -10,6 +10,7 @@ import {
   type ChatHistoryItem,
   type SessionCredentials,
 } from "./api/client";
+import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
 import { Chat } from "./components/Chat";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -28,7 +29,7 @@ export default function App() {
   const setMode = useCallback((mode: ShellMode) => {
     writeShellMode(mode);
     setShellMode(mode);
-    if (mode === "agents") setSidebarOpen(false);
+    if (mode === "agents" || mode === "graph") setSidebarOpen(false);
   }, []);
 
   const refreshHistory = useCallback(async () => {
@@ -111,11 +112,16 @@ export default function App() {
   );
 
   const inAgents = shellMode === "agents";
-  const showChatChrome = !inAgents;
+  const inGraph = shellMode === "graph";
+  const showChatChrome = shellMode === "chat";
+  const shellLabel =
+    shellMode === "agents" ? "Агенты" : shellMode === "graph" ? "Схема Агентов" : "Чат";
 
   return (
     <DebugProvider>
-      <div className={`app${inAgents ? " app--agents" : ""}`}>
+      <div
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}`}
+      >
         {showChatChrome ? (
           <SessionSidebar
             items={history}
@@ -144,7 +150,7 @@ export default function App() {
               ) : null}
               <span
                 className="dot"
-                data-state={inAgents || session ? "online" : "offline"}
+                data-state={inAgents || inGraph || session ? "online" : "offline"}
                 aria-hidden="true"
               />
               <h1>AI Чат-платформа</h1>
@@ -171,10 +177,18 @@ export default function App() {
               >
                 Агенты
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "graph"}
+                onClick={() => setMode("graph")}
+              >
+                Схема Агентов
+              </button>
             </div>
 
             <span className="sr-only" aria-live="polite">
-              Режим: {inAgents ? "Агенты" : "Чат"}
+              Режим: {shellLabel}
             </span>
           </header>
 
@@ -186,6 +200,8 @@ export default function App() {
 
           {inAgents ? (
             <AgentWorkshop />
+          ) : inGraph ? (
+            <AgentStudio />
           ) : (
             <>
               {(booting || (!session && !error)) && (
