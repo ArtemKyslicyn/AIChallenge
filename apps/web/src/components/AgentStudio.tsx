@@ -37,7 +37,8 @@ const nodeTypes = { agentGraph: AgentGraphNodeView };
 const defaultEdgeOptions = {
   type: "smoothstep" as const,
   animated: false,
-  style: { stroke: "#64748b", strokeWidth: 2 },
+  style: { strokeWidth: 2 },
+  className: "ag-edge",
 };
 
 type LogLine = {
@@ -377,15 +378,17 @@ function AgentStudioInner() {
     [selectedId, setEdges, setNodes],
   );
 
+  const linkTargets = useMemo(() => {
+    if (!selected || selected.data.kind === "end") return [];
+    return nodes.filter((n) => n.id !== selected.id && n.data.kind !== "start");
+  }, [nodes, selected]);
+
   return (
     <div className="agent-graph" onKeyDown={onKeyDown}>
       <header className="agent-graph-top">
         <div className="agent-graph-title">
           <h2>Схема Агентов</h2>
-          <p className="agent-graph-sub">
-            Связи: потяни от точки справа (или снизу) узла к точке слева (или сверху) другого —
-            так же между агентами. Либо выбери узел и нажми «Связать →» в свойствах.
-          </p>
+          <p className="agent-graph-sub">Потяни точку → точку или «Связать» в свойствах</p>
         </div>
         <label className="agent-graph-name">
           <span className="sr-only">Название схемы</span>
@@ -413,8 +416,10 @@ function AgentStudioInner() {
 
       <div className="agent-graph-body">
         <aside className="agent-graph-palette" aria-label="Палитра узлов">
-          <h3>Узлы</h3>
-          <ul>
+          <div className="agent-graph-panel-head">
+            <h3>Узлы</h3>
+          </div>
+          <ul className="agent-graph-palette-list">
             {PALETTE.map((item) => (
               <li key={item.kind}>
                 <button
@@ -426,18 +431,24 @@ function AgentStudioInner() {
                     e.dataTransfer.effectAllowed = "move";
                   }}
                   onClick={() => addNode(item.kind)}
+                  title={item.hint}
                 >
-                  <span className="ag-palette-title">{NODE_KIND_LABEL[item.kind]}</span>
-                  <span className="ag-palette-hint">{item.hint}</span>
+                  <span className="ag-palette-dot" aria-hidden="true" />
+                  <span className="ag-palette-copy">
+                    <span className="ag-palette-title">{NODE_KIND_LABEL[item.kind]}</span>
+                    <span className="ag-palette-hint">{item.hint}</span>
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
-          <h3>Шаблоны</h3>
+          <div className="agent-graph-panel-head">
+            <h3>Шаблоны</h3>
+          </div>
           <ul className="agent-graph-templates">
             {GRAPH_TEMPLATES.map((t) => (
               <li key={t.id}>
-                <button type="button" className="ghost-button" onClick={() => applyTemplate(t.id)}>
+                <button type="button" className="ag-template-btn" onClick={() => applyTemplate(t.id)}>
                   <strong>{t.title}</strong>
                   <span>{t.blurb}</span>
                 </button>
@@ -454,7 +465,10 @@ function AgentStudioInner() {
         >
           {nodes.length === 0 ? (
             <div className="agent-graph-empty">
-              <p>Перетащи узел из палитры или выбери шаблон.</p>
+              <div className="agent-graph-empty-card">
+                <strong>Пустая схема</strong>
+                <p>Перетащи узел слева или открой шаблон. Связи — от точки к точке.</p>
+              </div>
             </div>
           ) : null}
           <ReactFlow
@@ -479,25 +493,34 @@ function AgentStudioInner() {
               setSelectedId(sel[0]?.id ?? null);
             }}
             fitView
+            fitViewOptions={{ padding: 0.18 }}
             deleteKeyCode={null}
             proOptions={{ hideAttribution: true }}
           >
-            <Background gap={18} size={1} color="var(--ag-grid, #d8dde6)" />
-            <Controls showInteractive={false} />
-            <MiniMap pannable zoomable className="agent-graph-minimap" />
+            <Background gap={20} size={1} color="var(--ag-grid)" />
+            <Controls showInteractive={false} className="agent-graph-controls" />
+            <MiniMap
+              pannable
+              zoomable
+              className="agent-graph-minimap"
+              maskColor="color-mix(in srgb, var(--bg) 55%, transparent)"
+            />
           </ReactFlow>
         </div>
 
         <aside className="agent-graph-inspector" aria-label="Свойства узла">
-          <h3>Свойства</h3>
+          <div className="agent-graph-panel-head">
+            <h3>Свойства</h3>
+            {selected ? (
+              <span className={`ag-kind-chip ag-kind-chip--${selected.data.kind}`}>
+                {NODE_KIND_LABEL[selected.data.kind]}
+              </span>
+            ) : null}
+          </div>
           {!selected ? (
-            <p className="agent-graph-muted">Выбери узел на схеме.</p>
+            <p className="agent-graph-muted">Выбери узел на схеме, чтобы править подпись, модель и связи.</p>
           ) : (
             <div className="agent-graph-fields">
-              <label>
-                <span>Тип</span>
-                <input value={NODE_KIND_LABEL[selected.data.kind]} readOnly />
-              </label>
               <label>
                 <span>Подпись</span>
                 <input
@@ -515,10 +538,10 @@ function AgentStudioInner() {
                       placeholder="auto"
                     />
                   </label>
-                  <label>
+                  <label className="agent-graph-field-grow">
                     <span>Инструкция</span>
                     <textarea
-                      rows={8}
+                      rows={5}
                       value={selected.data.systemPrompt || ""}
                       onChange={(e) => patchSelected({ systemPrompt: e.target.value })}
                     />
@@ -527,21 +550,23 @@ function AgentStudioInner() {
               ) : null}
               {selected.data.kind !== "end" ? (
                 <div className="agent-graph-link-to">
-                  <span>Связать →</span>
-                  <div className="agent-graph-link-btns">
-                    {nodes
-                      .filter((n) => n.id !== selected.id && n.data.kind !== "start")
-                      .map((n) => (
+                  <span className="agent-graph-link-label">Связать →</span>
+                  {linkTargets.length === 0 ? (
+                    <p className="agent-graph-muted">Добавь ещё узлы, чтобы связать.</p>
+                  ) : (
+                    <div className="agent-graph-link-btns">
+                      {linkTargets.map((n) => (
                         <button
                           key={n.id}
                           type="button"
-                          className="ghost-button"
+                          className="ag-link-chip"
                           onClick={() => linkSelectedTo(n.id)}
                         >
                           {n.data.label || NODE_KIND_LABEL[n.data.kind]}
                         </button>
                       ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -551,15 +576,13 @@ function AgentStudioInner() {
               {status}
             </p>
           ) : null}
-          <p className="agent-graph-hint">
-            Del — удалить выбранный узел. Схема сохраняется в браузере.
-          </p>
+          <p className="agent-graph-hint">Del — удалить узел · автосохранение в браузере</p>
         </aside>
       </div>
 
       <footer className="agent-graph-run">
         <label className="agent-graph-run-input">
-          <span>Вход (Старт)</span>
+          <span>Вход для Старта</span>
           <textarea
             rows={2}
             value={runInput}
@@ -569,15 +592,21 @@ function AgentStudioInner() {
           />
         </label>
         <div className="agent-graph-log" aria-live="polite">
+          <div className="agent-graph-log-head">Лог</div>
           {log.length === 0 ? (
-            <p className="agent-graph-muted">Лог запуска появится здесь.</p>
+            <p className="agent-graph-muted">Появится после запуска.</p>
           ) : (
-            log.map((line) => (
-              <article key={line.id} className={`agent-graph-log-line agent-graph-log-line--${line.kind}`}>
-                {line.modelId ? <span className="badge">{line.modelId}</span> : null}
-                <p>{line.text}</p>
-              </article>
-            ))
+            <div className="agent-graph-log-scroll">
+              {log.map((line) => (
+                <article
+                  key={line.id}
+                  className={`agent-graph-log-line agent-graph-log-line--${line.kind}`}
+                >
+                  {line.modelId ? <span className="badge">{line.modelId}</span> : null}
+                  <p>{line.text}</p>
+                </article>
+              ))}
+            </div>
           )}
         </div>
       </footer>
