@@ -568,19 +568,50 @@ export type HarnessLeaderboardRow = {
   matched: boolean;
 };
 
+export type HarnessBoardRow = {
+  rank: number;
+  harness: string;
+  profile: string | null;
+  model_label: string;
+  passed: number;
+  total: number;
+  pct: number;
+  steps: number | null;
+  tokens: number | null;
+  in_chain: boolean;
+  linked_model_ids: string[];
+};
+
 export type HarnessLeaderboard = {
   task_set: string;
   total_tasks: number;
   source_url: string;
   landing_url: string;
   updated_at: string;
+  coverage?: {
+    connected: number;
+    matched: number;
+    unmatched: number;
+    board_rows: number;
+  };
   rows: HarnessLeaderboardRow[];
+  board?: HarnessBoardRow[];
+  refreshed?: boolean;
 };
 
 export function fetchHarnessLeaderboard(
   signal?: AbortSignal,
 ): Promise<HarnessLeaderboard> {
   return request<HarnessLeaderboard>("/benchmarks/leaderboard", { signal });
+}
+
+export function refreshHarnessLeaderboard(
+  signal?: AbortSignal,
+): Promise<HarnessLeaderboard> {
+  return request<HarnessLeaderboard>("/benchmarks/refresh", {
+    method: "POST",
+    signal,
+  });
 }
 
 export interface LabPresetDto {

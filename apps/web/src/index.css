@@ -3991,12 +3991,21 @@ textarea {
   gap: var(--space-3);
 }
 
-.bench-board-top {
+.bench-board-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.bench-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.bench-row--ours td {
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
 }
 
 .bench-board-top h2 {

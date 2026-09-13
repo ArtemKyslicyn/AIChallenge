@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync AIChallenge harness-bench leaderboard snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/aichallenge
+ExecStart=/opt/aichallenge/scripts/harness-board-sync.sh
+Nice=10

@@ -40,6 +40,10 @@ class AgentsRunDisabledError(DomainError):
     """Agent workshop runs are switched off by configuration."""
 
 
+class BenchmarkRefreshError(DomainError):
+    """Failed to refresh the harness-bench leaderboard snapshot."""
+
+
 class AgentRunRateLimitError(DomainError):
     """Visitor exceeded the configured agent-workshop run rate limit."""
 

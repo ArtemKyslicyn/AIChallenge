@@ -40,7 +40,7 @@ services:
       # Scenarios are configuration, not code: editable without a rebuild.
       - ./configs/scenarios:/app/configs/scenarios:ro
       - ./configs/lab:/app/configs/lab:ro
-      - ./configs/benchmarks:/app/configs/benchmarks:ro
+      - ./configs/benchmarks:/app/configs/benchmarks
       - media_data:/app/data/media
     depends_on:
       db:
