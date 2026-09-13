@@ -3973,10 +3973,136 @@ textarea {
 }
 
 .app--agents .app-main,
-.app--graph .app-main {
+.app--graph .app-main,
+.app--benchmarks .app-main {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* —— Benchmarks (harness-bench-fast board) —— */
+.bench-board {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bench-board-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.bench-board-top h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.bench-board-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 44rem;
+  line-height: 1.45;
+}
+
+.bench-board-sub a {
+  color: var(--accent);
+}
+
+.bench-board-muted,
+.bench-board-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.bench-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.bench-table th,
+.bench-table td {
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.bench-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+}
+
+.bench-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.bench-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.bench-model {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 10rem;
+}
+
+.bench-model strong {
+  font-weight: 600;
+}
+
+.bench-model code,
+.bench-unmatched code,
+.bench-board-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.bench-unmatched {
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.bench-unmatched h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bench-unmatched ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 /* —— Схема Агентов (graph canvas) —— */

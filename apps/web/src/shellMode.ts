@@ -1,10 +1,10 @@
-/** Shell mode: Chat | Agents workshop | Agent graph canvas. */
+/** Shell mode: Chat | Agents | Agent graph | Benchmarks. */
 
-export type ShellMode = "chat" | "agents" | "graph";
+export type ShellMode = "chat" | "agents" | "graph" | "benchmarks";
 
 const STORAGE_KEY = "aichallenge.shell_mode";
 
-const VALID: ShellMode[] = ["chat", "agents", "graph"];
+const VALID: ShellMode[] = ["chat", "agents", "graph", "benchmarks"];
 
 export function readShellMode(): ShellMode {
   if (typeof window === "undefined") return "chat";
@@ -25,6 +25,10 @@ export function readShellMode(): ShellMode {
     if (window.location.hash === "#graph" || window.location.hash === "#schema") {
       writeShellMode("graph");
       return "graph";
+    }
+    if (window.location.hash === "#benchmarks" || window.location.hash === "#bench") {
+      writeShellMode("benchmarks");
+      return "benchmarks";
     }
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw && VALID.includes(raw as ShellMode)) return raw as ShellMode;

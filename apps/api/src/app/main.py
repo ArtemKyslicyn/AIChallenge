@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.api.agent_studio import router as agent_studio_router
 from app.adapters.api.agent_workshop import router as agent_workshop_router
+from app.adapters.api.benchmarks import router as benchmarks_router
 from app.adapters.api.errors import register_error_handlers
 from app.adapters.api.feedback import router as feedback_router
 from app.adapters.api.health import router as health_router
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         health_router,
         sessions_router,
         llm_router,
+        benchmarks_router,
         agent_workshop_router,
         agent_studio_router,
         media_router,

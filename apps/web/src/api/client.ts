@@ -553,6 +553,36 @@ export function listModels(): Promise<ModelCatalogItemDto[]> {
   return request<ModelCatalogItemDto[]>("/llm/models");
 }
 
+export type HarnessLeaderboardRow = {
+  rank: number | null;
+  model_id: string;
+  model_label: string;
+  harness: string | null;
+  profile: string | null;
+  passed: number | null;
+  total: number | null;
+  pct: number | null;
+  steps: number | null;
+  tokens: number | null;
+  in_chain: boolean;
+  matched: boolean;
+};
+
+export type HarnessLeaderboard = {
+  task_set: string;
+  total_tasks: number;
+  source_url: string;
+  landing_url: string;
+  updated_at: string;
+  rows: HarnessLeaderboardRow[];
+};
+
+export function fetchHarnessLeaderboard(
+  signal?: AbortSignal,
+): Promise<HarnessLeaderboard> {
+  return request<HarnessLeaderboard>("/benchmarks/leaderboard", { signal });
+}
+
 export interface LabPresetDto {
   id: string;
   title: string;

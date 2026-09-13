@@ -12,6 +12,7 @@ import {
 } from "./api/client";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
+import { BenchmarksBoard } from "./components/BenchmarksBoard";
 import { Chat } from "./components/Chat";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { DebugProvider } from "./debug/DebugContext";
@@ -29,7 +30,9 @@ export default function App() {
   const setMode = useCallback((mode: ShellMode) => {
     writeShellMode(mode);
     setShellMode(mode);
-    if (mode === "agents" || mode === "graph") setSidebarOpen(false);
+    if (mode === "agents" || mode === "graph" || mode === "benchmarks") {
+      setSidebarOpen(false);
+    }
   }, []);
 
   const refreshHistory = useCallback(async () => {
@@ -113,14 +116,21 @@ export default function App() {
 
   const inAgents = shellMode === "agents";
   const inGraph = shellMode === "graph";
+  const inBenchmarks = shellMode === "benchmarks";
   const showChatChrome = shellMode === "chat";
   const shellLabel =
-    shellMode === "agents" ? "Агенты" : shellMode === "graph" ? "Схема Агентов" : "Чат";
+    shellMode === "agents"
+      ? "Агенты"
+      : shellMode === "graph"
+        ? "Схема Агентов"
+        : shellMode === "benchmarks"
+          ? "Benchmarks"
+          : "Чат";
 
   return (
     <DebugProvider>
       <div
-        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}`}
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}`}
       >
         {showChatChrome ? (
           <SessionSidebar
@@ -150,7 +160,9 @@ export default function App() {
               ) : null}
               <span
                 className="dot"
-                data-state={inAgents || inGraph || session ? "online" : "offline"}
+                data-state={
+                  inAgents || inGraph || inBenchmarks || session ? "online" : "offline"
+                }
                 aria-hidden="true"
               />
               <h1>AI Чат-платформа</h1>
@@ -185,6 +197,14 @@ export default function App() {
               >
                 Схема Агентов
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "benchmarks"}
+                onClick={() => setMode("benchmarks")}
+              >
+                Benchmarks
+              </button>
             </div>
 
             <span className="sr-only" aria-live="polite">
@@ -202,6 +222,8 @@ export default function App() {
             <AgentWorkshop />
           ) : inGraph ? (
             <AgentStudio />
+          ) : inBenchmarks ? (
+            <BenchmarksBoard />
           ) : (
             <>
               {(booting || (!session && !error)) && (
