@@ -755,6 +755,113 @@ export function clearAgentDialogByDraft(
   );
 }
 
+export type AgentGraphRunEvent =
+  | { type: "graph_start"; name?: string; order: string[]; start_id: string }
+  | { type: "node_start"; node_id: string; kind: string; label: string }
+  | {
+      type: "node_end";
+      node_id: string;
+      kind: string;
+      label: string;
+      content: string;
+      model_id: string | null;
+    }
+  | { type: "done"; content: string; end_ids: string[] }
+  | { type: "error"; message: string; node_id?: string };
+
+function parseGraphFrame(raw: string): AgentGraphRunEvent | null {
+  const lines = raw.split("\n");
+  let event = "message";
+  let data = "";
+  for (const line of lines) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try {
+    const payload = JSON.parse(data) as Record<string, unknown>;
+    if (event === "graph_start") {
+      return {
+        type: "graph_start",
+        name: typeof payload.name === "string" ? payload.name : undefined,
+        order: Array.isArray(payload.order) ? (payload.order as string[]) : [],
+        start_id: String(payload.start_id || ""),
+      };
+    }
+    if (event === "node_start") {
+      return {
+        type: "node_start",
+        node_id: String(payload.node_id || ""),
+        kind: String(payload.kind || ""),
+        label: String(payload.label || ""),
+      };
+    }
+    if (event === "node_end") {
+      return {
+        type: "node_end",
+        node_id: String(payload.node_id || ""),
+        kind: String(payload.kind || ""),
+        label: String(payload.label || ""),
+        content: String(payload.content || ""),
+        model_id: payload.model_id == null ? null : String(payload.model_id),
+      };
+    }
+    if (event === "done") {
+      return {
+        type: "done",
+        content: String(payload.content || ""),
+        end_ids: Array.isArray(payload.end_ids) ? (payload.end_ids as string[]) : [],
+      };
+    }
+    if (event === "error") {
+      return {
+        type: "error",
+        message: String(payload.message || "Ошибка"),
+        node_id: payload.node_id ? String(payload.node_id) : undefined,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** POST /agent-studio/run — SSE execution of a client graph. */
+export async function runAgentGraphSSE(
+  message: string,
+  graph: { name?: string; nodes: unknown[]; edges: unknown[] },
+  onEvent: (event: AgentGraphRunEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${BASE}/agent-studio/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...visitorHeaders(),
+    },
+    body: JSON.stringify({ message, graph }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const frame = parseGraphFrame(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      if (frame) onEvent(frame);
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+}
+
 /**
  * `GET /api/v1/lab/pareto` — aggregates per `model_id` over a time window.
  *
