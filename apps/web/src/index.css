@@ -4214,10 +4214,61 @@ textarea {
 }
 
 .ag-handle {
-  width: 8px !important;
-  height: 8px !important;
-  background: #64748b !important;
+  width: 12px !important;
+  height: 12px !important;
+  background: #475569 !important;
   border: 2px solid #fff !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #0f172a 18%, transparent);
+  z-index: 3;
+}
+
+.ag-handle--out {
+  background: #1e3a5f !important;
+}
+
+.ag-handle--in {
+  background: #0f766e !important;
+}
+
+.ag-handle--aux {
+  width: 10px !important;
+  height: 10px !important;
+  opacity: 0.85;
+}
+
+.react-flow__handle-connecting,
+.react-flow__handle-valid {
+  background: #0f766e !important;
+}
+
+.react-flow__connection-path {
+  stroke: #1e3a5f !important;
+  stroke-width: 2.5 !important;
+}
+
+.react-flow__edge-path {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.agent-graph-link-to {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.agent-graph-link-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.agent-graph-link-btns .ghost-button {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.45rem;
 }
 
 .agent-graph-fields {
