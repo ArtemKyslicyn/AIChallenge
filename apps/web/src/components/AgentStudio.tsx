@@ -16,6 +16,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "@xyflow/react/dist/style.css";
 
+import {
+  ApiError,
+  runAgentGraphSSE,
+  type AgentGraphRunEvent,
+} from "../api/client";
 import { emptyGraph, loadGraph, saveGraph } from "../studio/persist";
 import { GRAPH_TEMPLATES } from "../studio/templates";
 import {
@@ -27,6 +32,13 @@ import {
 import { AgentGraphNodeView, type AgentGraphNode } from "./studio/AgentGraphNodeView";
 
 const nodeTypes = { agentGraph: AgentGraphNodeView };
+
+type LogLine = {
+  id: string;
+  kind: string;
+  text: string;
+  modelId?: string | null;
+};
 
 let idSeq = 0;
 function nextId(prefix: string) {
@@ -43,6 +55,10 @@ function AgentStudioInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(boot.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [runInput, setRunInput] = useState("Собери короткое ТЗ для чат-платформы.");
+  const [running, setRunning] = useState(false);
+  const [log, setLog] = useState<LogLine[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
   const rfRef = useRef<ReactFlowInstance<AgentGraphNode, Edge> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -169,8 +185,127 @@ function AgentStudioInner() {
     setEdges([]);
     setSelectedId(null);
     setName(empty.name);
+    setLog([]);
     setStatus("Схема очищена");
   }, [name, setEdges, setNodes]);
+
+  const setRunState = useCallback(
+    (nodeId: string, runState: AgentNodeData["runState"]) => {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, runState } } : n,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const resetRunStates = useCallback(() => {
+    setNodes((ns) =>
+      ns.map((n) => ({ ...n, data: { ...n.data, runState: "idle" as const } })),
+    );
+  }, [setNodes]);
+
+  const stopRun = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setRunning(false);
+    setStatus("Остановлено");
+  }, []);
+
+  const runGraph = useCallback(async () => {
+    const msg = runInput.trim();
+    if (!msg) {
+      setStatus("Введите сообщение для старта.");
+      return;
+    }
+    if (nodes.length === 0) {
+      setStatus("Схема пуста — добавьте узлы или шаблон.");
+      return;
+    }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setLog([]);
+    resetRunStates();
+    setStatus("Запуск схемы…");
+
+    const graph = {
+      name,
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: {
+          kind: n.data.kind,
+          label: n.data.label,
+          systemPrompt: n.data.systemPrompt,
+          preferredModel: n.data.preferredModel,
+        },
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle,
+        targetHandle: e.targetHandle,
+      })),
+    };
+
+    const pushLog = (line: LogLine) => setLog((prev) => [...prev, line]);
+
+    try {
+      await runAgentGraphSSE(
+        msg,
+        graph,
+        (ev: AgentGraphRunEvent) => {
+          if (ev.type === "graph_start") {
+            setStatus(`Порядок: ${ev.order.length} узлов`);
+          } else if (ev.type === "node_start") {
+            setRunState(ev.node_id, "running");
+            pushLog({
+              id: `s-${ev.node_id}-${Date.now()}`,
+              kind: "start",
+              text: `→ ${ev.label || ev.kind}`,
+            });
+          } else if (ev.type === "node_end") {
+            setRunState(ev.node_id, "done");
+            pushLog({
+              id: `e-${ev.node_id}-${Date.now()}`,
+              kind: "end",
+              text: ev.content,
+              modelId: ev.model_id,
+            });
+          } else if (ev.type === "done") {
+            setStatus("Готово");
+            pushLog({
+              id: `done-${Date.now()}`,
+              kind: "done",
+              text: ev.content || "(пусто)",
+            });
+          } else if (ev.type === "error") {
+            if (ev.node_id) setRunState(ev.node_id, "error");
+            setStatus(ev.message);
+            pushLog({
+              id: `err-${Date.now()}`,
+              kind: "error",
+              text: ev.message,
+            });
+          }
+        },
+        controller.signal,
+      );
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      const message = e instanceof ApiError ? e.message : "Не удалось запустить схему.";
+      setStatus(message);
+      pushLog({ id: `err-${Date.now()}`, kind: "error", text: message });
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      setRunning(false);
+    }
+  }, [edges, name, nodes, resetRunStates, runInput, setRunState]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -193,7 +328,7 @@ function AgentStudioInner() {
         <div className="agent-graph-title">
           <h2>Схема Агентов</h2>
           <p className="agent-graph-sub">
-            Собери цепочку узлов и связей. Запуск графа — следующим этапом.
+            Собери цепочку узлов и связей, затем нажми «Запустить».
           </p>
         </div>
         <label className="agent-graph-name">
@@ -205,9 +340,18 @@ function AgentStudioInner() {
           />
         </label>
         <div className="agent-graph-actions">
-          <button type="button" className="ghost-button" onClick={clearAll}>
+          <button type="button" className="ghost-button" onClick={clearAll} disabled={running}>
             Очистить
           </button>
+          {running ? (
+            <button type="button" className="ghost-button" onClick={stopRun}>
+              Стоп
+            </button>
+          ) : (
+            <button type="button" className="primary-button" onClick={() => void runGraph()}>
+              Запустить
+            </button>
+          )}
         </div>
       </header>
 
@@ -329,6 +473,31 @@ function AgentStudioInner() {
           </p>
         </aside>
       </div>
+
+      <footer className="agent-graph-run">
+        <label className="agent-graph-run-input">
+          <span>Вход (Старт)</span>
+          <textarea
+            rows={2}
+            value={runInput}
+            disabled={running}
+            onChange={(e) => setRunInput(e.target.value)}
+            placeholder="Сообщение для схемы…"
+          />
+        </label>
+        <div className="agent-graph-log" aria-live="polite">
+          {log.length === 0 ? (
+            <p className="agent-graph-muted">Лог запуска появится здесь.</p>
+          ) : (
+            log.map((line) => (
+              <article key={line.id} className={`agent-graph-log-line agent-graph-log-line--${line.kind}`}>
+                {line.modelId ? <span className="badge">{line.modelId}</span> : null}
+                <p>{line.text}</p>
+              </article>
+            ))
+          )}
+        </div>
+      </footer>
     </div>
   );
 }

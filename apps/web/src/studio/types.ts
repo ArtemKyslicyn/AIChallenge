@@ -9,6 +9,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   draftId?: string | null;
   systemPrompt?: string;
   preferredModel?: string;
+  runState?: "idle" | "running" | "done" | "error";
 }
 
 export const NODE_KIND_LABEL: Record<GraphNodeKind, string> = {

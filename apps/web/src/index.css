@@ -4260,6 +4260,102 @@ textarea {
   color: var(--ag-agent);
 }
 
+.ag-node--running {
+  outline: 2px solid color-mix(in srgb, var(--ag-start) 70%, transparent);
+}
+.ag-node--done {
+  outline: 2px solid color-mix(in srgb, #166534 45%, transparent);
+}
+.ag-node--error {
+  outline: 2px solid color-mix(in srgb, #b91c1c 55%, transparent);
+}
+
+.ag-node-run {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.agent-graph-run {
+  display: grid;
+  grid-template-columns: minmax(12rem, 22rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 7.5rem;
+  max-height: 14rem;
+}
+
+.agent-graph-run-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.agent-graph-run-input textarea {
+  flex: 1;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border, #d0d4dc);
+  background: #fff;
+  resize: vertical;
+  color: var(--text, #1f2937);
+}
+
+.agent-graph-log {
+  overflow: auto;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border, #d0d4dc);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface, #f7f8fa) 92%, #fff);
+}
+
+.agent-graph-log-line {
+  margin: 0 0 0.45rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border, #c8ccd4) 80%, transparent);
+}
+
+.agent-graph-log-line:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.agent-graph-log-line p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.agent-graph-log-line--error p {
+  color: #991b1b;
+}
+
+.agent-graph-log-line--done p {
+  font-weight: 600;
+}
+
+.primary-button {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--ag-agent, #1e3a5f) 70%, #000);
+  background: var(--ag-agent, #1e3a5f);
+  color: #fff;
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 960px) {
   .agent-graph-body {
     grid-template-columns: 1fr;
@@ -4279,6 +4375,11 @@ textarea {
 
   .ag-palette-item {
     width: auto;
+  }
+
+  .agent-graph-run {
+    grid-template-columns: 1fr;
+    max-height: none;
   }
 }
 
