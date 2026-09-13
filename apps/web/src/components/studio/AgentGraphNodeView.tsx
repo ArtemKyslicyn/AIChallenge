@@ -57,8 +57,8 @@ export function AgentGraphNodeView({ data, selected }: NodeProps<AgentGraphNode>
         ) : null}
       </div>
       <div className="ag-node-label">{data.label}</div>
-      {kind === "agent" && data.preferredModel ? (
-        <div className="ag-node-meta">{data.preferredModel}</div>
+      {kind === "agent" && (data.lastModelId || data.preferredModel) ? (
+        <div className="ag-node-meta">{data.lastModelId || data.preferredModel}</div>
       ) : null}
       {showOut ? (
         <>

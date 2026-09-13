@@ -765,6 +765,30 @@ export type AgentGraphRunEvent =
       label: string;
       content: string;
       model_id: string | null;
+      degraded?: boolean;
+    }
+  | {
+      type: "node_retry";
+      node_id: string;
+      kind: string;
+      label: string;
+      attempt: number;
+      preferred_model: string;
+      reason: string;
+    }
+  | {
+      type: "model_switch";
+      node_id: string;
+      from_model: string;
+      to_model: string;
+      reason: string;
+    }
+  | {
+      type: "node_degraded";
+      node_id: string;
+      kind: string;
+      label: string;
+      message: string;
     }
   | { type: "done"; content: string; end_ids: string[] }
   | { type: "error"; message: string; node_id?: string };
@@ -796,6 +820,35 @@ function parseGraphFrame(raw: string): AgentGraphRunEvent | null {
         label: String(payload.label || ""),
       };
     }
+    if (event === "node_retry") {
+      return {
+        type: "node_retry",
+        node_id: String(payload.node_id || ""),
+        kind: String(payload.kind || ""),
+        label: String(payload.label || ""),
+        attempt: Number(payload.attempt) || 0,
+        preferred_model: String(payload.preferred_model || "auto"),
+        reason: String(payload.reason || ""),
+      };
+    }
+    if (event === "model_switch") {
+      return {
+        type: "model_switch",
+        node_id: String(payload.node_id || ""),
+        from_model: String(payload.from_model || ""),
+        to_model: String(payload.to_model || ""),
+        reason: String(payload.reason || ""),
+      };
+    }
+    if (event === "node_degraded") {
+      return {
+        type: "node_degraded",
+        node_id: String(payload.node_id || ""),
+        kind: String(payload.kind || ""),
+        label: String(payload.label || ""),
+        message: String(payload.message || "ошибка"),
+      };
+    }
     if (event === "node_end") {
       return {
         type: "node_end",
@@ -804,6 +857,7 @@ function parseGraphFrame(raw: string): AgentGraphRunEvent | null {
         label: String(payload.label || ""),
         content: String(payload.content || ""),
         model_id: payload.model_id == null ? null : String(payload.model_id),
+        degraded: Boolean(payload.degraded),
       };
     }
     if (event === "done") {

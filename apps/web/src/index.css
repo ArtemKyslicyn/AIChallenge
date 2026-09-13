@@ -4630,7 +4630,7 @@ textarea {
   color: var(--text);
 }
 
-.agent-graph-log {
+.agent-graph-result {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -4645,12 +4645,39 @@ textarea {
 
 .agent-graph-log-head {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.68rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-bottom: 0.3rem;
+}
+
+.agent-graph-result-text {
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agent-graph-log {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
 }
 
 .agent-graph-log-scroll {
