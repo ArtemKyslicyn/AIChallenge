@@ -1,4 +1,9 @@
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 
 import { NODE_KIND_LABEL, type AgentNodeData, type GraphNodeKind } from "../../studio/types";
 
@@ -20,10 +25,25 @@ export function AgentGraphNodeView({ data, selected }: NodeProps<AgentGraphNode>
   return (
     <div
       className={`ag-node ${KIND_CLASS[kind]}${selected ? " is-selected" : ""} ag-node--${run}`}
-      title={NODE_KIND_LABEL[kind]}
+      title={`${NODE_KIND_LABEL[kind]} — тяни связь от точки к точке`}
     >
       {showIn ? (
-        <Handle type="target" position={Position.Left} id="in" className="ag-handle" />
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="in"
+            className="ag-handle ag-handle--in"
+            isConnectable
+          />
+          <Handle
+            type="target"
+            position={Position.Top}
+            id="in-top"
+            className="ag-handle ag-handle--in ag-handle--aux"
+            isConnectable
+          />
+        </>
       ) : null}
       <div className="ag-node-kind">{NODE_KIND_LABEL[kind]}</div>
       <div className="ag-node-label">{data.label}</div>
@@ -32,7 +52,22 @@ export function AgentGraphNodeView({ data, selected }: NodeProps<AgentGraphNode>
       ) : null}
       {run !== "idle" ? <div className="ag-node-run">{run}</div> : null}
       {showOut ? (
-        <Handle type="source" position={Position.Right} id="out" className="ag-handle" />
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="out"
+            className="ag-handle ag-handle--out"
+            isConnectable
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="out-bottom"
+            className="ag-handle ag-handle--out ag-handle--aux"
+            isConnectable
+          />
+        </>
       ) : null}
     </div>
   );

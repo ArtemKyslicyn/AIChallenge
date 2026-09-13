@@ -1,5 +1,6 @@
 import {
   Background,
+  ConnectionMode,
   Controls,
   MiniMap,
   ReactFlow,
@@ -32,6 +33,12 @@ import {
 import { AgentGraphNodeView, type AgentGraphNode } from "./studio/AgentGraphNodeView";
 
 const nodeTypes = { agentGraph: AgentGraphNodeView };
+
+const defaultEdgeOptions = {
+  type: "smoothstep" as const,
+  animated: false,
+  style: { stroke: "#64748b", strokeWidth: 2 },
+};
 
 type LogLine = {
   id: string;
@@ -73,18 +80,66 @@ function AgentStudioInner() {
 
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) =>
-        addEdge(
+      if (!connection.source || !connection.target) return;
+      if (connection.source === connection.target) return;
+      setEdges((eds) => {
+        const dup = eds.some(
+          (e) =>
+            e.source === connection.source &&
+            e.target === connection.target &&
+            (e.sourceHandle || "out") === (connection.sourceHandle || "out") &&
+            (e.targetHandle || "in") === (connection.targetHandle || "in"),
+        );
+        if (dup) return eds;
+        const next = addEdge(
           {
             ...connection,
             id: nextId("e"),
-            animated: false,
+            ...defaultEdgeOptions,
           },
           eds,
-        ),
-      );
+        );
+        return next;
+      });
+      setStatus("Связь добавлена");
     },
     [setEdges],
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      const sourceId = "source" in connection ? connection.source : null;
+      const targetId = "target" in connection ? connection.target : null;
+      if (!sourceId || !targetId || sourceId === targetId) return false;
+      const src = nodes.find((n) => n.id === sourceId);
+      const tgt = nodes.find((n) => n.id === targetId);
+      if (!src || !tgt) return false;
+      if (src.data.kind === "end") return false;
+      if (tgt.data.kind === "start") return false;
+      return true;
+    },
+    [nodes],
+  );
+
+  /** Quick-link: connect selected node → another agent/merge/end. */
+  const linkSelectedTo = useCallback(
+    (targetId: string) => {
+      if (!selectedId || selectedId === targetId) return;
+      const src = nodes.find((n) => n.id === selectedId);
+      const tgt = nodes.find((n) => n.id === targetId);
+      if (!src || !tgt) return;
+      if (src.data.kind === "end" || tgt.data.kind === "start") {
+        setStatus("Такую связь нельзя: Конец не отдаёт, Старт не принимает.");
+        return;
+      }
+      onConnect({
+        source: selectedId,
+        target: targetId,
+        sourceHandle: "out",
+        targetHandle: "in",
+      });
+    },
+    [nodes, onConnect, selectedId],
   );
 
   const addNode = useCallback(
@@ -328,7 +383,8 @@ function AgentStudioInner() {
         <div className="agent-graph-title">
           <h2>Схема Агентов</h2>
           <p className="agent-graph-sub">
-            Собери цепочку узлов и связей, затем нажми «Запустить».
+            Связи: потяни от точки справа (или снизу) узла к точке слева (или сверху) другого —
+            так же между агентами. Либо выбери узел и нажми «Связать →» в свойствах.
           </p>
         </div>
         <label className="agent-graph-name">
@@ -407,6 +463,14 @@ function AgentStudioInner() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={36}
+            connectOnClick
+            defaultEdgeOptions={defaultEdgeOptions}
+            nodesConnectable
+            elementsSelectable
+            edgesReconnectable
             nodeTypes={nodeTypes}
             onInit={(inst) => {
               rfRef.current = inst;
@@ -460,6 +524,25 @@ function AgentStudioInner() {
                     />
                   </label>
                 </>
+              ) : null}
+              {selected.data.kind !== "end" ? (
+                <div className="agent-graph-link-to">
+                  <span>Связать →</span>
+                  <div className="agent-graph-link-btns">
+                    {nodes
+                      .filter((n) => n.id !== selected.id && n.data.kind !== "start")
+                      .map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => linkSelectedTo(n.id)}
+                        >
+                          {n.data.label || NODE_KIND_LABEL[n.data.kind]}
+                        </button>
+                      ))}
+                  </div>
+                </div>
               ) : null}
             </div>
           )}
