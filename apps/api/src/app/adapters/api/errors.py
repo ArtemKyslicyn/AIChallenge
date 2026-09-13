@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app.domain.errors import (
     AgentRunRateLimitError,
     AgentsRunDisabledError,
+    BenchmarkRefreshError,
     DomainError,
     FeedbackTargetError,
     LLMExhaustedError,
@@ -36,6 +37,7 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     SessionClosedError: status.HTTP_409_CONFLICT,
     FeedbackTargetError: status.HTTP_400_BAD_REQUEST,
     MessageValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    BenchmarkRefreshError: status.HTTP_502_BAD_GATEWAY,
     LLMExhaustedError: status.HTTP_503_SERVICE_UNAVAILABLE,
     LLMStreamAbortedError: status.HTTP_502_BAD_GATEWAY,
     LLMProviderError: status.HTTP_502_BAD_GATEWAY,

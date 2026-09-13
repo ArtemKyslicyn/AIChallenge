@@ -149,11 +149,12 @@ def parse_board(raw: Mapping[str, Any]) -> HarnessBoard:
 
 
 #: Substrings / tokens that map a provider model id onto a board label.
+#: Only aliases with a real row in the published harness table.
 _ALIAS_NEEDLES: tuple[tuple[str, str], ...] = (
     ("deepseek-v4-flash", "deepseek v4 flash"),
     ("deepseek-v4", "deepseek v4 flash"),
     ("deepseek-chat", "deepseek v4 flash"),
-    ("deepseek-v3.2", "deepseek"),
+    ("deepseek-v3.2", "deepseek v4 flash"),
     ("kimi-k3", "kimi k3"),
     ("kimi/k3", "kimi k3"),
     ("claude-haiku-4.5", "claude haiku 4.5"),
@@ -161,16 +162,13 @@ _ALIAS_NEEDLES: tuple[tuple[str, str], ...] = (
     ("glm-5.2", "glm-5.2"),
     ("glm-5", "glm-5.2"),
     ("qwen3-coder", "qwen3 coder"),
-    ("qwen3", "qwen3"),
+    ("qwen3", "qwen3 coder"),
     ("gpt-oss-120b", "gpt-oss-120b"),
     ("gpt-oss-20b", "gpt-oss-20b"),
     ("gigachat-3-ultra", "gigachat 3 ultra"),
     ("gigachat-3.5", "gigachat 3.5"),
     ("gigachat-3-pro", "gigachat 3 pro"),
     ("gigachat-3-lightning", "gigachat 3 lightning"),
-    ("gemini-2.5-flash", "gemini"),
-    ("gemma-4", "gemma"),
-    ("nemotron", "nemotron"),
 )
 
 
@@ -184,12 +182,19 @@ def match_board_row(model_id: str, board: HarnessBoard) -> BoardRow | None:
     """Pick the best README row for a connected model id (highest passed, then fewer steps)."""
     needle = _needle_for_model(model_id)
     if not needle:
-        # fallback: use last path segment tokens
-        needle = normalize_label(model_id.split("/")[-1])
+        needle = normalize_label(model_id.split("/")[-1].split(":")[0])
+    tokens = [tok for tok in needle.split() if len(tok) > 2]
+    if not tokens:
+        return None
+
     candidates: list[BoardRow] = []
     for row in board.rows:
         label = normalize_label(row.model_label)
-        if needle in label or all(tok in label for tok in needle.split() if len(tok) > 2):
+        if needle in label:
+            candidates.append(row)
+            continue
+        # Require every significant token; avoids matching on a lone common word.
+        if all(tok in label for tok in tokens):
             candidates.append(row)
     if not candidates:
         return None

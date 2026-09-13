@@ -36,7 +36,7 @@ services:
     volumes:
       - ./configs/scenarios:/app/configs/scenarios:ro
       - ./configs/lab:/app/configs/lab:ro
-      - ./configs/benchmarks:/app/configs/benchmarks:ro
+      - ./configs/benchmarks:/app/configs/benchmarks
       - media_data:/app/data/media
     networks:
       default:

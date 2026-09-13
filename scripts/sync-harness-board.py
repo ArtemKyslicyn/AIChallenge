@@ -1,47 +1,52 @@
 #!/usr/bin/env python3
 """Refresh configs/benchmarks/harness_board.json from upstream README.
 
-No API keys. Usage (from repo root):
+No API keys. Usage (from repo root or /opt/aichallenge):
 
     python3 scripts/sync-harness-board.py
+    python3 scripts/sync-harness-board.py /path/to/harness_board.json
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
-import urllib.request
-from datetime import UTC, datetime
 from pathlib import Path
 
-README_URL = (
-    "https://raw.githubusercontent.com/ai-forever/harness-bench-fast/main/README.md"
-)
-OUT = Path(__file__).resolve().parents[1] / "configs" / "benchmarks" / "harness_board.json"
-SOURCE = "https://github.com/ai-forever/harness-bench-fast"
-LANDING = "https://ai-forever.github.io/harness-bench-fast/"
+# Allow running on the VPS without installing the API package.
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_OUT = ROOT / "configs" / "benchmarks" / "harness_board.json"
 
 
-def _num(raw: str) -> int | None:
-    text = raw.strip().replace(",", "")
-    if text in {"", "-", "—", "–"}:
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
+def _sync_via_stdlib(out: Path) -> int:
+    import re
+    import urllib.request
+    from datetime import UTC, datetime
 
+    url = "https://raw.githubusercontent.com/ai-forever/harness-bench-fast/main/README.md"
+    source = "https://github.com/ai-forever/harness-bench-fast"
+    landing = "https://ai-forever.github.io/harness-bench-fast/"
+    req = urllib.request.Request(url, headers={"User-Agent": "aichallenge-harness-board-sync/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        text = resp.read().decode()
 
-def parse_readme(text: str) -> list[dict]:
     lines = text.splitlines()
-    start: int | None = None
-    for i, line in enumerate(lines):
-        if line.startswith("| Harness") and "Result" in line:
-            start = i
-            break
+    start = next(
+        (i for i, line in enumerate(lines) if line.startswith("| Harness") and "Result" in line),
+        None,
+    )
     if start is None:
-        raise SystemExit("harness-bench README table not found")
+        print("README table not found", file=sys.stderr)
+        return 1
+
+    def num(raw: str) -> int | None:
+        text = raw.strip().replace(",", "")
+        if text in {"", "-", "—", "–"}:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
 
     rows: list[dict] = []
     for line in lines[start + 2 :]:
@@ -65,33 +70,32 @@ def parse_readme(text: str) -> list[dict]:
                 "passed": passed,
                 "total": total,
                 "pct": pct_f,
-                "steps": _num(steps),
-                "tokens": _num(tokens),
-                "source": SOURCE,
+                "steps": num(steps),
+                "tokens": num(tokens),
+                "source": source,
             }
         )
     if not rows:
-        raise SystemExit("no leaderboard rows parsed")
-    return rows
+        print("no rows parsed", file=sys.stderr)
+        return 1
 
-
-def main() -> int:
-    with urllib.request.urlopen(README_URL, timeout=60) as resp:
-        text = resp.read().decode()
-    rows = parse_readme(text)
-    total_tasks = max((r["total"] for r in rows), default=391)
     board = {
         "task_set": "v0.16.0",
-        "total_tasks": total_tasks,
-        "source_url": SOURCE,
-        "landing_url": LANDING,
+        "total_tasks": max(r["total"] for r in rows),
+        "source_url": source,
+        "landing_url": landing,
         "updated_at": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rows": rows,
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(board, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {OUT} ({len(rows)} rows)", file=sys.stderr)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(board, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {out} ({len(rows)} rows)", file=sys.stderr)
     return 0
+
+
+def main() -> int:
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
+    return _sync_via_stdlib(out)
 
 
 if __name__ == "__main__":
