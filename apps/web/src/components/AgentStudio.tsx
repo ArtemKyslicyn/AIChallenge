@@ -41,13 +41,6 @@ const defaultEdgeOptions = {
   className: "ag-edge",
 };
 
-type LogLine = {
-  id: string;
-  kind: string;
-  text: string;
-  modelId?: string | null;
-};
-
 let idSeq = 0;
 function nextId(prefix: string) {
   idSeq += 1;
@@ -65,7 +58,8 @@ function AgentStudioInner() {
   const [status, setStatus] = useState("");
   const [runInput, setRunInput] = useState(DEMO_RUN_INPUT);
   const [running, setRunning] = useState(false);
-  const [log, setLog] = useState<LogLine[]>([]);
+  const [resultText, setResultText] = useState("");
+  const [resultModel, setResultModel] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const rfRef = useRef<ReactFlowInstance<AgentGraphNode, Edge> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -240,7 +234,8 @@ function AgentStudioInner() {
     setEdges([]);
     setSelectedId(null);
     setName("Новая схема");
-    setLog([]);
+    setResultText("");
+    setResultModel(null);
     setStatus("Схема очищена — можно взять шаблон «Демо»");
   }, [setEdges, setNodes]);
 
@@ -250,18 +245,22 @@ function AgentStudioInner() {
     setEdges(demo.edges);
     setName(demo.name);
     setSelectedId(null);
-    setLog([]);
+    setResultText("");
+    setResultModel(null);
     setRunInput(DEMO_RUN_INPUT);
     setStatus("Загружено демо «идея → MVP»");
     queueMicrotask(() => rfRef.current?.fitView({ padding: 0.18 }));
   }, [setEdges, setNodes]);
 
   const setRunState = useCallback(
-    (nodeId: string, runState: AgentNodeData["runState"]) => {
+    (nodeId: string, runState: AgentNodeData["runState"], modelId?: string | null) => {
       setNodes((ns) =>
-        ns.map((n) =>
-          n.id === nodeId ? { ...n, data: { ...n.data, runState } } : n,
-        ),
+        ns.map((n) => {
+          if (n.id !== nodeId) return n;
+          const data: AgentNodeData = { ...n.data, runState };
+          if (modelId) data.lastModelId = modelId;
+          return { ...n, data };
+        }),
       );
     },
     [setNodes],
@@ -294,7 +293,8 @@ function AgentStudioInner() {
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
-    setLog([]);
+    setResultText("");
+    setResultModel(null);
     resetRunStates();
     setStatus("Запуск схемы…");
 
@@ -308,7 +308,7 @@ function AgentStudioInner() {
           kind: n.data.kind,
           label: n.data.label,
           systemPrompt: n.data.systemPrompt,
-          preferredModel: n.data.preferredModel,
+          preferredModel: n.data.preferredModel || "auto",
         },
       })),
       edges: edges.map((e) => ({
@@ -320,8 +320,6 @@ function AgentStudioInner() {
       })),
     };
 
-    const pushLog = (line: LogLine) => setLog((prev) => [...prev, line]);
-
     try {
       await runAgentGraphSSE(
         msg,
@@ -331,34 +329,35 @@ function AgentStudioInner() {
             setStatus(`Порядок: ${ev.order.length} узлов`);
           } else if (ev.type === "node_start") {
             setRunState(ev.node_id, "running");
-            pushLog({
-              id: `s-${ev.node_id}-${Date.now()}`,
-              kind: "start",
-              text: `→ ${ev.label || ev.kind}`,
-            });
+            setStatus(`→ ${ev.label || ev.kind}`);
+          } else if (ev.type === "node_retry") {
+            setStatus(
+              `↻ ${ev.label || ev.node_id}: повтор #${ev.attempt} (${ev.preferred_model})`,
+            );
+          } else if (ev.type === "model_switch") {
+            setStatus(`Модель: ${ev.from_model} → ${ev.to_model}`);
+            setRunState(ev.node_id, "running", ev.to_model);
+          } else if (ev.type === "node_degraded") {
+            setRunState(ev.node_id, "error");
+            setStatus(`⚠ ${ev.label || ev.node_id}: ${ev.message}`);
           } else if (ev.type === "node_end") {
-            setRunState(ev.node_id, "done");
-            pushLog({
-              id: `e-${ev.node_id}-${Date.now()}`,
-              kind: "end",
-              text: ev.content,
-              modelId: ev.model_id,
-            });
+            setRunState(
+              ev.node_id,
+              ev.degraded ? "error" : "done",
+              ev.model_id,
+            );
+            if (ev.model_id) setResultModel(ev.model_id);
+            setStatus(
+              ev.degraded
+                ? `Пропуск с ошибкой: ${ev.label || ev.node_id}`
+                : `✓ ${ev.label || ev.kind}${ev.model_id ? ` · ${ev.model_id}` : ""}`,
+            );
           } else if (ev.type === "done") {
             setStatus("Готово");
-            pushLog({
-              id: `done-${Date.now()}`,
-              kind: "done",
-              text: ev.content || "(пусто)",
-            });
+            setResultText(ev.content || "(пусто)");
           } else if (ev.type === "error") {
             if (ev.node_id) setRunState(ev.node_id, "error");
             setStatus(ev.message);
-            pushLog({
-              id: `err-${Date.now()}`,
-              kind: "error",
-              text: ev.message,
-            });
           }
         },
         controller.signal,
@@ -367,7 +366,6 @@ function AgentStudioInner() {
       if (controller.signal.aborted) return;
       const message = e instanceof ApiError ? e.message : "Не удалось запустить схему.";
       setStatus(message);
-      pushLog({ id: `err-${Date.now()}`, kind: "error", text: message });
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setRunning(false);
@@ -605,22 +603,18 @@ function AgentStudioInner() {
             placeholder="Сообщение для схемы…"
           />
         </label>
-        <div className="agent-graph-log" aria-live="polite">
-          <div className="agent-graph-log-head">Лог</div>
-          {log.length === 0 ? (
-            <p className="agent-graph-muted">Появится после запуска.</p>
+        <div className="agent-graph-result" aria-live="polite">
+          <div className="agent-graph-log-head">
+            Результат
+            {resultModel ? <span className="badge">{resultModel}</span> : null}
+          </div>
+          {resultText ? (
+            <p className="agent-graph-result-text">{resultText}</p>
           ) : (
-            <div className="agent-graph-log-scroll">
-              {log.map((line) => (
-                <article
-                  key={line.id}
-                  className={`agent-graph-log-line agent-graph-log-line--${line.kind}`}
-                >
-                  {line.modelId ? <span className="badge">{line.modelId}</span> : null}
-                  <p>{line.text}</p>
-                </article>
-              ))}
-            </div>
+            <p className="agent-graph-muted">
+              После запуска — финальный ответ. При сбое узел повторит с другой моделью и схема
+              продолжит работу.
+            </p>
           )}
         </div>
       </footer>

@@ -9,6 +9,8 @@ export interface AgentNodeData extends Record<string, unknown> {
   draftId?: string | null;
   systemPrompt?: string;
   preferredModel?: string;
+  /** Last model that answered this node in a graph run (UI only). */
+  lastModelId?: string | null;
   runState?: "idle" | "running" | "done" | "error";
 }
 
