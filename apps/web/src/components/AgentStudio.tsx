@@ -23,7 +23,7 @@ import {
   type AgentGraphRunEvent,
 } from "../api/client";
 import { emptyGraph, loadGraph, saveGraph } from "../studio/persist";
-import { GRAPH_TEMPLATES } from "../studio/templates";
+import { DEMO_RUN_INPUT, GRAPH_TEMPLATES } from "../studio/templates";
 import {
   NODE_KIND_LABEL,
   PALETTE,
@@ -63,7 +63,7 @@ function AgentStudioInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(boot.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
-  const [runInput, setRunInput] = useState("Собери короткое ТЗ для чат-платформы.");
+  const [runInput, setRunInput] = useState(DEMO_RUN_INPUT);
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<LogLine[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -236,14 +236,25 @@ function AgentStudioInner() {
   );
 
   const clearAll = useCallback(() => {
-    const empty = emptyGraph(name || "Новая схема");
     setNodes([]);
     setEdges([]);
     setSelectedId(null);
-    setName(empty.name);
+    setName("Новая схема");
     setLog([]);
-    setStatus("Схема очищена");
-  }, [name, setEdges, setNodes]);
+    setStatus("Схема очищена — можно взять шаблон «Демо»");
+  }, [setEdges, setNodes]);
+
+  const resetDemo = useCallback(() => {
+    const demo = emptyGraph();
+    setNodes(demo.nodes as AgentGraphNode[]);
+    setEdges(demo.edges);
+    setName(demo.name);
+    setSelectedId(null);
+    setLog([]);
+    setRunInput(DEMO_RUN_INPUT);
+    setStatus("Загружено демо «идея → MVP»");
+    queueMicrotask(() => rfRef.current?.fitView({ padding: 0.18 }));
+  }, [setEdges, setNodes]);
 
   const setRunState = useCallback(
     (nodeId: string, runState: AgentNodeData["runState"]) => {
@@ -399,6 +410,9 @@ function AgentStudioInner() {
           />
         </label>
         <div className="agent-graph-actions">
+          <button type="button" className="ghost-button" onClick={resetDemo} disabled={running}>
+            Демо
+          </button>
           <button type="button" className="ghost-button" onClick={clearAll} disabled={running}>
             Очистить
           </button>
