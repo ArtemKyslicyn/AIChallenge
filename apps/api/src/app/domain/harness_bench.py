@@ -148,27 +148,62 @@ def parse_board(raw: Mapping[str, Any]) -> HarnessBoard:
     )
 
 
-#: Substrings / tokens that map a provider model id onto a board label.
-#: Only aliases with a real row in the published harness table.
-_ALIAS_NEEDLES: tuple[tuple[str, str], ...] = (
-    ("deepseek-v4-flash", "deepseek v4 flash"),
-    ("deepseek-v4", "deepseek v4 flash"),
-    ("deepseek-chat", "deepseek v4 flash"),
-    ("deepseek-v3.2", "deepseek v4 flash"),
-    ("kimi-k3", "kimi k3"),
-    ("kimi/k3", "kimi k3"),
-    ("claude-haiku-4.5", "claude haiku 4.5"),
-    ("claude-haiku", "claude haiku"),
-    ("glm-5.2", "glm-5.2"),
-    ("glm-5", "glm-5.2"),
-    ("qwen3-coder", "qwen3 coder"),
-    ("qwen3", "qwen3 coder"),
-    ("gpt-oss-120b", "gpt-oss-120b"),
-    ("gpt-oss-20b", "gpt-oss-20b"),
-    ("gigachat-3-ultra", "gigachat 3 ultra"),
-    ("gigachat-3.5", "gigachat 3.5"),
-    ("gigachat-3-pro", "gigachat 3 pro"),
-    ("gigachat-3-lightning", "gigachat 3 lightning"),
+#: Provider slug fragments → board label needle. Longest token wins; no cross-family aliases.
+#: Only map ids that really are that board model (not "same vendor, different release").
+_ALIAS_NEEDLES: tuple[tuple[str, str], ...] = tuple(
+    sorted(
+        (
+            ("deepseek-v4-flash", "deepseek v4 flash"),
+            ("deepseek-v4", "deepseek v4 flash"),
+            ("kimi-k3", "kimi k3"),
+            ("kimi/k3", "kimi k3"),
+            ("claude-haiku-4.5", "claude haiku 4.5"),
+            ("claude-haiku", "claude haiku"),
+            ("glm-5.2", "glm-5.2"),
+            ("qwen3-coder-30b", "qwen3 coder"),
+            ("qwen3-coder", "qwen3 coder"),
+            ("gpt-oss-120b", "gpt-oss-120b"),
+            ("gpt-oss-20b", "gpt-oss-20b"),
+            ("gigachat-3-ultra", "gigachat 3 ultra"),
+            ("gigachat-3.5", "gigachat 3.5"),
+            ("gigachat-3-pro", "gigachat 3 pro"),
+            ("gigachat-3-lightning", "gigachat 3 lightning"),
+        ),
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
+)
+
+#: Family/vendor tokens that must not alone decide a match.
+_WEAK_TOKENS = frozenset(
+    {
+        "deepseek",
+        "qwen",
+        "qwen3",
+        "claude",
+        "google",
+        "gemini",
+        "openai",
+        "gpt",
+        "kimi",
+        "glm",
+        "gigachat",
+        "mistral",
+        "llama",
+        "nvidia",
+        "meta",
+        "coder",
+        "chat",
+        "instruct",
+        "flash",
+        "pro",
+        "ultra",
+        "lite",
+        "mini",
+        "nano",
+        "free",
+        "openrouter",
+    }
 )
 
 
@@ -184,6 +219,10 @@ def match_board_row(model_id: str, board: HarnessBoard) -> BoardRow | None:
     tokens = [tok for tok in needle.split() if len(tok) > 2]
     if not tokens:
         return None
+    strong = [tok for tok in tokens if tok not in _WEAK_TOKENS]
+    # A single vendor token ("deepseek") must not match any board row by itself.
+    if not strong and len(tokens) < 2:
+        return None
 
     candidates: list[BoardRow] = []
     for row in board.rows:
@@ -191,8 +230,8 @@ def match_board_row(model_id: str, board: HarnessBoard) -> BoardRow | None:
         if needle in label:
             candidates.append(row)
             continue
-        # Require every significant token; avoids matching on a lone common word.
-        if all(tok in label for tok in tokens):
+        # Token match: every significant token + at least one non-vendor cue.
+        if strong and all(tok in label for tok in tokens):
             candidates.append(row)
     if not candidates:
         return None
@@ -274,9 +313,26 @@ def build_leaderboard(
 def _needle_for_model(model_id: str) -> str | None:
     low = model_id.lower()
     for token, needle in _ALIAS_NEEDLES:
-        if token in low:
+        if _slug_has_token(low, token):
             return needle
     return None
+
+
+def _slug_has_token(model_id: str, token: str) -> bool:
+    """True when ``token`` appears as a slug fragment (not a prefix of a longer id)."""
+    if token not in model_id:
+        return False
+    start = 0
+    while True:
+        idx = model_id.find(token, start)
+        if idx < 0:
+            return False
+        before = model_id[idx - 1] if idx > 0 else ""
+        after_idx = idx + len(token)
+        after = model_id[after_idx] if after_idx < len(model_id) else ""
+        if (not before or not before.isalnum()) and (not after or not after.isalnum()):
+            return True
+        start = idx + 1
 
 
 def _opt_int(value: Any) -> int | None:
