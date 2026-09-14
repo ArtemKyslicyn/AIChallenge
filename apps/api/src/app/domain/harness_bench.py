@@ -168,6 +168,13 @@ _ALIAS_NEEDLES: tuple[tuple[str, str], ...] = tuple(
             ("gigachat-3.5", "gigachat 3.5"),
             ("gigachat-3-pro", "gigachat 3 pro"),
             ("gigachat-3-lightning", "gigachat 3 lightning"),
+            ("nemotron-3-super", "nvidia nemotron-3-super-120b-a12b free"),
+            ("gemma-4-31b", "google gemma-4-31b-it free"),
+            ("gemini-2.5-flash", "google gemini-2.5-flash"),
+            ("deepseek-chat", "deepseek deepseek-chat"),
+            ("mistral-nemo", "mistralai mistral-nemo"),
+            ("openrouter/free", "openrouter free"),
+            ("openrouter-free", "openrouter free"),
         ),
         key=lambda pair: len(pair[0]),
         reverse=True,
@@ -213,25 +220,31 @@ def normalize_label(text: str) -> str:
 
 def match_board_row(model_id: str, board: HarnessBoard) -> BoardRow | None:
     """Pick the best README row for a connected model id (highest passed, then fewer steps)."""
-    needle = _needle_for_model(model_id)
-    if not needle:
-        needle = normalize_label(model_id.split("/")[-1].split(":")[0])
+    raw_needle = _needle_for_model(model_id)
+    if not raw_needle:
+        raw_needle = model_id.split("/")[-1].split(":")[0]
+    needle = normalize_label(raw_needle)
+    # Prefer matching the full provider id when local runs store it as model_label.
+    full_id_needle = normalize_label(model_id)
     tokens = [tok for tok in needle.split() if len(tok) > 2]
-    if not tokens:
+    if not tokens and not full_id_needle:
         return None
     strong = [tok for tok in tokens if tok not in _WEAK_TOKENS]
     # A single vendor token ("deepseek") must not match any board row by itself.
-    if not strong and len(tokens) < 2:
+    if not strong and len(tokens) < 2 and full_id_needle == needle:
         return None
 
     candidates: list[BoardRow] = []
     for row in board.rows:
         label = normalize_label(row.model_label)
-        if needle in label:
+        if full_id_needle and full_id_needle == label:
+            candidates.append(row)
+            continue
+        if needle and needle in label:
             candidates.append(row)
             continue
         # Token match: every significant token + at least one non-vendor cue.
-        if strong and all(tok in label for tok in tokens):
+        if strong and tokens and all(tok in label for tok in tokens):
             candidates.append(row)
     if not candidates:
         return None

@@ -1535,8 +1535,8 @@ export function AgentWorkshop() {
             <h2 id={titleId}>Агенты</h2>
             <p className="agent-workshop-lead">
               {isTeam
-                ? "Команда: fan-out, handoff, прогон. Ответы и склейка — в ленте."
-                : "Соберите агента и ведите диалог — история в Postgres, помнит после перезапуска."}
+                ? "Лаборатория команды: fan-out, handoff, прогон. Ответы и склейка — в ленте."
+                : "Лаборатория агента: инструкция, модель, диалог с памятью — видно, кто ответил."}
             </p>
           </div>
           <div className="agent-workspace-modes" role="group" aria-label="Режим работы">

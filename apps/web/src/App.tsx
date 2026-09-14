@@ -122,9 +122,9 @@ export default function App() {
     shellMode === "agents"
       ? "Агенты"
       : shellMode === "graph"
-        ? "Схема Агентов"
+        ? "Схема"
         : shellMode === "benchmarks"
-          ? "Benchmarks"
+          ? "Замеры"
           : "Чат";
 
   return (
@@ -165,18 +165,22 @@ export default function App() {
                 }
                 aria-hidden="true"
               />
-              <h1>AI Чат-платформа</h1>
+              <div className="brand-text">
+                <h1>AIChallenge</h1>
+                <p className="brand-tagline">Чат, в котором видно модель</p>
+              </div>
             </div>
 
-            <div
+            <nav
               className="shell-mode"
               role="group"
-              aria-label="Режим приложения"
+              aria-label="Разделы стенда"
             >
               <button
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "chat"}
+                title="Прозрачный ответ: у каждого сообщения свой model_id"
                 onClick={() => setMode("chat")}
               >
                 Чат
@@ -185,6 +189,7 @@ export default function App() {
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "agents"}
+                title="Лаборатория: собрать агента или команду"
                 onClick={() => setMode("agents")}
               >
                 Агенты
@@ -193,22 +198,24 @@ export default function App() {
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "graph"}
+                title="Схема агентов: пайплайн узлов одним прогоном"
                 onClick={() => setMode("graph")}
               >
-                Схема Агентов
+                Схема
               </button>
               <button
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "benchmarks"}
+                title="Таблица правды: harness-bench по моделям из цепочки"
                 onClick={() => setMode("benchmarks")}
               >
-                Benchmarks
+                Замеры
               </button>
-            </div>
+            </nav>
 
             <span className="sr-only" aria-live="polite">
-              Режим: {shellLabel}
+              Раздел: {shellLabel}
             </span>
           </header>
 
@@ -239,6 +246,8 @@ export default function App() {
                   onStaleSession={onStaleSession}
                   onFirstMessage={onFirstMessage}
                   onOpenAgents={() => setMode("agents")}
+                  onOpenGraph={() => setMode("graph")}
+                  onOpenBenchmarks={() => setMode("benchmarks")}
                 />
               )}
             </>

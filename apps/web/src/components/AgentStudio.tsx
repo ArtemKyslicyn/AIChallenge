@@ -396,8 +396,10 @@ function AgentStudioInner() {
     <div className="agent-graph" onKeyDown={onKeyDown}>
       <header className="agent-graph-top">
         <div className="agent-graph-title">
-          <h2>Схема Агентов</h2>
-          <p className="agent-graph-sub">Потяни точку → точку или «Связать» в свойствах</p>
+          <h2>Схема агентов</h2>
+          <p className="agent-graph-sub">
+            Пайплайн узлов одним прогоном. Связь: точка → точка или «Связать» в свойствах.
+          </p>
         </div>
         <label className="agent-graph-name">
           <span className="sr-only">Название схемы</span>
