@@ -43,6 +43,11 @@ if [[ -x /usr/local/sbin/assert-edge-safe.sh ]] || [[ -f "$ROOT/scripts/assert-e
   }
 fi
 
+echo "==> ensure harness board snapshot is writable by api (uid 10001)"
+mkdir -p "$ROOT/configs/benchmarks"
+chown -R 10001:10001 "$ROOT/configs/benchmarks" 2>/dev/null || true
+chmod -R u+rwX,g+rwX "$ROOT/configs/benchmarks" 2>/dev/null || true
+
 echo "==> docker compose build + up (prod, rolling — no down)"
 docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
 

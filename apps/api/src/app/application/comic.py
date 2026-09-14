@@ -411,7 +411,9 @@ Return ONLY one JSON object (no markdown fences) with this shape:
   "title": "...",
   "style": "bold ink comic, flat cel shading",
   "seed": 12345,
-  "characters": [{"id": "cat", "name": "Cat", "look": "orange tabby, blue scarf, green eyes, bipedal"}],
+  "characters": [
+    {"id": "cat", "name": "Cat", "look": "orange tabby, blue scarf, green eyes, bipedal"}
+  ],
   "panels": [
     {
       "index": 1,
@@ -428,7 +430,8 @@ Rules:
 - Keep the user's spoken lines when they supplied dialogue (any language OK for dialogue/caption).
 - EVERY panel needs non-empty dialogue OR caption. Prefer short dialogue.
 - characters.look: English, ~15–40 words, distinctive colors/props (same sheet reused per panel).
-- visual: MUST be English. Lead with who does what. Different action each panel. No text/letters/bubbles in visual.
+- visual: MUST be English. Lead with who does what. Different action each panel.
+  No text/letters/bubbles in visual.
 - dialogue must be a STRING (not an object). speaker is a character id string.
 - text_mode: "bubble" | "caption" | "both".
 - style: short English art direction.

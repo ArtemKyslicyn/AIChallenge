@@ -61,7 +61,10 @@ def test_harness_leaderboard_for_connected_models(tmp_path: Any) -> None:
     assert body["rows"][0]["matched"] is True
     assert body["rows"][0]["rank"] == 1
     assert body["rows"][0]["passed"] == 320
-    assert any(r["model_id"] == "google/gemini-2.5-flash" and not r["matched"] for r in body["rows"])
+    assert any(
+        r["model_id"] == "google/gemini-2.5-flash" and not r["matched"]
+        for r in body["rows"]
+    )
     assert len(body["board"]) == 1
     assert body["board"][0]["in_chain"] is True
 

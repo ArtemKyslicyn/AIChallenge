@@ -135,7 +135,7 @@ def refresh_board_from_upstream(path: Path, *, force: bool = False) -> dict[str,
     now = time.monotonic()
     if not force and _last_refresh_mono and (now - _last_refresh_mono) < REFRESH_COOLDOWN_SECONDS:
         wait = int(REFRESH_COOLDOWN_SECONDS - (now - _last_refresh_mono))
-        raise RefreshCooldownLimitedError(f"Подождите {wait} с перед следующим обновлением.")
+        raise RefreshRateLimitedError(f"Подождите {wait} с перед следующим обновлением.")
 
     try:
         text = fetch_readme_text()
