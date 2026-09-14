@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -40,7 +41,7 @@ async def run_agent_graph(
     if not isinstance(payload.graph, dict):
         raise MessageValidationError("graph должен быть объектом.")
 
-    async def frames():
+    async def frames() -> AsyncIterator[str]:
         try:
             async for item in iter_graph_run(
                 graph_payload=payload.graph,

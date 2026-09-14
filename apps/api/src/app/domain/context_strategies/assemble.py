@@ -47,7 +47,9 @@ def resolve_context_mode(
     return ContextMode.NONE
 
 
-def _strategy_est(system_prompt: str, system_extra: str, recent: list, user: str) -> int:
+def _strategy_est(
+    system_prompt: str, system_extra: str, recent: list[AgentDialogMessage], user: str
+) -> int:
     sys = system_prompt.strip()
     extra = (system_extra or "").strip()
     if extra:

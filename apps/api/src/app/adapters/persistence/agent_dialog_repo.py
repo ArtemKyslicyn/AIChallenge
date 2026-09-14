@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,7 +13,7 @@ from app.adapters.persistence.models import AgentDialogRow
 from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
 
 
-def _parse_messages(raw: list[dict] | None) -> list[AgentDialogMessage]:
+def _parse_messages(raw: list[dict[str, Any]] | None) -> list[AgentDialogMessage]:
     out: list[AgentDialogMessage] = []
     if not raw:
         return out
@@ -47,7 +48,7 @@ def _parse_messages(raw: list[dict] | None) -> list[AgentDialogMessage]:
     return out
 
 
-def _dump_messages(messages: list[AgentDialogMessage]) -> list[dict]:
+def _dump_messages(messages: list[AgentDialogMessage]) -> list[dict[str, Any]]:
     return [
         {
             "id": m.id,
@@ -151,6 +152,7 @@ class SqlAlchemyAgentDialogRepository:
             row.parent_dialog_id = dialog.parent_dialog_id
             row.branch_label = dialog.branch_label
             row.forked_from_message_id = dialog.forked_from_message_id
-            row.updated_at = dialog.updated_at
+            if dialog.updated_at is not None:
+                row.updated_at = dialog.updated_at
         await self._db.flush()
         return _to_domain(row)
