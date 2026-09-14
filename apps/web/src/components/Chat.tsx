@@ -91,11 +91,15 @@ export function Chat({
   onStaleSession,
   onFirstMessage,
   onOpenAgents,
+  onOpenGraph,
+  onOpenBenchmarks,
 }: {
   session: SessionCredentials;
   onStaleSession: () => void;
   onFirstMessage?: (text: string) => void;
   onOpenAgents?: () => void;
+  onOpenGraph?: () => void;
+  onOpenBenchmarks?: () => void;
 }) {
   const [items, setItems] = useState<ThreadItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -900,18 +904,30 @@ export function Chat({
 
           {empty && (
             <div className="empty">
-              <h2>О чём поговорим?</h2>
+              <h2>Спросите — и увидите, кто ответил</h2>
               <p>
-                Режим <strong>Один</strong> — чат. Можно попросить нарисовать картинку, короткое
-                видео или комикс (текст реплик поверх картинок). <strong>×2</strong> — шаблоны.{" "}
-                <strong>×T</strong> — температуры 0 / 0.7 / 1.2 с автооценкой.{" "}
-                <strong>×4</strong> — лаборатория стратегий. Отладка — плавающая кнопка Debug.
+                У каждого ответа ассистента есть <strong>model_id</strong>. Режим{" "}
+                <strong>Один</strong> — обычный чат (можно картинку, видео или комикс).{" "}
+                <strong>×2</strong> — два шаблона рядом. <strong>×T</strong> — температуры.{" "}
+                <strong>×4</strong> — лаборатория стратегий. Всё остальное — в разделах сверху.
               </p>
-              {onOpenAgents ? (
-                <p className="empty-agents-link">
-                  <button type="button" className="text-link" onClick={onOpenAgents}>
-                    Собрать агента (урок 6)
-                  </button>
+              {onOpenAgents || onOpenGraph || onOpenBenchmarks ? (
+                <p className="empty-agents-link empty-stand-links">
+                  {onOpenAgents ? (
+                    <button type="button" className="text-link" onClick={onOpenAgents}>
+                      Собрать агента
+                    </button>
+                  ) : null}
+                  {onOpenGraph ? (
+                    <button type="button" className="text-link" onClick={onOpenGraph}>
+                      Схема пайплайна
+                    </button>
+                  ) : null}
+                  {onOpenBenchmarks ? (
+                    <button type="button" className="text-link" onClick={onOpenBenchmarks}>
+                      Таблица замеров
+                    </button>
+                  ) : null}
                 </p>
               ) : null}
               <div className="suggestions">

@@ -66,9 +66,9 @@ export function BenchmarksBoard() {
     <div className="bench-board">
       <header className="bench-board-top">
         <div>
-          <h2>Benchmarks</h2>
+          <h2>Замеры</h2>
           <p className="bench-board-sub">
-            Рейтинг по{" "}
+            Таблица правды по{" "}
             <a
               href={data?.source_url || "https://github.com/ai-forever/harness-bench-fast"}
               target="_blank"
@@ -76,7 +76,8 @@ export function BenchmarksBoard() {
             >
               harness-bench-fast
             </a>
-            : Result = passed/total, % = passed/total×100
+            : Result = passed/total, % = passed/total×100. Модели из вашей цепочки —
+            сверху; без строки в бенче — «ещё не измерены».
             {data ? ` · task-set ${data.task_set} · ${data.total_tasks} задач` : null}
             {coverage
               ? ` · в цепочке ${coverage.matched}/${coverage.connected} с измерением`
@@ -167,7 +168,7 @@ export function BenchmarksBoard() {
 
           {unmatched.length > 0 ? (
             <section className="bench-unmatched">
-              <h3>В цепочке, но нет в harness-bench (ещё не измерены)</h3>
+              <h3>В цепочке, ещё не измерены</h3>
               <ul>
                 {unmatched.map((row) => (
                   <li key={row.model_id}>
@@ -179,7 +180,7 @@ export function BenchmarksBoard() {
           ) : null}
 
           <section>
-            <h3 className="bench-section-title">Полная борда harness-bench-fast</h3>
+            <h3 className="bench-section-title">Полная таблица harness-bench-fast</h3>
             <div className="bench-table-wrap">
               <table className="bench-table">
                 <thead>
