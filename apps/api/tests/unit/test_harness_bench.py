@@ -79,6 +79,20 @@ def test_match_prefers_highest_passed() -> None:
     assert row.passed == 387
 
 
+def test_match_rejects_cross_family_aliases() -> None:
+    board = _sample_board()
+    assert match_board_row("deepseek/deepseek-v3.2", board) is None
+    assert match_board_row("deepseek/deepseek-chat", board) is None
+    assert match_board_row("qwen/qwen3-235b-a22b-2507", board) is None
+
+
+def test_match_qwen_coder_still_works() -> None:
+    board = _sample_board()
+    row = match_board_row("qwen/qwen3-coder-30b-a3b", board)
+    assert row is not None
+    assert row.model_label == "Qwen3 Coder 30B-A3B"
+
+
 def test_leaderboard_ranks_connected_only() -> None:
     board = _sample_board()
     entries = build_leaderboard(
