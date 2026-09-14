@@ -55,10 +55,14 @@ def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
         )
     if not cast:
         raise DomainError("Нужен хотя бы один включённый агент в касте.")
-    rules = raw.get("rules") if isinstance(raw.get("rules"), Mapping) else {}
-    world_raw = raw.get("world") if isinstance(raw.get("world"), Mapping) else {}
-    inputs = raw.get("inputs") if isinstance(raw.get("inputs"), Mapping) else {}
-    arbiter = raw.get("arbiter") if isinstance(raw.get("arbiter"), Mapping) else {}
+    rules_raw = raw.get("rules")
+    world_raw = raw.get("world")
+    inputs_raw = raw.get("inputs")
+    arbiter_raw = raw.get("arbiter")
+    rules: dict[str, Any] = dict(rules_raw) if isinstance(rules_raw, Mapping) else {}
+    world: dict[str, Any] = dict(world_raw) if isinstance(world_raw, Mapping) else {}
+    inputs: dict[str, Any] = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
+    arbiter: dict[str, Any] = dict(arbiter_raw) if isinstance(arbiter_raw, Mapping) else {}
     arbiter_prompt = str(raw.get("arbiter_prompt") or arbiter.get("system_prompt") or "")
     if not arbiter_prompt:
         arbiter_prompt = (
@@ -69,10 +73,10 @@ def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "id": str(raw.get("id") or "arena"),
         "name": str(raw.get("name") or "Battle")[:120],
-        "world": dict(world_raw),
-        "inputs": dict(inputs),
+        "world": world,
+        "inputs": inputs,
         "cast": cast,
-        "rules": dict(rules),
+        "rules": rules,
         "seed": int(raw.get("seed") or 1),
         "arbiter_prompt": arbiter_prompt,
     }
