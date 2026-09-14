@@ -172,4 +172,3 @@ async def test_iter_graph_run_degrades_and_continues() -> None:
     assert "node_degraded" in kinds
     assert kinds[-1] == "done"
     assert "[узел" in events[-1]["data"]["content"]
-

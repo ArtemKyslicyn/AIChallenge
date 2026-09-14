@@ -102,9 +102,7 @@ async def run_agent(
     ]
 
     preferred = (definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL
-    result = await router.complete_chat(
-        turns, preferred_model=preferred, generation=generation
-    )
+    result = await router.complete_chat(turns, preferred_model=preferred, generation=generation)
     tokens = build_token_breakdown(
         system_prompt=system_for_llm,
         history_before=history_before,
@@ -130,9 +128,7 @@ async def _refresh_summary(
         ChatMessage(role=MessageRole.USER, content=prompt),
     ]
     gen = GenerationParams(temperature=0.2, max_tokens=400)
-    result = await router.complete_chat(
-        turns, preferred_model=preferred_model, generation=gen
-    )
+    result = await router.complete_chat(turns, preferred_model=preferred_model, generation=gen)
     return (result.content or "").strip()
 
 
@@ -149,9 +145,7 @@ async def _extract_facts(
         ChatMessage(role=MessageRole.USER, content=prompt),
     ]
     gen = GenerationParams(temperature=0.1, max_tokens=400)
-    result = await router.complete_chat(
-        turns, preferred_model=preferred_model, generation=gen
-    )
+    result = await router.complete_chat(turns, preferred_model=preferred_model, generation=gen)
     return parse_facts_json(result.content or "")
 
 
@@ -217,9 +211,7 @@ async def run_agent_with_dialog(
     else:
         dialog.name = (definition.name or "").strip()[:120]
         dialog.system_prompt = definition.system_prompt.strip()
-        dialog.preferred_model = (
-            (definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL
-        )
+        dialog.preferred_model = (definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL
         dialog.temperature = definition.temperature
         dialog.max_tokens = definition.max_tokens
         if vhash:
@@ -245,8 +237,10 @@ async def run_agent_with_dialog(
             dialog.facts = dict(state.facts)
             facts_updated = True
 
-    keep = recent_keep if recent_keep is not None else (
-        DEFAULT_RECENT_KEEP if mode == ContextMode.COMPRESS else None
+    keep = (
+        recent_keep
+        if recent_keep is not None
+        else (DEFAULT_RECENT_KEEP if mode == ContextMode.COMPRESS else None)
     )
     every = (
         summarize_every

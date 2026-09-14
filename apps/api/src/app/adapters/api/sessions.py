@@ -198,6 +198,7 @@ def schedule_turn_analytics(
         )
     )
 
+
 async def _write_interrupted(container: Container, draft: ReplyDraft) -> None:
     """Save a cut-off answer using a session of its own.
 

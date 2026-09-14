@@ -334,9 +334,7 @@ def build_container(settings: Settings) -> Container:
         media_generator=media_generator,
         media_store=media_store,
         media_limiter=media_limiter,
-        agent_run_limiter=AgentRunRateLimiter(
-            limit_per_hour=settings.agents_run_limit_per_hour
-        ),
+        agent_run_limiter=AgentRunRateLimiter(limit_per_hour=settings.agents_run_limit_per_hour),
         penalties=penalties,
         scorer=HeuristicAnswerScorer(
             min_answer_chars=settings.cascade_min_answer_chars,

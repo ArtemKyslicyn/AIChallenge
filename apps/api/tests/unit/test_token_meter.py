@@ -68,9 +68,10 @@ def test_fit_drops_oldest_when_over_budget() -> None:
     assert trunc.dropped_tokens_est > 0
     # Fixed system+user always leave room only for a short tail.
     assert all(m.content != blob for m in kept) or len(kept) < len(history)
-    assert estimate_tokens("S") + estimate_messages_tokens(kept) + estimate_tokens(
-        "NOW"
-    ) <= trunc.budget
+    assert (
+        estimate_tokens("S") + estimate_messages_tokens(kept) + estimate_tokens("NOW")
+        <= trunc.budget
+    )
 
 
 def test_build_token_breakdown_totals() -> None:

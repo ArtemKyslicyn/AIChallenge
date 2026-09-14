@@ -35,9 +35,7 @@ def resolve_context_mode(
         try:
             mode = ContextMode(raw)
         except ValueError as exc:
-            raise MessageValidationError(
-                f"Неизвестный context_mode: {context_mode!r}"
-            ) from exc
+            raise MessageValidationError(f"Неизвестный context_mode: {context_mode!r}") from exc
         if compress is True and mode != ContextMode.COMPRESS:
             raise MessageValidationError(
                 "compress=true конфликтует с context_mode "
@@ -77,9 +75,7 @@ def assemble_context(
     )
     sys = system_prompt.strip()
     user = user_message.strip()
-    raw_est = estimate_raw_request_tokens(
-        system_prompt=sys, messages=hist, user_message=user
-    )
+    raw_est = estimate_raw_request_tokens(system_prompt=sys, messages=hist, user_message=user)
 
     if mode == ContextMode.NONE:
         meta = StrategyMeta(
@@ -94,9 +90,7 @@ def assemble_context(
 
     if mode == ContextMode.SLIDING:
         keep = (
-            DEFAULT_FACTS_RECENT_KEEP
-            if recent_keep is None
-            else max(2, min(40, int(recent_keep)))
+            DEFAULT_FACTS_RECENT_KEEP if recent_keep is None else max(2, min(40, int(recent_keep)))
         )
         recent, kept, dropped = apply_sliding(hist, recent_keep=keep)
         meta = StrategyMeta(
@@ -111,9 +105,7 @@ def assemble_context(
 
     if mode == ContextMode.FACTS:
         keep = (
-            DEFAULT_FACTS_RECENT_KEEP
-            if recent_keep is None
-            else max(2, min(40, int(recent_keep)))
+            DEFAULT_FACTS_RECENT_KEEP if recent_keep is None else max(2, min(40, int(recent_keep)))
         )
         recent, kept, dropped = apply_sliding(hist, recent_keep=keep)
         extra = format_facts_block(st.facts)

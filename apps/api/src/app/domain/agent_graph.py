@@ -84,11 +84,7 @@ def parse_graph_payload(raw: dict[str, Any]) -> AgentGraph:
                 else 0.3,
                 max_tokens=int(data["max_tokens"])
                 if isinstance(data.get("max_tokens"), int)
-                else (
-                    int(data["maxTokens"])
-                    if isinstance(data.get("maxTokens"), int)
-                    else 512
-                ),
+                else (int(data["maxTokens"]) if isinstance(data.get("maxTokens"), int) else 512),
             )
         )
     edges: list[GraphEdge] = []

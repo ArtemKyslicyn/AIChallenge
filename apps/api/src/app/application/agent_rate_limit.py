@@ -22,8 +22,6 @@ class AgentRunRateLimiter:
         stamps = [t for t in self._hits[key] if t >= cutoff]
         if len(stamps) >= self._limit:
             self._hits[key] = stamps
-            raise AgentRunRateLimitError(
-                f"Лимит запусков агента: не больше {self._limit} в час."
-            )
+            raise AgentRunRateLimitError(f"Лимит запусков агента: не больше {self._limit} в час.")
         stamps.append(now)
         self._hits[key] = stamps

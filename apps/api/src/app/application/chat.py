@@ -443,9 +443,7 @@ async def send_user_message_and_stream(
                     last_err: str | None = None
                     for _attempt in range(2):
                         try:
-                            plan = await router.complete_chat(
-                                story_turns, preferred_model=model
-                            )
+                            plan = await router.complete_chat(story_turns, preferred_model=model)
                             plan_model = plan.model_id or plan_model
                             board = parse_storyboard_json(plan.content)
                             break
@@ -487,8 +485,7 @@ async def send_user_message_and_stream(
                         title=board.title,
                         panel_count=len(board.panels),
                         characters=[
-                            {"id": c.id, "name": c.name, "look": c.look}
-                            for c in board.characters
+                            {"id": c.id, "name": c.name, "look": c.look} for c in board.characters
                         ],
                         layout="per_panel",
                     )
@@ -652,8 +649,7 @@ async def send_user_message_and_stream(
         if comic_finished or comic_attempted:
             if comic_attempted and not comic_finished and not accumulated:
                 fail_note = (
-                    "\n\nНе удалось собрать комикс. "
-                    "Попробуй короче описать сюжет и диалоги.\n"
+                    "\n\nНе удалось собрать комикс. Попробуй короче описать сюжет и диалоги.\n"
                 )
                 accumulated.append(fail_note)
                 if first_token_at is None:
