@@ -63,7 +63,7 @@ def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
     if not arbiter_prompt:
         arbiter_prompt = (
             "You are the arena arbiter. Summarize proposals and emit a JSON object "
-            'with optional keys stability, public_panic, tech_lead, notes, '
+            "with optional keys stability, public_panic, tech_lead, notes, "
             "red_line_crossed. Keep the fiction abstract; never give real weapon details."
         )
     return {
@@ -87,9 +87,9 @@ def _build_user_packet(
     prior: list[dict[str, Any]],
     agenda: str,
 ) -> str:
-    prior_txt = "\n".join(
-        f"- {p.get('name')}: {(p.get('content') or '')[:400]}" for p in prior
-    ) or "(none)"
+    prior_txt = (
+        "\n".join(f"- {p.get('name')}: {(p.get('content') or '')[:400]}" for p in prior) or "(none)"
+    )
     return (
         f"Round {round_no} phase={phase}\n"
         f"Public agenda: {agenda}\n"
@@ -358,7 +358,6 @@ async def iter_battle_run(
     }
     if reveal_goals:
         done_payload["goals_revealed"] = [
-            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""}
-            for c in arena["cast"]
+            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""} for c in arena["cast"]
         ]
     yield {"event": "battle_done", "data": done_payload}
