@@ -33,7 +33,7 @@ from app.core.deps import (
     visitor_id_header,
 )
 from app.domain.agent_definition import AgentDefinition
-from app.domain.agent_dialog import AgentDialog
+from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
 from app.domain.analytics import AnalyticsEvent
 from app.domain.context_compress import CompressionInfo
 from app.domain.context_strategies import StrategyMeta
@@ -56,7 +56,7 @@ def _definition_from_payload(payload: AgentWorkshopRunRequest) -> AgentDefinitio
     )
 
 
-def _msg_dto(m) -> AgentDialogMessageResponse:
+def _msg_dto(m: AgentDialogMessage) -> AgentDialogMessageResponse:
     return AgentDialogMessageResponse(
         id=m.id,
         role=m.role,
@@ -67,14 +67,13 @@ def _msg_dto(m) -> AgentDialogMessageResponse:
 
 
 def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
+    stamp = dialog.updated_at or dialog.created_at
     return AgentDialogResponse(
         id=dialog.id,
         client_draft_id=dialog.client_draft_id,
         name=dialog.name,
         messages=[_msg_dto(m) for m in dialog.messages],
-        updated_at=(dialog.updated_at or dialog.created_at).isoformat()
-        if dialog.updated_at or dialog.created_at
-        else "",
+        updated_at=stamp.isoformat() if stamp is not None else "",
         summary_text=dialog.summary_text or "",
         summary_until_count=int(dialog.summary_until_count or 0),
         facts=dict(dialog.facts or {}),

@@ -63,7 +63,10 @@ def fetch_readme_text(*, timeout: float = 45.0) -> str:
         headers={"User-Agent": "aichallenge-harness-board-sync/1.0"},
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8")
+        raw = resp.read()
+        if isinstance(raw, bytes):
+            return raw.decode("utf-8")
+        return bytes(raw).decode("utf-8")
 
 
 def parse_readme_rows(text: str) -> list[dict[str, Any]]:

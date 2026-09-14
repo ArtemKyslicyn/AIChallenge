@@ -67,7 +67,8 @@ def parse_graph_payload(raw: dict[str, Any]) -> AgentGraph:
         if nid in seen:
             raise MessageValidationError(f"Дубликат id узла: {nid}")
         seen.add(nid)
-        data = item.get("data") if isinstance(item.get("data"), dict) else item
+        data_raw = item.get("data")
+        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else item
         kind = _kind(data.get("kind") or item.get("type"))
         nodes.append(
             GraphNode(
