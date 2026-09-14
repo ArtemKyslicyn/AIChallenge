@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
 from app.domain.errors import MessageValidationError

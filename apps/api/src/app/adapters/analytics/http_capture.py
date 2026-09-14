@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from app.domain.analytics import AnalyticsCapture, AnalyticsEvent
+from app.domain.analytics import AnalyticsEvent
 
 logger = logging.getLogger(__name__)
 

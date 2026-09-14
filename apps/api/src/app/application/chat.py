@@ -432,7 +432,8 @@ async def send_user_message_and_stream(
                             content=(
                                 "Build a comic storyboard JSON for this brief. "
                                 "Preserve user dialogue when present. "
-                                "visual fields MUST be English; dialogue may keep user language.\n\n"
+                                "visual fields MUST be English; "
+                                "dialogue may keep user language.\n\n"
                                 f"{brief}"
                             ),
                         ),

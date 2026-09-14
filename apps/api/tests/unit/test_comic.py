@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.application.comic import (
-    NO_TEXT_CLAUSE,
     build_panel_image_prompt,
     choose_text_mode,
     extract_comic_from_content,
@@ -43,7 +42,14 @@ def test_parse_clamps_and_requires_min_panels() -> None:
             "style": "ink comic",
             "seed": 7,
             "characters": [{"id": "a", "name": "Cat", "look": "orange tabby"}],
-            "panels": [{"visual": f"scene {i}", "dialogue": "ok", "speaker": "a"} for i in range(8)],
+            "panels": [
+                {
+                    "visual": f"scene {i}",
+                    "dialogue": "ok",
+                    "speaker": "a",
+                }
+                for i in range(8)
+            ],
         }
     )
     assert len(board.panels) == 6

@@ -68,8 +68,9 @@ async def test_run_agent_assembles_system_and_user() -> None:
 
 @pytest.mark.asyncio
 async def test_run_agent_includes_history() -> None:
-    from app.domain.agent_dialog import AgentDialogMessage
     from datetime import UTC, datetime
+
+    from app.domain.agent_dialog import AgentDialogMessage
 
     router = _FakeRouter()
     definition = AgentDefinition(
