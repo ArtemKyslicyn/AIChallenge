@@ -50,8 +50,7 @@ def _definition_from_payload(payload: AgentWorkshopRunRequest) -> AgentDefinitio
     return AgentDefinition(
         name=(payload.definition.name or "").strip(),
         system_prompt=payload.definition.system_prompt,
-        preferred_model=(payload.definition.preferred_model or AUTO_MODEL).strip()
-        or AUTO_MODEL,
+        preferred_model=(payload.definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL,
         temperature=payload.definition.temperature,
         max_tokens=payload.definition.max_tokens,
     )
@@ -180,9 +179,7 @@ async def run_workshop_agent(
                 )
             draft_id = (payload.client_draft_id or "").strip()
             if not draft_id:
-                raise MessageValidationError(
-                    "Для сохранения диалога передайте client_draft_id."
-                )
+                raise MessageValidationError("Для сохранения диалога передайте client_draft_id.")
             identity = resolve_visitor_identity(request, owner)
             vhash = identity[0] if identity else None
             outcome, dialog = await run_agent_with_dialog(
@@ -235,9 +232,7 @@ async def run_workshop_agent(
         content = outcome.result.content
         model_id = outcome.result.model_id
         tokens_out = _tokens_dto(outcome.tokens)
-        return AgentWorkshopRunResponse(
-            content=content, model_id=model_id, tokens=tokens_out
-        )
+        return AgentWorkshopRunResponse(content=content, model_id=model_id, tokens=tokens_out)
     except Exception:
         status = "error"
         await db.rollback()
@@ -247,9 +242,7 @@ async def run_workshop_agent(
 
         async def _emit() -> None:
             try:
-                name = (
-                    "agent_run_completed" if status == "ok" else "agent_run_failed"
-                )
+                name = "agent_run_completed" if status == "ok" else "agent_run_failed"
                 props = {
                     "status": status,
                     "model_id": model_id or None,

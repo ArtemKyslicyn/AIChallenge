@@ -110,11 +110,7 @@ def estimate_compressed_request_tokens(
     sys = system_prompt.strip()
     if summary_text.strip():
         sys = f"{sys}\n\n---\n{SUMMARY_PREFIX}{summary_text.strip()}"
-    return (
-        estimate_tokens(sys)
-        + estimate_messages_tokens(recent)
-        + estimate_tokens(user_message)
-    )
+    return estimate_tokens(sys) + estimate_messages_tokens(recent) + estimate_tokens(user_message)
 
 
 def merge_system_with_summary(system_prompt: str, summary_text: str) -> str:

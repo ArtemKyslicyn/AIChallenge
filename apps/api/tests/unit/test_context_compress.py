@@ -54,9 +54,7 @@ def test_summarizer_prompt_includes_prior_and_chunk() -> None:
 def test_token_estimates_compressed_smaller() -> None:
     fat = "x" * 400
     msgs = [_msg("user", fat), _msg("assistant", fat)] * 5
-    raw = estimate_raw_request_tokens(
-        system_prompt="sys", messages=msgs, user_message="q"
-    )
+    raw = estimate_raw_request_tokens(system_prompt="sys", messages=msgs, user_message="q")
     compressed = estimate_compressed_request_tokens(
         system_prompt="sys",
         summary_text="краткая сводка",

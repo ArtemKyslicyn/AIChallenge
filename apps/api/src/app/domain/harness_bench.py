@@ -173,9 +173,7 @@ _ALIAS_NEEDLES: tuple[tuple[str, str], ...] = (
 
 
 def normalize_label(text: str) -> str:
-    return " ".join(
-        text.lower().replace("_", " ").replace("/", " ").replace(":", " ").split()
-    )
+    return " ".join(text.lower().replace("_", " ").replace("/", " ").replace(":", " ").split())
 
 
 def match_board_row(model_id: str, board: HarnessBoard) -> BoardRow | None:

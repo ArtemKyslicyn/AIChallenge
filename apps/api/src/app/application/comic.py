@@ -10,9 +10,7 @@ from uuid import uuid4
 
 COMIC_FENCE_START = "```comic+json"
 COMIC_FENCE_END = "```"
-NO_TEXT_CLAUSE = (
-    "no text, no letters, no words, no captions, no speech bubbles, no watermarks"
-)
+NO_TEXT_CLAUSE = "no text, no letters, no words, no captions, no speech bubbles, no watermarks"
 _FOREGROUND_CLAUSE = (
     "cartoon comic characters in the foreground, clear action pose, "
     "not an empty cityscape, not architecture photography, not a building facade"
@@ -220,9 +218,7 @@ def character_looks_line(board: ComicStoryboard, *, compact: bool = False) -> st
     if not board.characters:
         return "main comic characters in the foreground, consistent design"
     if compact:
-        parts = [
-            f"{c.name}: {_short_look(c.look, max_chars=80)}" for c in board.characters[:4]
-        ]
+        parts = [f"{c.name}: {_short_look(c.look, max_chars=80)}" for c in board.characters[:4]]
         return "same characters: " + "; ".join(parts)
     parts = [f"{c.name} ({c.id}): {_short_look(c.look)}" for c in board.characters]
     return "Character sheet: " + " | ".join(parts)
@@ -316,9 +312,7 @@ def normalize_storyboard_speech(board: ComicStoryboard) -> None:
     for panel in board.panels:
         if panel.dialogue or panel.caption:
             if panel.text_mode not in {"bubble", "caption", "both"}:
-                panel.text_mode = choose_text_mode(
-                    dialogue=panel.dialogue, caption=panel.caption
-                )
+                panel.text_mode = choose_text_mode(dialogue=panel.dialogue, caption=panel.caption)
             continue
         who = panel.speaker or "Герой"
         panel.dialogue = f"{who}: …"
@@ -350,9 +344,7 @@ def storyboard_to_persist_dict(board: ComicStoryboard) -> dict[str, Any]:
         "seed": board.seed,
         "layout": board.layout,
         "page_image_url": board.page_image_url,
-        "characters": [
-            {"id": c.id, "name": c.name, "look": c.look} for c in board.characters
-        ],
+        "characters": [{"id": c.id, "name": c.name, "look": c.look} for c in board.characters],
         "panels": [
             {
                 "index": p.index,

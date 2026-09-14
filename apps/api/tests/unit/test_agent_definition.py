@@ -34,6 +34,4 @@ def test_validate_empty_message() -> None:
 
 def test_validate_oversize_system() -> None:
     with pytest.raises(MessageValidationError, match="Инструкция"):
-        validate_agent_run(
-            _def(system_prompt="x" * 50), message="hi", max_message_chars=20
-        )
+        validate_agent_run(_def(system_prompt="x" * 50), message="hi", max_message_chars=20)

@@ -23,9 +23,7 @@ from app.domain.harness_bench import (
 
 logger = logging.getLogger(__name__)
 
-README_URL = (
-    "https://raw.githubusercontent.com/ai-forever/harness-bench-fast/main/README.md"
-)
+README_URL = "https://raw.githubusercontent.com/ai-forever/harness-bench-fast/main/README.md"
 SOURCE = "https://github.com/ai-forever/harness-bench-fast"
 LANDING = "https://ai-forever.github.io/harness-bench-fast/"
 

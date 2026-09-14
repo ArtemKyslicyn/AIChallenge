@@ -73,9 +73,7 @@ async def test_run_agent_includes_history() -> None:
     from app.domain.agent_dialog import AgentDialogMessage
 
     router = _FakeRouter()
-    definition = AgentDefinition(
-        name="N", system_prompt="Remember.", preferred_model="auto"
-    )
+    definition = AgentDefinition(name="N", system_prompt="Remember.", preferred_model="auto")
     prior = [
         AgentDialogMessage(
             id="1",
@@ -106,9 +104,7 @@ async def test_run_agent_includes_history() -> None:
 
     with pytest.raises(AgentsRunDisabledError):
         await run_agent(
-            definition=AgentDefinition(
-                name="N", system_prompt="S", preferred_model="auto"
-            ),
+            definition=AgentDefinition(name="N", system_prompt="S", preferred_model="auto"),
             message="Hi",
             router=_FakeRouter(),  # type: ignore[arg-type]
             enabled=False,
@@ -125,9 +121,7 @@ async def test_run_agent_truncates_history_under_low_context_limit() -> None:
     router = _FakeRouter()
     blob = "z" * 400
     prior = [
-        AgentDialogMessage(
-            id="1", role="user", content=blob, created_at=datetime.now(UTC)
-        ),
+        AgentDialogMessage(id="1", role="user", content=blob, created_at=datetime.now(UTC)),
         AgentDialogMessage(
             id="2",
             role="assistant",
@@ -135,9 +129,7 @@ async def test_run_agent_truncates_history_under_low_context_limit() -> None:
             created_at=datetime.now(UTC),
             model_id="fake",
         ),
-        AgentDialogMessage(
-            id="3", role="user", content="short", created_at=datetime.now(UTC)
-        ),
+        AgentDialogMessage(id="3", role="user", content="short", created_at=datetime.now(UTC)),
         AgentDialogMessage(
             id="4",
             role="assistant",
