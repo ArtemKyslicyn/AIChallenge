@@ -93,6 +93,7 @@ export function Chat({
   onOpenAgents,
   onOpenGraph,
   onOpenBenchmarks,
+  onOpenBattle,
 }: {
   session: SessionCredentials;
   onStaleSession: () => void;
@@ -100,6 +101,7 @@ export function Chat({
   onOpenAgents?: () => void;
   onOpenGraph?: () => void;
   onOpenBenchmarks?: () => void;
+  onOpenBattle?: () => void;
 }) {
   const [items, setItems] = useState<ThreadItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -911,7 +913,7 @@ export function Chat({
                 <strong>×2</strong> — два шаблона рядом. <strong>×T</strong> — температуры.{" "}
                 <strong>×4</strong> — лаборатория стратегий. Всё остальное — в разделах сверху.
               </p>
-              {onOpenAgents || onOpenGraph || onOpenBenchmarks ? (
+              {onOpenAgents || onOpenGraph || onOpenBenchmarks || onOpenBattle ? (
                 <p className="empty-agents-link empty-stand-links">
                   {onOpenAgents ? (
                     <button type="button" className="text-link" onClick={onOpenAgents}>
@@ -926,6 +928,11 @@ export function Chat({
                   {onOpenBenchmarks ? (
                     <button type="button" className="text-link" onClick={onOpenBenchmarks}>
                       Таблица замеров
+                    </button>
+                  ) : null}
+                  {onOpenBattle ? (
+                    <button type="button" className="text-link" onClick={onOpenBattle}>
+                      Битва агентов
                     </button>
                   ) : null}
                 </p>

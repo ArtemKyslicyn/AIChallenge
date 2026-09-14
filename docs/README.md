@@ -8,6 +8,8 @@
 |------|----------|
 | [specs/2026-08-31-ai-chat-platform-design.md](superpowers/specs/2026-08-31-ai-chat-platform-design.md) | **Design spec** — целевая архитектура v1: hexagonal monorepo, API/SSE, LLM ModelRouter, Postgres, секреты, критерии успеха. Источник правды по дизайну. |
 | [plans/2026-08-31-ai-chat-platform-claude-code.md](superpowers/plans/2026-08-31-ai-chat-platform-claude-code.md) | **Implementation plan** для Claude Code: 15 задач с TDD-шагами, file map, DoD, правила секретов. Им исполняют агенты. |
+| [specs/2026-09-14-agent-battle-design.md](superpowers/specs/2026-09-14-agent-battle-design.md) | **Битва агентов** — песочница конкурирующих ролей, редактируемый мир/факты, SSE-раунды (draft). |
+| [plans/2026-09-14-agent-battle.md](superpowers/plans/2026-09-14-agent-battle.md) | План реализации вкладки «Битва» (8 задач). |
 
 ## Агенты и соглашения
 

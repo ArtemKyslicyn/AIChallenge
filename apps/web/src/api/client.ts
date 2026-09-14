@@ -941,6 +941,177 @@ function parseGraphFrame(raw: string): AgentGraphRunEvent | null {
   return null;
 }
 
+/** SSE events from POST /agent-battle/run. */
+export type AgentBattleEvent =
+  | {
+      type: "battle_start";
+      arena_id: string;
+      name: string;
+      seed: number;
+      max_rounds: number;
+      cast: { id: string; name: string }[];
+      world: Record<string, unknown>;
+    }
+  | { type: "round_start"; round: number; world: Record<string, unknown> }
+  | { type: "phase"; round: number; phase: string }
+  | {
+      type: "agent_done";
+      round: number;
+      phase: string;
+      agent_id: string;
+      name: string;
+      content: string;
+      model_id: string | null;
+    }
+  | {
+      type: "verdict";
+      round: number;
+      red_line?: boolean;
+      rationale: string;
+      model_id: string | null;
+      scores: { agent_id: string; points: number; notes?: string }[];
+      world: Record<string, unknown>;
+    }
+  | { type: "world_update"; round: number; world: Record<string, unknown> }
+  | {
+      type: "battle_done";
+      aborted?: boolean;
+      leaderboard: { agent_id: string; name: string; points: number }[];
+      goals_revealed?: { agent_id: string; hidden_goal: string }[];
+      world: Record<string, unknown>;
+    }
+  | { type: "error"; message: string };
+
+function parseBattleFrame(raw: string): AgentBattleEvent | null {
+  const lines = raw.split("\n");
+  let event = "message";
+  let data = "";
+  for (const line of lines) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try {
+    const payload = JSON.parse(data) as Record<string, unknown>;
+    if (event === "battle_start") {
+      return {
+        type: "battle_start",
+        arena_id: String(payload.arena_id || ""),
+        name: String(payload.name || ""),
+        seed: Number(payload.seed) || 0,
+        max_rounds: Number(payload.max_rounds) || 1,
+        cast: Array.isArray(payload.cast)
+          ? (payload.cast as { id: string; name: string }[])
+          : [],
+        world: (payload.world as Record<string, unknown>) || {},
+      };
+    }
+    if (event === "round_start") {
+      return {
+        type: "round_start",
+        round: Number(payload.round) || 0,
+        world: (payload.world as Record<string, unknown>) || {},
+      };
+    }
+    if (event === "phase") {
+      return {
+        type: "phase",
+        round: Number(payload.round) || 0,
+        phase: String(payload.phase || ""),
+      };
+    }
+    if (event === "agent_done") {
+      return {
+        type: "agent_done",
+        round: Number(payload.round) || 0,
+        phase: String(payload.phase || ""),
+        agent_id: String(payload.agent_id || ""),
+        name: String(payload.name || ""),
+        content: String(payload.content || ""),
+        model_id: payload.model_id == null ? null : String(payload.model_id),
+      };
+    }
+    if (event === "verdict") {
+      return {
+        type: "verdict",
+        round: Number(payload.round) || 0,
+        red_line: Boolean(payload.red_line),
+        rationale: String(payload.rationale || ""),
+        model_id: payload.model_id == null ? null : String(payload.model_id),
+        scores: Array.isArray(payload.scores)
+          ? (payload.scores as { agent_id: string; points: number; notes?: string }[])
+          : [],
+        world: (payload.world as Record<string, unknown>) || {},
+      };
+    }
+    if (event === "world_update") {
+      return {
+        type: "world_update",
+        round: Number(payload.round) || 0,
+        world: (payload.world as Record<string, unknown>) || {},
+      };
+    }
+    if (event === "battle_done") {
+      return {
+        type: "battle_done",
+        aborted: Boolean(payload.aborted),
+        leaderboard: Array.isArray(payload.leaderboard)
+          ? (payload.leaderboard as {
+              agent_id: string;
+              name: string;
+              points: number;
+            }[])
+          : [],
+        goals_revealed: Array.isArray(payload.goals_revealed)
+          ? (payload.goals_revealed as { agent_id: string; hidden_goal: string }[])
+          : undefined,
+        world: (payload.world as Record<string, unknown>) || {},
+      };
+    }
+    if (event === "error") {
+      return { type: "error", message: String(payload.message || "Ошибка") };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** POST /agent-battle/run — competing personas over SSE. */
+export async function runAgentBattleSSE(
+  arena: unknown,
+  onEvent: (event: AgentBattleEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${BASE}/agent-battle/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...visitorHeaders(),
+    },
+    body: JSON.stringify({ arena }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const frame = parseBattleFrame(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      if (frame) onEvent(frame);
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+}
+
 /** POST /agent-studio/run — SSE execution of a client graph. */
 export async function runAgentGraphSSE(
   message: string,

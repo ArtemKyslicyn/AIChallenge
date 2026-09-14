@@ -10,6 +10,7 @@ import {
   type ChatHistoryItem,
   type SessionCredentials,
 } from "./api/client";
+import { AgentBattle } from "./components/AgentBattle";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
 import { BenchmarksBoard } from "./components/BenchmarksBoard";
@@ -30,7 +31,7 @@ export default function App() {
   const setMode = useCallback((mode: ShellMode) => {
     writeShellMode(mode);
     setShellMode(mode);
-    if (mode === "agents" || mode === "graph" || mode === "benchmarks") {
+    if (mode === "agents" || mode === "graph" || mode === "benchmarks" || mode === "battle") {
       setSidebarOpen(false);
     }
   }, []);
@@ -117,6 +118,7 @@ export default function App() {
   const inAgents = shellMode === "agents";
   const inGraph = shellMode === "graph";
   const inBenchmarks = shellMode === "benchmarks";
+  const inBattle = shellMode === "battle";
   const showChatChrome = shellMode === "chat";
   const shellLabel =
     shellMode === "agents"
@@ -125,12 +127,14 @@ export default function App() {
         ? "Схема"
         : shellMode === "benchmarks"
           ? "Замеры"
-          : "Чат";
+          : shellMode === "battle"
+            ? "Битва"
+            : "Чат";
 
   return (
     <DebugProvider>
       <div
-        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}`}
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}`}
       >
         {showChatChrome ? (
           <SessionSidebar
@@ -161,7 +165,9 @@ export default function App() {
               <span
                 className="dot"
                 data-state={
-                  inAgents || inGraph || inBenchmarks || session ? "online" : "offline"
+                  inAgents || inGraph || inBenchmarks || inBattle || session
+                    ? "online"
+                    : "offline"
                 }
                 aria-hidden="true"
               />
@@ -212,6 +218,15 @@ export default function App() {
               >
                 Замеры
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "battle"}
+                title="Песочница: конкурирующие агенты в вымышленном кризисе"
+                onClick={() => setMode("battle")}
+              >
+                Битва
+              </button>
             </nav>
 
             <span className="sr-only" aria-live="polite">
@@ -231,6 +246,8 @@ export default function App() {
             <AgentStudio />
           ) : inBenchmarks ? (
             <BenchmarksBoard />
+          ) : inBattle ? (
+            <AgentBattle />
           ) : (
             <>
               {(booting || (!session && !error)) && (
@@ -248,6 +265,7 @@ export default function App() {
                   onOpenAgents={() => setMode("agents")}
                   onOpenGraph={() => setMode("graph")}
                   onOpenBenchmarks={() => setMode("benchmarks")}
+                  onOpenBattle={() => setMode("battle")}
                 />
               )}
             </>
