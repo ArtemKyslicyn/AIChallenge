@@ -404,9 +404,7 @@ async def write_memory_layer(
         if dialog is None:
             raise MessageValidationError("Сначала создайте диалог (persist run).")
         try:
-            updated = apply_working_write(
-                WorkingMemory.from_mapping(dialog.working_memory), write
-            )
+            updated = apply_working_write(WorkingMemory.from_mapping(dialog.working_memory), write)
         except ValueError as exc:
             raise MessageValidationError(str(exc)) from exc
         from datetime import UTC, datetime
