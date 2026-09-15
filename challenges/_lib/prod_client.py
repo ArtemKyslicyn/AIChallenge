@@ -254,6 +254,52 @@ def agent_dialog_clear(base: str, client_draft_id: str, *, timeout: float = 30.0
     return data if isinstance(data, dict) else None
 
 
+def agent_memory_get(
+    base: str,
+    client_draft_id: str | None = None,
+    *,
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    path = "/api/v1/agent-workshop/memory"
+    if client_draft_id:
+        path = f"{path}?client_draft_id={client_draft_id}"
+    data = request_json(base, path, timeout=timeout, retries=0)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Unexpected memory payload: {data!r}")
+    return data
+
+
+def agent_memory_write(
+    base: str,
+    *,
+    layer: str,
+    kind: str,
+    value: str,
+    key: str = "",
+    client_draft_id: str | None = None,
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "layer": layer,
+        "kind": kind,
+        "key": key,
+        "value": value,
+    }
+    if client_draft_id:
+        body["client_draft_id"] = client_draft_id
+    data = request_json(
+        base,
+        "/api/v1/agent-workshop/memory/write",
+        method="POST",
+        body=body,
+        timeout=timeout,
+        retries=0,
+    )
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Unexpected memory write payload: {data!r}")
+    return data
+
+
 def list_models(base: str) -> list[dict[str, Any]]:
     data = request_json(base, "/api/v1/llm/models", timeout=30.0)
     if not isinstance(data, list):

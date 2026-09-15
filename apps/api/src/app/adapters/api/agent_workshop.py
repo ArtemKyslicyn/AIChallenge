@@ -15,12 +15,15 @@ from app.adapters.api.schemas import (
     AgentDialogForkRequest,
     AgentDialogMessageResponse,
     AgentDialogResponse,
+    AgentMemorySnapshotResponse,
+    AgentMemoryWriteRequest,
     AgentTokenTruncationResponse,
     AgentTokenUsageResponse,
     AgentWorkshopRunRequest,
     AgentWorkshopRunResponse,
 )
 from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
+from app.adapters.persistence.long_term_memory_repo import SqlAlchemyLongTermMemoryRepository
 from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
 from app.application.dialog_fork import fork_agent_dialog
 from app.application.llm_catalog import generation_from_api
@@ -34,6 +37,14 @@ from app.core.deps import (
 )
 from app.domain.agent_definition import AgentDefinition
 from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
+from app.domain.agent_memory import (
+    LAYER_PURPOSE,
+    MemoryLayer,
+    MemoryWrite,
+    WorkingMemory,
+    apply_long_term_write,
+    apply_working_write,
+)
 from app.domain.analytics import AnalyticsEvent
 from app.domain.context_compress import CompressionInfo
 from app.domain.context_strategies import StrategyMeta
@@ -77,6 +88,7 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
         summary_text=dialog.summary_text or "",
         summary_until_count=int(dialog.summary_until_count or 0),
         facts=dict(dialog.facts or {}),
+        working_memory=dict(dialog.working_memory or {}),
         parent_dialog_id=dialog.parent_dialog_id,
         branch_label=dialog.branch_label,
         forked_from_message_id=dialog.forked_from_message_id,
@@ -198,6 +210,9 @@ async def run_workshop_agent(
                 compress=bool(payload.compress) if payload.compress else None,
                 recent_keep=payload.recent_keep,
                 summarize_every=payload.summarize_every,
+                long_term=await SqlAlchemyLongTermMemoryRepository(db).get(owner),
+                include_working_memory=payload.include_working_memory,
+                include_long_term_memory=payload.include_long_term_memory,
             )
             await db.commit()
             content = outcome.result.content
@@ -317,10 +332,102 @@ async def clear_dialog_by_draft(
     dialog.summary_text = ""
     dialog.summary_until_count = 0
     dialog.facts = {}
+    dialog.working_memory = {}
     dialog.updated_at = datetime.now(UTC)
     saved = await repo.save(dialog)
     await db.commit()
     return _dialog_dto(saved)
+
+
+@router.get("/memory", response_model=AgentMemorySnapshotResponse)
+async def get_memory_snapshot(
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+    client_draft_id: str | None = None,
+) -> AgentMemorySnapshotResponse:
+    """Return all three layers separately (short-term = dialog turns)."""
+    short: list[AgentDialogMessageResponse] = []
+    working: dict[str, object] = {}
+    draft = (client_draft_id or "").strip()
+    if draft:
+        dialog = await SqlAlchemyAgentDialogRepository(db).get_by_client_draft(
+            client_visitor_id=client_visitor_id, client_draft_id=draft
+        )
+        if dialog is not None:
+            short = [_msg_dto(m) for m in dialog.messages]
+            working = dict(dialog.working_memory or {})
+    long_term = await SqlAlchemyLongTermMemoryRepository(db).get(client_visitor_id)
+    return AgentMemorySnapshotResponse(
+        short_term=short,
+        working=working,
+        long_term=long_term.to_dict(),
+    )
+
+
+@router.get("/memory/purpose")
+async def memory_layer_purpose() -> dict[str, str]:
+    return {layer.value: text for layer, text in LAYER_PURPOSE.items()}
+
+
+@router.post("/memory/write", response_model=AgentMemorySnapshotResponse)
+async def write_memory_layer(
+    payload: AgentMemoryWriteRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+) -> AgentMemorySnapshotResponse:
+    """Explicit write into working or long_term — never auto-routes."""
+    try:
+        layer = MemoryLayer(payload.layer.strip().lower())
+    except ValueError as exc:
+        raise MessageValidationError("layer must be working or long_term") from exc
+    if layer == MemoryLayer.SHORT_TERM:
+        raise MessageValidationError(
+            "Краткосрочная память пишется только репликами диалога (run/persist)."
+        )
+
+    draft = (payload.client_draft_id or "").strip()
+    dialogs = SqlAlchemyAgentDialogRepository(db)
+    ltm_repo = SqlAlchemyLongTermMemoryRepository(db)
+    write = MemoryWrite(
+        layer=layer,
+        kind=payload.kind,
+        key=payload.key,
+        value=payload.value,
+    )
+
+    if layer == MemoryLayer.WORKING:
+        if not draft:
+            raise MessageValidationError("Для рабочей памяти нужен client_draft_id.")
+        dialog = await dialogs.get_by_client_draft(
+            client_visitor_id=client_visitor_id, client_draft_id=draft
+        )
+        if dialog is None:
+            raise MessageValidationError("Сначала создайте диалог (persist run).")
+        try:
+            updated = apply_working_write(
+                WorkingMemory.from_mapping(dialog.working_memory), write
+            )
+        except ValueError as exc:
+            raise MessageValidationError(str(exc)) from exc
+        from datetime import UTC, datetime
+
+        dialog.working_memory = updated.to_dict()
+        dialog.updated_at = datetime.now(UTC)
+        await dialogs.save(dialog)
+    else:
+        current = await ltm_repo.get(client_visitor_id)
+        try:
+            updated_lt = apply_long_term_write(current, write)
+        except ValueError as exc:
+            raise MessageValidationError(str(exc)) from exc
+        await ltm_repo.save(client_visitor_id, updated_lt)
+
+    await db.commit()
+    return await get_memory_snapshot(
+        db=db,
+        client_visitor_id=client_visitor_id,
+        client_draft_id=draft or None,
+    )
 
 
 @router.post(

@@ -8,6 +8,11 @@ from uuid import UUID, uuid4
 
 from app.domain.agent_definition import AgentDefinition, validate_agent_run
 from app.domain.agent_dialog import AgentDialog, AgentDialogMessage
+from app.domain.agent_memory import (
+    LongTermMemory,
+    WorkingMemory,
+    build_memory_system_extra,
+)
 from app.domain.context_compress import (
     DEFAULT_RECENT_KEEP,
     DEFAULT_SUMMARIZE_EVERY,
@@ -167,6 +172,9 @@ async def run_agent_with_dialog(
     compress: bool | None = None,
     recent_keep: int | None = None,
     summarize_every: int | None = None,
+    long_term: LongTermMemory | None = None,
+    include_working_memory: bool = True,
+    include_long_term_memory: bool = True,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -205,6 +213,7 @@ async def run_agent_with_dialog(
             summary_text="",
             summary_until_count=0,
             facts={},
+            working_memory={},
             created_at=now,
             updated_at=now,
         )
@@ -309,6 +318,18 @@ async def run_agent_with_dialog(
             tokens_compressed_est=meta.tokens_strategy_est,
         )
 
+    working = WorkingMemory.from_mapping(dialog.working_memory)
+    memory_extra = build_memory_system_extra(
+        working=working,
+        long_term=long_term or LongTermMemory(),
+        include_working=include_working_memory,
+        include_long_term=include_long_term_memory,
+        include_short_term=False,
+    )
+    system_extra = assembly.system_extra
+    if memory_extra:
+        system_extra = f"{system_extra}\n\n{memory_extra}".strip() if system_extra else memory_extra
+
     outcome = await run_agent(
         definition=definition,
         message=message,
@@ -318,7 +339,7 @@ async def run_agent_with_dialog(
         generation=generation,
         history=assembly.history,
         context_limit=context_limit,
-        system_extra=assembly.system_extra,
+        system_extra=system_extra,
     )
     outcome = AgentRunOutcome(
         result=outcome.result,
