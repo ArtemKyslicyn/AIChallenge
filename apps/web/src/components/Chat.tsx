@@ -52,12 +52,14 @@ import {
 const SUGGESTIONS = [
   "С чем ты можешь помочь?",
   "Сформулируй это тремя пунктами",
-  "Задавай мне по одному вопросу за раз",
 ];
 
 const MEDIA_SUGGESTIONS = [
   "Нарисуй закат над морем в стиле акварели",
   "Сгенерируй картинку: робот читает книгу в библиотеке",
+];
+
+const MORE_MEDIA_SUGGESTIONS = [
   "Сделай короткое видео: кот бежит по лужайке",
   "Нарисуй комикс: кот и робот спорят в метро",
 ];
@@ -107,8 +109,13 @@ export function Chat({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(null);
+  const [seed, setSeed] = useState<{
+    text: string;
+    nonce: number;
+    chatMode?: "single" | "compare" | "temp_studio" | "lab";
+  } | null>(null);
   const [status, setStatus] = useState("");
+  const [emptyMoreOpen, setEmptyMoreOpen] = useState(false);
   const [activeFloat, setActiveFloat] = useState<FloatId | null>(null);
   const [resultsPayload, setResultsPayload] = useState<LabResultsPayload | null>(null);
   const [labExpanded, setLabExpanded] = useState<Record<string, boolean>>({});
@@ -906,75 +913,126 @@ export function Chat({
 
           {empty && (
             <div className="empty">
-              <h2>Спросите — и увидите, кто ответил</h2>
+              <h2>Чем помочь?</h2>
               <p>
-                У каждого ответа ассистента есть <strong>model_id</strong>. Режим{" "}
-                <strong>Один</strong> — обычный чат (можно картинку, видео или комикс).{" "}
-                <strong>×2</strong> — два шаблона рядом. <strong>×T</strong> — температуры.{" "}
-                <strong>×4</strong> — лаборатория стратегий. Всё остальное — в разделах сверху.
+                Напишите вопрос или нажмите <strong>Картинка</strong> внизу — у ответа всегда
+                виден <code>model_id</code>.
               </p>
-              {onOpenAgents || onOpenGraph || onOpenBenchmarks || onOpenBattle ? (
-                <p className="empty-agents-link empty-stand-links">
-                  {onOpenAgents ? (
-                    <button type="button" className="text-link" onClick={onOpenAgents}>
-                      Собрать агента
-                    </button>
-                  ) : null}
-                  {onOpenGraph ? (
-                    <button type="button" className="text-link" onClick={onOpenGraph}>
-                      Схема пайплайна
-                    </button>
-                  ) : null}
-                  {onOpenBenchmarks ? (
-                    <button type="button" className="text-link" onClick={onOpenBenchmarks}>
-                      Таблица замеров
-                    </button>
-                  ) : null}
-                  {onOpenBattle ? (
-                    <button type="button" className="text-link" onClick={onOpenBattle}>
-                      Битва агентов
-                    </button>
-                  ) : null}
-                </p>
-              ) : null}
               <div className="suggestions">
+                <button
+                  type="button"
+                  className="chip chip-primary"
+                  onClick={() =>
+                    setSeed({
+                      text: "Нарисуй закат над морем в стиле акварели",
+                      nonce: Date.now(),
+                      chatMode: "single",
+                    })
+                  }
+                >
+                  Нарисовать картинку
+                </button>
                 {SUGGESTIONS.map((text) => (
                   <button
                     key={text}
                     type="button"
                     className="chip"
-                    onClick={() => setSeed({ text, nonce: Date.now() })}
+                    onClick={() =>
+                      setSeed({ text, nonce: Date.now(), chatMode: "single" })
+                    }
                   >
                     {text}
                   </button>
                 ))}
               </div>
-              <p className="empty-lab-lead">Картинка или видео</p>
-              <div className="suggestions suggestions-lab">
+              <div className="suggestions suggestions-media">
                 {MEDIA_SUGGESTIONS.map((text) => (
                   <button
                     key={text}
                     type="button"
-                    className="chip chip-lab"
-                    onClick={() => setSeed({ text, nonce: Date.now() })}
+                    className="chip chip-media"
+                    onClick={() =>
+                      setSeed({ text, nonce: Date.now(), chatMode: "single" })
+                    }
                   >
                     {text}
                   </button>
                 ))}
               </div>
-              <p className="empty-lab-lead">Для студии температуры (×T)</p>
-              <div className="suggestions suggestions-lab">
-                {TEMP_STUDIO_SUGGESTIONS.map((text) => (
-                  <button
-                    key={text}
-                    type="button"
-                    className="chip chip-lab"
-                    onClick={() => setSeed({ text, nonce: Date.now() })}
-                  >
-                    {text}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="text-link empty-more-toggle"
+                aria-expanded={emptyMoreOpen}
+                onClick={() => setEmptyMoreOpen((v) => !v)}
+              >
+                {emptyMoreOpen ? "Скрыть доп. идеи" : "Ещё идеи и лаборатория"}
+              </button>
+              {emptyMoreOpen ? (
+                <div className="empty-more">
+                  <p className="empty-more-lead">Видео и комикс</p>
+                  <div className="suggestions">
+                    {MORE_MEDIA_SUGGESTIONS.map((text) => (
+                      <button
+                        key={text}
+                        type="button"
+                        className="chip chip-media"
+                        onClick={() =>
+                          setSeed({ text, nonce: Date.now(), chatMode: "single" })
+                        }
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="empty-more-lead">Студия температуры (×T)</p>
+                  <div className="suggestions">
+                    {TEMP_STUDIO_SUGGESTIONS.map((text) => (
+                      <button
+                        key={text}
+                        type="button"
+                        className="chip"
+                        onClick={() =>
+                          setSeed({
+                            text,
+                            nonce: Date.now(),
+                            chatMode: "temp_studio",
+                          })
+                        }
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                  {onOpenAgents || onOpenGraph || onOpenBenchmarks || onOpenBattle ? (
+                    <p className="empty-agents-link empty-stand-links">
+                      {onOpenAgents ? (
+                        <button type="button" className="text-link" onClick={onOpenAgents}>
+                          Агенты
+                        </button>
+                      ) : null}
+                      {onOpenGraph ? (
+                        <button type="button" className="text-link" onClick={onOpenGraph}>
+                          Схема
+                        </button>
+                      ) : null}
+                      {onOpenBenchmarks ? (
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={onOpenBenchmarks}
+                        >
+                          Замеры
+                        </button>
+                      ) : null}
+                      {onOpenBattle ? (
+                        <button type="button" className="text-link" onClick={onOpenBattle}>
+                          Битва
+                        </button>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
 
