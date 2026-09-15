@@ -174,6 +174,9 @@ class AgentDialogRow(Base):
     facts: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
+    working_memory: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     parent_dialog_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("agent_dialogs.id", ondelete="SET NULL"), nullable=True
     )
@@ -191,3 +194,21 @@ class AgentDialogRow(Base):
         Index("ix_agent_dialogs_client_updated", "client_visitor_id", "updated_at"),
         Index("ix_agent_dialogs_visitor_hash", "visitor_hash"),
     )
+
+
+class AgentLongTermMemoryRow(Base):
+    """Visitor-scoped long-term memory (profile / decisions / knowledge)."""
+
+    __tablename__ = "agent_long_term_memory"
+
+    client_visitor_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    profile: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    decisions: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    knowledge: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

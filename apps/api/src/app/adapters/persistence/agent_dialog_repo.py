@@ -88,6 +88,7 @@ def _to_domain(row: AgentDialogRow) -> AgentDialog:
         summary_text=getattr(row, "summary_text", "") or "",
         summary_until_count=int(getattr(row, "summary_until_count", 0) or 0),
         facts=_normalize_facts(getattr(row, "facts", None) or {}),
+        working_memory=dict(getattr(row, "working_memory", None) or {}),
         parent_dialog_id=getattr(row, "parent_dialog_id", None),
         branch_label=getattr(row, "branch_label", None),
         forked_from_message_id=getattr(row, "forked_from_message_id", None),
@@ -131,6 +132,7 @@ class SqlAlchemyAgentDialogRepository:
                 summary_text=dialog.summary_text or "",
                 summary_until_count=int(dialog.summary_until_count or 0),
                 facts=dict(dialog.facts or {}),
+                working_memory=dict(dialog.working_memory or {}),
                 parent_dialog_id=dialog.parent_dialog_id,
                 branch_label=dialog.branch_label,
                 forked_from_message_id=dialog.forked_from_message_id,
@@ -149,6 +151,7 @@ class SqlAlchemyAgentDialogRepository:
             row.summary_text = dialog.summary_text or ""
             row.summary_until_count = int(dialog.summary_until_count or 0)
             row.facts = dict(dialog.facts or {})
+            row.working_memory = dict(dialog.working_memory or {})
             row.parent_dialog_id = dialog.parent_dialog_id
             row.branch_label = dialog.branch_label
             row.forked_from_message_id = dialog.forked_from_message_id

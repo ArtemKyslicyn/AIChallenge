@@ -924,24 +924,55 @@ textarea {
   background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
 }
 
+.mode-chip-default[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 75%, transparent);
+  font-weight: 650;
+}
+
+/* Idle lab/compare chips: available but quieter than Обычный */
+.mode-chip-stack:not(.mode-chip-default):not([aria-pressed="true"]) {
+  opacity: 0.8;
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+  min-width: 2.75rem;
+  padding: 4px 8px 5px;
+}
+
+.mode-chip-stack:not(.mode-chip-default):not([aria-pressed="true"]) .mode-chip-kicker {
+  color: color-mix(in srgb, var(--text-muted) 80%, transparent);
+  font-weight: 500;
+}
+
+.mode-chip-stack:not(.mode-chip-default):not([aria-pressed="true"]) .mode-chip-label {
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.mode-chip-stack:not(.mode-chip-default):not([aria-pressed="true"]):hover {
+  opacity: 1;
+}
+
 .composer-media-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-left: auto;
+  gap: var(--space-1);
+  margin-left: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
 }
 
 .composer-media-btn {
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
   color: var(--text);
-  border-radius: var(--radius-full);
-  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
+  min-height: 24px;
 }
 
 .composer-media-btn:hover:not(:disabled) {
@@ -957,33 +988,8 @@ textarea {
 .composer-media-btn--quiet {
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.composer-mode-summary {
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.composer-mode-panel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 35%, var(--surface));
-}
-
-@media (max-width: 640px) {
-  .composer-media-actions {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .composer-mode-summary,
-  .composer-more-toggle {
-    margin-left: 0;
-  }
+  background: transparent;
+  border-color: var(--border);
 }
 
 .composer-options-label {
@@ -1004,11 +1010,12 @@ textarea {
   font-size: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 2px var(--space-2);
+  padding: 4px var(--space-2);
   background: var(--surface);
   color: var(--text);
   min-width: 8rem;
   max-width: min(18rem, 52vw);
+  min-height: 24px;
 }
 
 .composer-options-chips {
@@ -1020,10 +1027,14 @@ textarea {
 }
 
 .composer-mode-toggle {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: 2px;
   flex: none;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 
 .mode-chip {
@@ -1035,6 +1046,7 @@ textarea {
   font-size: 12px;
   line-height: 1.3;
   cursor: pointer;
+  min-height: 24px;
   transition:
     border-color 140ms ease,
     background 140ms ease,
@@ -1049,10 +1061,11 @@ textarea {
   border-radius: 12px;
   padding: 5px 10px 6px;
   min-width: 3.25rem;
+  min-height: 24px;
 }
 
 .mode-chip-kicker {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1078,7 +1091,7 @@ textarea {
   }
 
   .mode-chip-kicker {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .mode-chip-label {
@@ -1232,6 +1245,7 @@ textarea {
   margin-left: auto;
   font-size: 12px;
   padding: var(--space-1) var(--space-2);
+  min-height: 24px;
 }
 
 .composer-options-hint {
@@ -1444,6 +1458,12 @@ textarea {
   padding: var(--space-2);
   max-height: 200px;
   outline: none;
+  border-radius: var(--radius-sm);
+}
+
+.composer textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .composer textarea::placeholder {
@@ -1599,6 +1619,11 @@ textarea {
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 
+.media-job--comic.media-job--running {
+  background: color-mix(in srgb, #ca8a04 12%, var(--surface));
+  border-color: color-mix(in srgb, #ca8a04 30%, var(--border));
+}
+
 .media-job--error {
   background: var(--danger-soft);
   border-color: color-mix(in srgb, var(--danger) 30%, transparent);
@@ -1675,8 +1700,8 @@ textarea {
 }
 
 .mode-chip-lab[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 80%, transparent);
+  border-color: color-mix(in srgb, #0d9488 45%, var(--border));
+  background: color-mix(in srgb, #0d9488 12%, var(--surface));
 }
 
 .composer-lab-sample {
@@ -4088,7 +4113,10 @@ textarea {
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 2px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .empty-agents-link {
@@ -5383,6 +5411,63 @@ textarea {
   margin: 0.4rem 0 0;
   white-space: pre-wrap;
   line-height: 1.4;
+}
+
+.agent-memory-panel {
+  background: color-mix(in srgb, var(--surface, #f6f7f9) 90%, #e0e7ff);
+}
+
+.agent-memory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.45rem;
+}
+
+@media (max-width: 900px) {
+  .agent-memory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.agent-memory-layer {
+  padding: 0.4rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--border, #d0d4dc) 70%, transparent);
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+}
+
+.agent-memory-layer h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text, #1f2937);
+}
+
+.agent-memory-hint,
+.agent-memory-empty,
+.agent-memory-stat {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.agent-memory-write {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.agent-memory-write input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 0.25rem 0.4rem;
+}
+
+.agent-memory-refresh {
+  margin-top: 0.45rem;
+  font-size: 12px;
 }
 
 .agent-token-meter {

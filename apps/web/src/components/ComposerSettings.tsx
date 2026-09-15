@@ -102,7 +102,7 @@ export function ComposerSettings({
                 onPatchGlobal({ defaultChatMode: e.target.value as ChatMode })
               }
             >
-              <option value="single">Один ответ</option>
+              <option value="single">Обычный чат</option>
               <option value="compare">Два рядом</option>
               <option value="temp_studio">Студия температуры ×T</option>
               <option value="lab">Лаборатория ×4</option>
@@ -194,7 +194,7 @@ export function ComposerSettings({
               value={chatMode}
               onChange={(e) => onPatchSession({ chatMode: e.target.value as ChatMode })}
             >
-              <option value="single">Один ответ (SSE, сохраняется)</option>
+              <option value="single">Обычный чат (SSE, сохраняется)</option>
               <option value="compare">Два рядом (probe)</option>
               <option value="temp_studio">Студия температуры ×T (probe)</option>
               <option value="lab">Лаборатория ×4 (probe)</option>

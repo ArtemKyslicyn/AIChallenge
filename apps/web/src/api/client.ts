@@ -715,9 +715,32 @@ export interface AgentDialogDto {
   summary_text?: string;
   summary_until_count?: number;
   facts?: Record<string, string>;
+  working_memory?: Record<string, unknown>;
   parent_dialog_id?: string | null;
   branch_label?: string | null;
   forked_from_message_id?: string | null;
+}
+
+export interface AgentMemorySnapshotDto {
+  short_term: AgentDialogMessageDto[];
+  working: {
+    goal?: string;
+    checklist?: string[];
+    scratch?: Record<string, string>;
+  };
+  long_term: {
+    profile?: Record<string, string>;
+    decisions?: string[];
+    knowledge?: Record<string, string>;
+  };
+}
+
+export interface AgentMemoryWriteDto {
+  layer: "working" | "long_term";
+  kind: string;
+  key?: string;
+  value: string;
+  clientDraftId?: string;
 }
 
 export interface AgentWorkshopRunOptions {
@@ -733,6 +756,8 @@ export interface AgentWorkshopRunOptions {
   compress?: boolean;
   recentKeep?: number | null;
   summarizeEvery?: number | null;
+  includeWorkingMemory?: boolean;
+  includeLongTermMemory?: boolean;
   signal?: AbortSignal;
 }
 
@@ -765,6 +790,12 @@ export function runAgentWorkshop(
   if (mode === "compress" && opts.summarizeEvery != null) {
     body.summarize_every = opts.summarizeEvery;
   }
+  if (opts.includeWorkingMemory === false) {
+    body.include_working_memory = false;
+  }
+  if (opts.includeLongTermMemory === false) {
+    body.include_long_term_memory = false;
+  }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",
     {
@@ -774,6 +805,33 @@ export function runAgentWorkshop(
     },
     240_000,
   );
+}
+
+export function getAgentMemory(
+  clientDraftId?: string | null,
+  signal?: AbortSignal,
+): Promise<AgentMemorySnapshotDto> {
+  const q = clientDraftId
+    ? `?client_draft_id=${encodeURIComponent(clientDraftId)}`
+    : "";
+  return request<AgentMemorySnapshotDto>(`/agent-workshop/memory${q}`, { signal });
+}
+
+export function writeAgentMemory(
+  write: AgentMemoryWriteDto,
+  signal?: AbortSignal,
+): Promise<AgentMemorySnapshotDto> {
+  return request<AgentMemorySnapshotDto>("/agent-workshop/memory/write", {
+    method: "POST",
+    body: JSON.stringify({
+      layer: write.layer,
+      kind: write.kind,
+      key: write.key || "",
+      value: write.value,
+      client_draft_id: write.clientDraftId || null,
+    }),
+    signal,
+  });
 }
 
 export async function forkAgentDialog(

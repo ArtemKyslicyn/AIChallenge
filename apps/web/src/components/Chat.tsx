@@ -54,11 +54,6 @@ const SUGGESTIONS = [
   "Сформулируй это тремя пунктами",
 ];
 
-const MEDIA_SUGGESTIONS = [
-  "Нарисуй закат над морем в стиле акварели",
-  "Сгенерируй картинку: робот читает книгу в библиотеке",
-];
-
 const MORE_MEDIA_SUGGESTIONS = [
   "Сделай короткое видео: кот бежит по лужайке",
   "Нарисуй комикс: кот и робот спорят в метро",
@@ -325,6 +320,7 @@ export function Chat({
                   patch({ mediaJob: errJob });
                   setActiveMediaJob(errJob);
                   setStatus(event.error || "Медиа-инструмент не сработал.");
+                  setError(event.error || "Медиа-инструмент не сработал.");
                 } else {
                   patch({
                     mediaJob: {
@@ -906,7 +902,7 @@ export function Chat({
       <div className="thread" ref={thread} onScroll={onScroll}>
         <div className="thread-inner">
           {loading && (
-            <p className="center-state">
+            <p className="center-state" role="status">
               <span className="spinner" aria-hidden="true" /> Загружаем переписку…
             </p>
           )}
@@ -915,13 +911,25 @@ export function Chat({
             <div className="empty">
               <h2>Чем помочь?</h2>
               <p>
-                Напишите вопрос или нажмите <strong>Картинка</strong> внизу — у ответа всегда
-                виден <code>model_id</code>.
+                Пишите как в чате — под каждым ответом видно, какая модель ответила. Для картинки —
+                кнопка <strong>Картинка</strong> внизу.
               </p>
               <div className="suggestions">
+                {SUGGESTIONS.map((text, index) => (
+                  <button
+                    key={text}
+                    type="button"
+                    className={index === 0 ? "chip chip-primary" : "chip"}
+                    onClick={() =>
+                      setSeed({ text, nonce: Date.now(), chatMode: "single" })
+                    }
+                  >
+                    {text}
+                  </button>
+                ))}
                 <button
                   type="button"
-                  className="chip chip-primary"
+                  className="chip"
                   onClick={() =>
                     setSeed({
                       text: "Нарисуй закат над морем в стиле акварели",
@@ -932,43 +940,18 @@ export function Chat({
                 >
                   Нарисовать картинку
                 </button>
-                {SUGGESTIONS.map((text) => (
-                  <button
-                    key={text}
-                    type="button"
-                    className="chip"
-                    onClick={() =>
-                      setSeed({ text, nonce: Date.now(), chatMode: "single" })
-                    }
-                  >
-                    {text}
-                  </button>
-                ))}
-              </div>
-              <div className="suggestions suggestions-media">
-                {MEDIA_SUGGESTIONS.map((text) => (
-                  <button
-                    key={text}
-                    type="button"
-                    className="chip chip-media"
-                    onClick={() =>
-                      setSeed({ text, nonce: Date.now(), chatMode: "single" })
-                    }
-                  >
-                    {text}
-                  </button>
-                ))}
               </div>
               <button
                 type="button"
                 className="text-link empty-more-toggle"
                 aria-expanded={emptyMoreOpen}
+                aria-controls="empty-more-panel"
                 onClick={() => setEmptyMoreOpen((v) => !v)}
               >
-                {emptyMoreOpen ? "Скрыть доп. идеи" : "Ещё идеи и лаборатория"}
+                {emptyMoreOpen ? "Скрыть доп. идеи" : "Ещё идеи"}
               </button>
               {emptyMoreOpen ? (
-                <div className="empty-more">
+                <div className="empty-more" id="empty-more-panel">
                   <p className="empty-more-lead">Видео и комикс</p>
                   <div className="suggestions">
                     {MORE_MEDIA_SUGGESTIONS.map((text) => (
@@ -984,7 +967,7 @@ export function Chat({
                       </button>
                     ))}
                   </div>
-                  <p className="empty-more-lead">Студия температуры (×T)</p>
+                  <p className="empty-more-lead">Три варианта тона</p>
                   <div className="suggestions">
                     {TEMP_STUDIO_SUGGESTIONS.map((text) => (
                       <button

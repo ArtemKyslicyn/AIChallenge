@@ -56,6 +56,23 @@ const MAX_HEIGHT = 200;
 const LAB_SUGGESTION =
   "В магазине акция: при покупке от 3 товаров скидка 10% на каждый. Товар стоит 400 ₽. Клиент покупает ровно 4 штуки. Сколько заплатит? Покажите расчёт.";
 
+/**
+ * Client-side media intent — mirrors `media_tools.detect_media_intent` hard hints
+ * (_COMIC_HINT / _IMAGE_HINT / _VIDEO_HINT), not the soft gate alone.
+ * Bare «сгенерируй…» without a media noun does not force single.
+ */
+function looksLikeMediaIntent(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const comic =
+    /комикс|comic\s*strip|(?:нарисуй|сделай|сгенер(?:ируй|ировать))\s+комикс|(?:draw|make|create|generate)\s+(?:a\s+)?comic/i;
+  const image =
+    /нарисуй|сгенер(?:ируй|ировать)\s+(?:картинк|изображен)|сделай\s+(?:мне\s+)?(?:картинк|изображен|рисунок)|хочу\s+(?:картинк|изображен|рисунок)|(?:generate|draw|paint|create)\s+(?:an?\s+)?(?:image|picture|drawing)|\/pollinations\b/i;
+  const video =
+    /сделай\s+(?:коротк\w+\s+)?видео|сгенер(?:ируй|ировать)\s+видео|(?:generate|make|create)\s+(?:a\s+)?(?:short\s+)?video|\/pixazo\b/i;
+  return comic.test(t) || image.test(t) || video.test(t);
+}
+
 export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Props) {
   const [value, setValue] = useState("");
   const [global, setGlobal] = useState<GlobalChatPrefs>(() => loadGlobalChatPrefs());
@@ -64,12 +81,13 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"global" | "session">("global");
-  const [modesOpen, setModesOpen] = useState(false);
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
+  const [forceSingleHint, setForceSingleHint] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const forceHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The composer is sticky and its height changes a lot: the options bar wraps,
   // ×4 adds a preset row, «Настройки» opens a whole panel, the textarea grows.
@@ -121,7 +139,6 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   const setChatMode = useCallback(
     (chatMode: ChatMode) => {
       patchSession({ chatMode });
-      if (chatMode !== "single") setModesOpen(true);
     },
     [patchSession],
   );
@@ -131,8 +148,6 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
     setValue(seed.text);
     if (seed.chatMode) {
       patchSession({ chatMode: seed.chatMode });
-      if (seed.chatMode !== "single") setModesOpen(true);
-      else setModesOpen(false);
     }
     requestAnimationFrame(() => box.current?.focus());
   }, [seed, patchSession]);
@@ -147,6 +162,12 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   useEffect(() => {
     listModels().then(setModels).catch(() => setModels([]));
     listLabPresets().then(setLabPresets).catch(() => setLabPresets([]));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (forceHintTimer.current) clearTimeout(forceHintTimer.current);
+    };
   }, []);
 
   const trimmed = value.trim();
@@ -179,19 +200,39 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   const globalModelLabel =
     modelOptions.find((m) => m.id === global.modelId)?.label ?? global.modelId;
 
-  function applyMediaDraft(kind: "image" | "video" | "comic") {
+  function applyMediaDraft(kind: "image" | "video") {
     setChatMode("single");
-    setModesOpen(false);
     const prefixes = {
       image: "Нарисуй ",
       video: "Сделай короткое видео: ",
-      comic: "Нарисуй комикс: ",
     } as const;
     const prefix = prefixes[kind];
     setValue((prev) => {
       const t = prev.trim();
       if (!t) return prefix;
-      if (/^(нарисуй|сгенерируй|сделай)\b/i.test(t)) return prev;
+
+      if (kind === "image") {
+        const videoPrefixed = t.match(
+          /^(?:сделай\s+короткое\s+видео\s*:?\s*|сгенерируй\s+(?:короткое\s+)?видео\s*:?\s*)([\s\S]*)$/i,
+        );
+        if (videoPrefixed) {
+          const rest = videoPrefixed[1].trim();
+          return rest ? `Нарисуй ${rest}` : "Нарисуй ";
+        }
+        if (/^(нарисуй|сгенерируй)\b/i.test(t)) return prev;
+        if (/^сделай\b/i.test(t)) {
+          const rest = t.replace(/^сделай\b\s*/i, "").trim();
+          return rest ? `Нарисуй ${rest}` : "Нарисуй ";
+        }
+        return `${prefix}${t}`;
+      }
+
+      const imagePrefixed = t.match(/^(?:нарисуй|сгенерируй)\b\s*/i);
+      if (imagePrefixed) {
+        const rest = t.slice(imagePrefixed[0].length).trim();
+        return rest ? `Сделай короткое видео: ${rest}` : "Сделай короткое видео: ";
+      }
+      if (/^(сделай|сгенерируй)\b/i.test(t)) return prev;
       return `${prefix}${t}`;
     });
     requestAnimationFrame(() => box.current?.focus());
@@ -199,15 +240,24 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
   function submit() {
     if (!canSend) return;
+    const forceSingle = effective.chatMode !== "single" && looksLikeMediaIntent(trimmed);
+    const chatMode: ChatMode = forceSingle ? "single" : effective.chatMode;
+    if (forceSingle) {
+      setChatMode("single");
+      setForceSingleHint("Медиа → обычный чат");
+      if (forceHintTimer.current) clearTimeout(forceHintTimer.current);
+      forceHintTimer.current = setTimeout(() => setForceSingleHint(null), 4000);
+    }
+    const prefs = forceSingle ? { ...effective, chatMode: "single" as const } : effective;
     const preset = labPresets.find((p) => p.id === labPresetId);
     onSend({
       display: outgoing.display,
       api: outgoing.api,
       modelId: outgoing.modelId,
-      chatMode: effective.chatMode,
-      effective,
+      chatMode,
+      effective: prefs,
       labMeta:
-        effective.chatMode === "lab"
+        chatMode === "lab"
           ? {
               goldenAnswer: preset?.golden_answer,
               rubric: preset?.rubric,
@@ -215,7 +265,7 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             }
           : undefined,
       tempStudioTemps:
-        effective.chatMode === "temp_studio"
+        chatMode === "temp_studio"
           ? normalizeTempTriple(session.tempStudioTemps)
           : undefined,
     });
@@ -231,20 +281,11 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
     patchSession({ tempStudioTemps: next });
   }
 
-  const modeLabel =
-    effective.chatMode === "lab"
-      ? "×4"
-      : effective.chatMode === "temp_studio"
-        ? "×T"
-        : effective.chatMode === "compare"
-          ? "×2"
-          : "Чат";
-
   const modeHint =
     effective.chatMode === "lab"
-      ? "Четыре стратегии промпта параллельно"
+      ? "Четыре способа задать один вопрос"
       : effective.chatMode === "temp_studio"
-        ? `Один запрос при t = ${studioTemps.map(formatTemp).join(" · ")} + автооценка. Размышление выкл. (иначе t не влияет на DeepSeek).`
+        ? `Один запрос — три тона ответа (t = ${studioTemps.map(formatTemp).join(" · ")})`
         : effective.chatMode === "compare"
           ? "Два ответа: без шаблона и с шаблоном"
           : templateSummary
@@ -253,14 +294,12 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
   const placeholder =
     effective.chatMode === "lab"
-      ? "Задача для лаборатории (логика, расчёт, анализ)…"
+      ? "Задача: сравним четыре способа ответа…"
       : effective.chatMode === "temp_studio"
-        ? "Запрос для сравнения температур (один текст → три ответа)…"
+        ? "Один текст — три ответа разным тоном…"
         : effective.chatMode === "compare"
-          ? "Сообщение для сравнения двух ответов…"
-          : "Спросите что угодно или нажмите «Картинка»…";
-
-  const showModeTools = modesOpen || effective.chatMode !== "single";
+          ? "Сообщение — сравним два ответа…"
+          : "Напишите сообщение…";
 
   return (
     <div className="composer-wrap" ref={wrap}>
@@ -274,16 +313,16 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
       <div className="composer-shell">
         <div className="composer-options-bar">
-          <label className="composer-model-picker">
+          <label className="composer-model-picker" htmlFor="composer-model-select">
             <span className="composer-options-label">Модель</span>
             <select
+              id="composer-model-select"
               className="composer-model-select"
               value={session.modelIdOverride}
               onChange={(e) => {
                 patchSession({ modelIdOverride: e.target.value });
                 if (e.target.value) setSettingsTab("session");
               }}
-              aria-label="Модель ответа"
             >
               <option value="">Общие: {globalModelLabel}</option>
               {modelOptions.map((m) => (
@@ -294,145 +333,127 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             </select>
           </label>
 
+          <div className="composer-mode-toggle" role="group" aria-label="Режим ответа">
+            <button
+              type="button"
+              className="mode-chip mode-chip-stack mode-chip-default"
+              aria-pressed={effective.chatMode === "single"}
+              aria-label="Обычный чат — один ответ, под ним видно модель"
+              onClick={() => setChatMode("single")}
+              title="Один ответ · под ним видно модель"
+            >
+              <span className="mode-chip-kicker">Чат</span>
+              <span className="mode-chip-label">Обычный</span>
+            </button>
+            <button
+              type="button"
+              className="mode-chip mode-chip-stack"
+              aria-pressed={effective.chatMode === "compare"}
+              aria-label="×2 — два ответа: без правил и с правилами"
+              onClick={() => setChatMode("compare")}
+              title="Два ответа: без правил и с правилами"
+            >
+              <span className="mode-chip-kicker">Шаблоны</span>
+              <span className="mode-chip-label">×2</span>
+            </button>
+            <button
+              type="button"
+              className="mode-chip mode-chip-stack mode-chip-temp"
+              aria-pressed={effective.chatMode === "temp_studio"}
+              aria-label="×T — один текст, три ответа разной смелости"
+              onClick={() => setChatMode("temp_studio")}
+              title="Один текст — три ответа разной «смелости»"
+            >
+              <span className="mode-chip-kicker">Темп.</span>
+              <span className="mode-chip-label">×T</span>
+            </button>
+            <button
+              type="button"
+              className="mode-chip mode-chip-stack mode-chip-lab"
+              aria-pressed={effective.chatMode === "lab"}
+              aria-label="×4 — один вопрос, четыре способа спросить"
+              onClick={() => setChatMode("lab")}
+              title="Один вопрос — четыре способа спросить"
+            >
+              <span className="mode-chip-kicker">Лаб</span>
+              <span className="mode-chip-label">×4</span>
+            </button>
+          </div>
+
           <div className="composer-media-actions" role="group" aria-label="Медиа">
             <button
               type="button"
               className="composer-media-btn"
               disabled={busy}
               onClick={() => applyMediaDraft("image")}
-              title="Подставит «Нарисуй…» и включит обычный чат"
+              aria-label="Подставить черновик: Нарисуй… (режим обычный чат)"
+              title="Обычный чат + «Нарисуй…»"
             >
               Картинка
             </button>
             <button
               type="button"
-              className="composer-media-btn"
+              className="composer-media-btn composer-media-btn--quiet"
               disabled={busy}
               onClick={() => applyMediaDraft("video")}
-              title="Подставит запрос на короткое видео"
+              aria-label="Подставить черновик запроса на видео (режим обычный чат)"
+              title="Обычный чат + запрос на видео"
             >
               Видео
             </button>
-            <button
-              type="button"
-              className="composer-media-btn composer-media-btn--quiet"
-              disabled={busy}
-              onClick={() => applyMediaDraft("comic")}
-              title="Подставит запрос на комикс"
-            >
-              Комикс
-            </button>
           </div>
 
-          <button
-            type="button"
-            className="ghost-button composer-mode-summary"
-            aria-expanded={showModeTools}
-            aria-controls="composer-mode-panel"
-            onClick={() => setModesOpen((open) => !open)}
-            title="Сравнение, температуры, лаборатория"
-          >
-            Режим · {modeLabel}
-          </button>
+          {effective.chatMode === "lab" && labPresets.length > 0 && (
+            <label className="composer-model-picker composer-lab-preset">
+              <span className="composer-options-label">Пресет</span>
+              <select
+                className="composer-model-select"
+                value={labPresetId}
+                aria-label="Пресет задачи лаборатории"
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setLabPresetId(id);
+                  const preset = labPresets.find((p) => p.id === id);
+                  if (preset) setValue(preset.task);
+                }}
+              >
+                <option value="">Своя задача</option>
+                {labPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {effective.chatMode === "lab" && !trimmed && !labPresetId && (
+            <button
+              type="button"
+              className="ghost-button composer-lab-sample"
+              onClick={() => setValue(LAB_SUGGESTION)}
+            >
+              Пример задачи
+            </button>
+          )}
 
           <button
             type="button"
             className="ghost-button composer-more-toggle"
             aria-expanded={settingsOpen}
+            aria-controls="composer-settings-panel"
             onClick={() => setSettingsOpen((open) => !open)}
           >
             {settingsOpen ? "Скрыть" : "Настройки"}
           </button>
         </div>
 
-        {showModeTools ? (
-          <div
-            id="composer-mode-panel"
-            className="composer-mode-panel"
-            role="group"
-            aria-label="Режим ответа"
-          >
-            <div className="composer-mode-toggle" role="group">
-              <button
-                type="button"
-                className="mode-chip mode-chip-stack"
-                aria-pressed={effective.chatMode === "single"}
-                onClick={() => setChatMode("single")}
-                title="Обычный чат — один ответ"
-              >
-                <span className="mode-chip-kicker">Чат</span>
-                <span className="mode-chip-label">Один</span>
-              </button>
-              <button
-                type="button"
-                className="mode-chip mode-chip-stack"
-                aria-pressed={effective.chatMode === "compare"}
-                onClick={() => setChatMode("compare")}
-                title="Сравнение: без шаблона и с шаблоном"
-              >
-                <span className="mode-chip-kicker">Шаблоны</span>
-                <span className="mode-chip-label">×2</span>
-              </button>
-              <button
-                type="button"
-                className="mode-chip mode-chip-stack mode-chip-temp"
-                aria-pressed={effective.chatMode === "temp_studio"}
-                onClick={() => setChatMode("temp_studio")}
-                title="Студия temperature: три значения + автооценка"
-              >
-                <span className="mode-chip-kicker">Темп.</span>
-                <span className="mode-chip-label">×T</span>
-              </button>
-              <button
-                type="button"
-                className="mode-chip mode-chip-stack mode-chip-lab"
-                aria-pressed={effective.chatMode === "lab"}
-                onClick={() => setChatMode("lab")}
-                title="Лаборатория: 4 стратегии промпта"
-              >
-                <span className="mode-chip-kicker">Лаб</span>
-                <span className="mode-chip-label">×4</span>
-              </button>
-            </div>
-
-            {effective.chatMode === "lab" && labPresets.length > 0 && (
-              <label className="composer-model-picker composer-lab-preset">
-                <span className="composer-options-label">Пресет</span>
-                <select
-                  className="composer-model-select"
-                  value={labPresetId}
-                  aria-label="Пресет задачи лаборатории"
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setLabPresetId(id);
-                    const preset = labPresets.find((p) => p.id === id);
-                    if (preset) setValue(preset.task);
-                  }}
-                >
-                  <option value="">Своя задача</option>
-                  {labPresets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {effective.chatMode === "lab" && !trimmed && !labPresetId && (
-              <button
-                type="button"
-                className="ghost-button composer-lab-sample"
-                onClick={() => setValue(LAB_SUGGESTION)}
-              >
-                Пример задачи
-              </button>
-            )}
-          </div>
-        ) : null}
-
         {effective.chatMode === "temp_studio" && (
-          <div className="composer-temp-bar" aria-label="Температуры студии ×T">
+          <div
+            className="composer-temp-bar"
+            role="group"
+            aria-label="Температуры студии ×T"
+          >
             <label className="composer-model-picker composer-temp-preset">
               <span className="composer-options-label">Пресет t</span>
               <select
@@ -467,7 +488,9 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
                   max={2}
                   step={0.1}
                   value={studioTemps[i]}
-                  aria-label={`Temperature ${i + 1}`}
+                  aria-label={
+                    i === 0 ? "Низкая температура" : i === 1 ? "Средняя температура" : "Высокая температура"
+                  }
                   onChange={(e) => setStudioTempAt(i, Number(e.target.value))}
                 />
               </label>
@@ -475,29 +498,37 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
           </div>
         )}
 
-        {(modeHint || rulesMissing || effective.sessionContext) && (
-          <p className={`composer-options-hint${rulesMissing ? " composer-options-warn" : ""}`}>
+        {(forceSingleHint || modeHint || rulesMissing || effective.sessionContext) && (
+          <p
+            id={rulesMissing ? "composer-rules-warn" : undefined}
+            role={rulesMissing ? "alert" : forceSingleHint ? "status" : undefined}
+            className={`composer-options-hint${rulesMissing ? " composer-options-warn" : ""}`}
+          >
             {rulesMissing
               ? "Режим «×2»: задайте правила шаблона — иначе ответы совпадут."
-              : modeHint}
-            {effective.sessionContext && !rulesMissing
+              : forceSingleHint
+                ? forceSingleHint
+                : modeHint}
+            {effective.sessionContext && !rulesMissing && !forceSingleHint
               ? ` · контекст чата (${effective.sessionContext.length} симв.)`
               : ""}
           </p>
         )}
 
         {settingsOpen && (
-          <ComposerSettings
-            tab={settingsTab}
-            onTabChange={setSettingsTab}
-            global={global}
-            session={session}
-            onPatchGlobal={patchGlobal}
-            onPatchSession={patchSession}
-            chatMode={effective.chatMode}
-            reasoningAllowed={reasoningAllowed}
-            globalModelLabel={globalModelLabel}
-          />
+          <div id="composer-settings-panel">
+            <ComposerSettings
+              tab={settingsTab}
+              onTabChange={setSettingsTab}
+              global={global}
+              session={session}
+              onPatchGlobal={patchGlobal}
+              onPatchSession={patchSession}
+              chatMode={effective.chatMode}
+              reasoningAllowed={reasoningAllowed}
+              globalModelLabel={globalModelLabel}
+            />
+          </div>
         )}
 
         <form
@@ -509,6 +540,7 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         >
           <textarea
             ref={box}
+            id="composer-message"
             rows={1}
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -520,6 +552,12 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             }}
             placeholder={placeholder}
             aria-label="Сообщение"
+            aria-invalid={rulesMissing || undefined}
+            aria-describedby={
+              [rulesMissing ? "composer-rules-warn" : null, "composer-keyboard-hint"]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
           />
 
           {busy ? (
@@ -558,13 +596,13 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         </form>
       </div>
 
-      <p className="hint">
+      <p className="hint" id="composer-keyboard-hint">
         <kbd>Enter</kbd> — отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка
         {effective.chatMode === "single"
-          ? " · картинка и видео — кнопки выше или «нарисуй…»"
-          : ""}
+          ? " · для картинки: кнопка «Картинка» или «нарисуй…»"
+          : " · «Картинка» переключит на обычный чат"}
         {effective.chatMode === "lab" || effective.chatMode === "temp_studio"
-          ? ` · ${effective.chatMode === "lab" ? "×4" : "×T"} не сохраняется в истории сервера`
+          ? " · этот режим не пишется в историю чата"
           : ""}
       </p>
     </div>

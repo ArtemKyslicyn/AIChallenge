@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { MediaJobState } from "../types";
 
@@ -17,6 +17,7 @@ interface Props {
 }
 
 export function MediaJobCard({ job, compact = false }: Props) {
+  const titleId = useId();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -61,8 +62,8 @@ export function MediaJobCard({ job, compact = false }: Props) {
   return (
     <div
       className={`media-job${compact ? " media-job--compact" : ""} media-job--${job.phase} media-job--${job.kind}`}
-      role="status"
-      aria-live="polite"
+      role="group"
+      aria-labelledby={titleId}
       aria-busy={job.phase === "running"}
     >
       <div className="media-job-visual" aria-hidden="true">
@@ -75,11 +76,17 @@ export function MediaJobCard({ job, compact = false }: Props) {
         )}
       </div>
       <div className="media-job-copy">
-        <p className="media-job-title">{title}</p>
+        <p className="media-job-title" id={titleId}>
+          {title}
+        </p>
         <p className="media-job-hint">{hint}</p>
       </div>
       {job.phase === "running" && (
-        <time className="media-job-elapsed" dateTime={`PT${Math.floor((now - job.startedAt) / 1000)}S`}>
+        <time
+          className="media-job-elapsed"
+          dateTime={`PT${Math.floor((now - job.startedAt) / 1000)}S`}
+          aria-hidden="true"
+        >
           {elapsed}
         </time>
       )}

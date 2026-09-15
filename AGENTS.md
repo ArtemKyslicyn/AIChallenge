@@ -20,6 +20,22 @@
 | `aichallenge-frontend` | Chat SPA, session, SSE client |
 | `aichallenge-testing` | Tests, FakeLLM, SSE contracts |
 
+## Design review agents (Cursor)
+
+Project subagents in `.cursor/agents/` (format: [Cursor subagents](https://cursor.com/docs/subagents.md)):
+
+| Agent | Role |
+|-------|------|
+| `designer-visual` | Visual hierarchy |
+| `designer-interaction` | Flows / media CTA |
+| `designer-density` | Clutter / first paint |
+| `designer-a11y` | Accessibility |
+| `designer-brand` | Copy / IA |
+| `design-lead` | Merge + implement plan |
+
+Slash: `.cursor/commands/design-review.md` (`/design-review`).  
+Health check: `scripts/check-design-agents.sh`.
+
 ## Stack reminder
 
 - API: FastAPI + uv + Postgres + Alembic

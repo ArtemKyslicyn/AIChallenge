@@ -145,6 +145,9 @@ class AgentWorkshopRunRequest(BaseModel):
     compress: bool = False
     recent_keep: int | None = Field(default=None, ge=0, le=40)
     summarize_every: int | None = Field(default=None, ge=2, le=100)
+    #: Day 11 — inject working / long-term memory blocks into system prompt.
+    include_working_memory: bool = True
+    include_long_term_memory: bool = True
 
 
 class AgentDialogMessageResponse(BaseModel):
@@ -217,6 +220,7 @@ class AgentDialogResponse(BaseModel):
     summary_text: str = ""
     summary_until_count: int = 0
     facts: dict[str, str] = Field(default_factory=dict)
+    working_memory: dict[str, object] = Field(default_factory=dict)
     parent_dialog_id: UUID | None = None
     branch_label: str | None = None
     forked_from_message_id: str | None = None
@@ -226,6 +230,26 @@ class AgentDialogForkRequest(BaseModel):
     from_message_id: str = Field(min_length=1, max_length=64)
     client_draft_id: str = Field(min_length=1, max_length=64)
     label: str | None = Field(default=None, max_length=80)
+
+
+class AgentMemorySnapshotResponse(BaseModel):
+    """Three layers, stored separately (Day 11)."""
+
+    short_term: list[AgentDialogMessageResponse] = Field(default_factory=list)
+    working: dict[str, object] = Field(default_factory=dict)
+    long_term: dict[str, object] = Field(default_factory=dict)
+
+
+class AgentMemoryWriteRequest(BaseModel):
+    """Explicit write — caller chooses the layer; nothing auto-promotes."""
+
+    layer: str = Field(description="working | long_term")
+    kind: str = Field(
+        description="working: goal|checklist_item|scratch; long_term: profile|decision|knowledge"
+    )
+    key: str = Field(default="", max_length=64)
+    value: str = Field(default="", max_length=2000)
+    client_draft_id: str | None = Field(default=None, max_length=64)
 
 
 class ModelCapabilitiesResponse(BaseModel):

@@ -5,9 +5,12 @@ import {
   clearAgentDialogByDraft,
   forkAgentDialog,
   getAgentDialogByDraft,
+  getAgentMemory,
   listModels,
   runAgentWorkshop,
+  writeAgentMemory,
   type AgentDialogMessageDto,
+  type AgentMemorySnapshotDto,
   type ModelCatalogItemDto,
 } from "../api/client";
 import {
@@ -448,6 +451,7 @@ export function AgentWorkshop() {
       dialogId: null,
       summaryText: null,
       facts: null,
+      workingMemory: null,
       branchDraftId: null,
     });
     if (!isTeam) {
@@ -464,15 +468,75 @@ export function AgentWorkshop() {
     try {
       const dialog = await getAgentDialogByDraft(agentId);
       if (!dialog) return;
+      const wm = dialog.working_memory || {};
       patchSession(agentId, {
         dialogId: dialog.id,
         log: dialogMessagesToLog(dialog.messages),
         status: "",
         summaryText: dialog.summary_text || null,
         facts: dialog.facts && Object.keys(dialog.facts).length ? dialog.facts : null,
+        workingMemory: {
+          goal: typeof wm.goal === "string" ? wm.goal : "",
+          checklist: Array.isArray(wm.checklist) ? wm.checklist.map(String) : [],
+          scratch:
+            wm.scratch && typeof wm.scratch === "object" && !Array.isArray(wm.scratch)
+              ? (wm.scratch as Record<string, string>)
+              : {},
+        },
       });
+      await refreshMemory(agentId);
     } catch {
       /* offline / empty */
+    }
+  }
+
+  function applyMemorySnapshot(agentId: string, snap: AgentMemorySnapshotDto) {
+    patchSession(agentId, {
+      workingMemory: {
+        goal: snap.working?.goal || "",
+        checklist: snap.working?.checklist || [],
+        scratch: snap.working?.scratch || {},
+      },
+      longTermMemory: {
+        profile: snap.long_term?.profile || {},
+        decisions: snap.long_term?.decisions || [],
+        knowledge: snap.long_term?.knowledge || {},
+      },
+    });
+  }
+
+  async function refreshMemory(agentId: string) {
+    if (isTeam) return;
+    try {
+      const snap = await getAgentMemory(agentId);
+      applyMemorySnapshot(agentId, snap);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function saveMemoryWrite(
+    agentId: string,
+    write: {
+      layer: "working" | "long_term";
+      kind: string;
+      key?: string;
+      value: string;
+    },
+  ) {
+    try {
+      const snap = await writeAgentMemory({
+        ...write,
+        clientDraftId: agentId,
+      });
+      applyMemorySnapshot(agentId, snap);
+      patchSession(agentId, {
+        status: `Память · ${write.layer}/${write.kind} сохранено`,
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+      patchSession(agentId, { status: `Память: ${msg}` });
     }
   }
 
@@ -646,6 +710,7 @@ export function AgentWorkshop() {
                 ? strategyMeter.facts
                 : sess.facts || null,
           });
+          void refreshMemory(agentId);
         } else {
           appendLog(agentId, {
             id: `a-${Date.now()}-${agentId}`,
@@ -1280,6 +1345,145 @@ export function AgentWorkshop() {
             </ul>
           </details>
         ) : null}
+        <details className="agent-summary-panel agent-memory-panel" open>
+          <summary>Память · 3 слоя</summary>
+          <div className="agent-memory-grid">
+            <section className="agent-memory-layer">
+              <h4>Краткосрочная</h4>
+              <p className="agent-memory-hint">Реплики диалога (ниже в логе)</p>
+              <p className="agent-memory-stat">{session.log.length} реплик в сессии</p>
+            </section>
+            <section className="agent-memory-layer">
+              <h4>Рабочая</h4>
+              <p className="agent-memory-hint">Цель / чеклист текущей задачи</p>
+              {session.workingMemory?.goal ? (
+                <p>
+                  <strong>Цель:</strong> {session.workingMemory.goal}
+                </p>
+              ) : (
+                <p className="agent-memory-empty">цель не задана</p>
+              )}
+              {(session.workingMemory?.checklist || []).length > 0 ? (
+                <ul className="agent-facts-list">
+                  {session.workingMemory!.checklist!.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <form
+                className="agent-memory-write"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  const goal = String(fd.get("goal") || "").trim();
+                  if (!goal) return;
+                  void saveMemoryWrite(draft.id, {
+                    layer: "working",
+                    kind: "goal",
+                    value: goal,
+                  });
+                  e.currentTarget.reset();
+                }}
+              >
+                <input name="goal" placeholder="Цель задачи…" maxLength={500} />
+                <button type="submit" className="ghost-button">
+                  → working
+                </button>
+              </form>
+              <form
+                className="agent-memory-write"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  const item = String(fd.get("item") || "").trim();
+                  if (!item) return;
+                  void saveMemoryWrite(draft.id, {
+                    layer: "working",
+                    kind: "checklist_item",
+                    value: item,
+                  });
+                  e.currentTarget.reset();
+                }}
+              >
+                <input name="item" placeholder="Пункт чеклиста…" maxLength={200} />
+                <button type="submit" className="ghost-button">
+                  + чеклист
+                </button>
+              </form>
+            </section>
+            <section className="agent-memory-layer">
+              <h4>Долговременная</h4>
+              <p className="agent-memory-hint">Профиль / решения / знания (visitor)</p>
+              {session.longTermMemory?.profile &&
+              Object.keys(session.longTermMemory.profile).length > 0 ? (
+                <ul className="agent-facts-list">
+                  {Object.entries(session.longTermMemory.profile).map(([k, v]) => (
+                    <li key={k}>
+                      <strong>{k}</strong>: {v}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="agent-memory-empty">профиль пуст</p>
+              )}
+              {(session.longTermMemory?.decisions || []).length > 0 ? (
+                <ul className="agent-facts-list">
+                  {session.longTermMemory!.decisions!.map((d) => (
+                    <li key={d}>✓ {d}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <form
+                className="agent-memory-write"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  const name = String(fd.get("name") || "").trim();
+                  if (!name) return;
+                  void saveMemoryWrite(draft.id, {
+                    layer: "long_term",
+                    kind: "profile",
+                    key: "name",
+                    value: name,
+                  });
+                  e.currentTarget.reset();
+                }}
+              >
+                <input name="name" placeholder="Имя в профиле…" maxLength={200} />
+                <button type="submit" className="ghost-button">
+                  → long-term
+                </button>
+              </form>
+              <form
+                className="agent-memory-write"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  const decision = String(fd.get("decision") || "").trim();
+                  if (!decision) return;
+                  void saveMemoryWrite(draft.id, {
+                    layer: "long_term",
+                    kind: "decision",
+                    value: decision,
+                  });
+                  e.currentTarget.reset();
+                }}
+              >
+                <input name="decision" placeholder="Решение…" maxLength={400} />
+                <button type="submit" className="ghost-button">
+                  + решение
+                </button>
+              </form>
+            </section>
+          </div>
+          <button
+            type="button"
+            className="ghost-button agent-memory-refresh"
+            onClick={() => void refreshMemory(draft.id)}
+          >
+            Обновить слои
+          </button>
+        </details>
         {session.branches && session.branches.length > 0 ? (
           <div className="agent-branches" role="navigation" aria-label="Ветки диалога">
             <span className="agent-branches-label">Ветки</span>

@@ -35,6 +35,8 @@ class AgentDialog:
     summary_until_count: int = 0
     #: Sticky key-value facts for context_mode=facts.
     facts: dict[str, str] = field(default_factory=dict)
+    #: Day 11 — working memory for the active task (separate from dialog turns).
+    working_memory: dict[str, object] = field(default_factory=dict)
     parent_dialog_id: UUID | None = None
     branch_label: str | None = None
     forked_from_message_id: str | None = None

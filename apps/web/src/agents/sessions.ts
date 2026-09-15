@@ -84,6 +84,18 @@ export interface AgentSession {
   /** Last known rolling summary for UI */
   summaryText?: string | null;
   facts?: Record<string, string> | null;
+  /** Day 11 — working memory snapshot for UI */
+  workingMemory?: {
+    goal?: string;
+    checklist?: string[];
+    scratch?: Record<string, string>;
+  } | null;
+  /** Day 11 — long-term memory snapshot */
+  longTermMemory?: {
+    profile?: Record<string, string>;
+    decisions?: string[];
+    knowledge?: Record<string, string>;
+  } | null;
   branches?: BranchRef[];
   /** When set, persist runs use this draft id instead of agent id (branch). */
   branchDraftId?: string | null;
@@ -116,6 +128,8 @@ export function emptySession(): AgentSession {
     summarizeEvery: 10,
     summaryText: null,
     facts: null,
+    workingMemory: null,
+    longTermMemory: null,
     branches: [],
     branchDraftId: null,
   };
@@ -155,6 +169,14 @@ export function loadSessions(): SessionMap {
           s.facts && typeof s.facts === "object" && !Array.isArray(s.facts)
             ? (s.facts as Record<string, string>)
             : null,
+        workingMemory:
+          s.workingMemory && typeof s.workingMemory === "object"
+            ? s.workingMemory
+            : null,
+        longTermMemory:
+          s.longTermMemory && typeof s.longTermMemory === "object"
+            ? s.longTermMemory
+            : null,
         branches: Array.isArray(s.branches) ? s.branches : [],
         branchDraftId: typeof s.branchDraftId === "string" ? s.branchDraftId : null,
       };
@@ -180,6 +202,8 @@ export function saveSessions(map: SessionMap): void {
         summarizeEvery: s.summarizeEvery ?? 10,
         summaryText: s.summaryText ?? null,
         facts: s.facts ?? null,
+        workingMemory: s.workingMemory ?? null,
+        longTermMemory: s.longTermMemory ?? null,
         branches: s.branches ?? [],
         branchDraftId: s.branchDraftId ?? null,
       };
