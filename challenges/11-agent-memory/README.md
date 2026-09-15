@@ -21,6 +21,7 @@
 
 ```bash
 python3 challenges/11-agent-memory/run.py
+cd challenges/record && RECORD_ONLY=11 npm run record
 ```
 
 Текст ролика: [`VIDEO.md`](VIDEO.md) · промпт: [`prompt.txt`](prompt.txt)
