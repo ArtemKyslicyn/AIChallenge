@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-09-15T21:51:14.021533+00:00",
+  "base": "https://aichallenge.arcilite.ru",
+  "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "layers_before_probe": {
+    "short_term_count": 2,
+    "working": {
+      "goal": "Показать три слоя памяти в ответе агента",
+      "scratch": {},
+      "checklist": [
+        "Проверить, что имя берётся из long-term",
+        "Проверить, что цель берётся из working"
+      ]
+    },
+    "long_term": {
+      "profile": {
+        "name": "Артём"
+      },
+      "decisions": [
+        "Стек: FastAPI + React + Postgres"
+      ],
+      "knowledge": {
+        "domain": "AIChallenge — чат-платформа, без медицинской терминологии"
+      }
+    }
+  },
+  "answer_with_all_layers": "Имя: Артём / Цель: Показать три слоя памяти в ответе агента",
+  "answer_after_clear_working": "Имя: Артём  \nЦель: Нет рабочей цели.",
+  "layers_after_clear": {
+    "short_term_count": 4,
+    "working": {},
+    "long_term": {
+      "profile": {
+        "name": "Артём"
+      },
+      "decisions": [
+        "Стек: FastAPI + React + Postgres"
+      ],
+      "knowledge": {
+        "domain": "AIChallenge — чат-платформа, без медицинской терминологии"
+      }
+    }
+  },
+  "checks": {
+    "name_in_with": true,
+    "goal_in_with": true,
+    "name_survives_clear": true,
+    "working_cleared": true
+  }
+}
