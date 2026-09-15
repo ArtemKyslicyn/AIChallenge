@@ -824,7 +824,12 @@ textarea {
 .empty p {
   margin: 0;
   color: var(--text-muted);
-  max-width: 34rem;
+  max-width: 28rem;
+  line-height: 1.45;
+}
+
+.empty code {
+  font-size: 0.92em;
 }
 
 .suggestions {
@@ -843,12 +848,43 @@ textarea {
   padding: var(--space-2) var(--space-3);
   font-size: 14px;
   cursor: pointer;
-  transition: border-color 140ms ease, transform 140ms ease;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
 }
 
 .chip:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   transform: translateY(-1px);
+}
+
+.chip-primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
+  font-weight: 600;
+}
+
+.chip-media {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.empty-more-toggle {
+  margin-top: var(--space-2);
+  font-size: 14px;
+}
+
+.empty-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 36rem;
+  padding-top: var(--space-1);
+}
+
+.empty-more-lead {
+  margin: var(--space-2) 0 0 !important;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* ---------- composer ---------- */
@@ -886,6 +922,68 @@ textarea {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+}
+
+.composer-media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.composer-media-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-full);
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.composer-media-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+.composer-media-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.composer-media-btn--quiet {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.composer-mode-summary {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.composer-mode-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 35%, var(--surface));
+}
+
+@media (max-width: 640px) {
+  .composer-media-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .composer-mode-summary,
+  .composer-more-toggle {
+    margin-left: 0;
+  }
 }
 
 .composer-options-label {

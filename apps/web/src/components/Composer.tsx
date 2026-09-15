@@ -35,13 +35,20 @@ export interface OutgoingMessage {
   tempStudioTemps?: [number, number, number];
 }
 
+export type ComposerSeed = {
+  text: string;
+  nonce: number;
+  /** Force chat mode when seeding (e.g. media chips → single). */
+  chatMode?: ChatMode;
+};
+
 interface Props {
   sessionId: string;
   onSend: (message: OutgoingMessage) => void;
   onStop: () => void;
   busy: boolean;
   maxChars: number;
-  seed: { text: string; nonce: number } | null;
+  seed: ComposerSeed | null;
 }
 
 const MAX_HEIGHT = 200;
@@ -57,6 +64,7 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"global" | "session">("global");
+  const [modesOpen, setModesOpen] = useState(false);
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
@@ -91,22 +99,6 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
   const effective = useMemo(() => mergeChatPrefs(global, session), [global, session]);
 
-  useLayoutEffect(() => {
-    if (seed) setValue(seed.text);
-  }, [seed]);
-
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
-  }, [value]);
-
-  useEffect(() => {
-    listModels().then(setModels).catch(() => setModels([]));
-    listLabPresets().then(setLabPresets).catch(() => setLabPresets([]));
-  }, []);
-
   const patchGlobal = useCallback((patch: Partial<GlobalChatPrefs>) => {
     setGlobal((prev) => {
       const next = { ...prev, ...patch };
@@ -127,9 +119,35 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   );
 
   const setChatMode = useCallback(
-    (chatMode: ChatMode) => patchSession({ chatMode }),
+    (chatMode: ChatMode) => {
+      patchSession({ chatMode });
+      if (chatMode !== "single") setModesOpen(true);
+    },
     [patchSession],
   );
+
+  useLayoutEffect(() => {
+    if (!seed) return;
+    setValue(seed.text);
+    if (seed.chatMode) {
+      patchSession({ chatMode: seed.chatMode });
+      if (seed.chatMode !== "single") setModesOpen(true);
+      else setModesOpen(false);
+    }
+    requestAnimationFrame(() => box.current?.focus());
+  }, [seed, patchSession]);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+  }, [value]);
+
+  useEffect(() => {
+    listModels().then(setModels).catch(() => setModels([]));
+    listLabPresets().then(setLabPresets).catch(() => setLabPresets([]));
+  }, []);
 
   const trimmed = value.trim();
   const manualControls =
@@ -160,6 +178,24 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   const reasoningAllowed = selectedModel?.capabilities.reasoning ?? true;
   const globalModelLabel =
     modelOptions.find((m) => m.id === global.modelId)?.label ?? global.modelId;
+
+  function applyMediaDraft(kind: "image" | "video" | "comic") {
+    setChatMode("single");
+    setModesOpen(false);
+    const prefixes = {
+      image: "Нарисуй ",
+      video: "Сделай короткое видео: ",
+      comic: "Нарисуй комикс: ",
+    } as const;
+    const prefix = prefixes[kind];
+    setValue((prev) => {
+      const t = prev.trim();
+      if (!t) return prefix;
+      if (/^(нарисуй|сгенерируй|сделай)\b/i.test(t)) return prev;
+      return `${prefix}${t}`;
+    });
+    requestAnimationFrame(() => box.current?.focus());
+  }
 
   function submit() {
     if (!canSend) return;
@@ -195,6 +231,15 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
     patchSession({ tempStudioTemps: next });
   }
 
+  const modeLabel =
+    effective.chatMode === "lab"
+      ? "×4"
+      : effective.chatMode === "temp_studio"
+        ? "×T"
+        : effective.chatMode === "compare"
+          ? "×2"
+          : "Чат";
+
   const modeHint =
     effective.chatMode === "lab"
       ? "Четыре стратегии промпта параллельно"
@@ -213,7 +258,9 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         ? "Запрос для сравнения температур (один текст → три ответа)…"
         : effective.chatMode === "compare"
           ? "Сообщение для сравнения двух ответов…"
-          : "Напишите сообщение…";
+          : "Спросите что угодно или нажмите «Картинка»…";
+
+  const showModeTools = modesOpen || effective.chatMode !== "single";
 
   return (
     <div className="composer-wrap" ref={wrap}>
@@ -247,83 +294,46 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             </select>
           </label>
 
-          <span className="composer-options-label">Режим</span>
-          <div className="composer-mode-toggle" role="group" aria-label="Режим ответа">
+          <div className="composer-media-actions" role="group" aria-label="Медиа">
             <button
               type="button"
-              className="mode-chip mode-chip-stack"
-              aria-pressed={effective.chatMode === "single"}
-              onClick={() => setChatMode("single")}
-              title="Обычный чат — один ответ"
+              className="composer-media-btn"
+              disabled={busy}
+              onClick={() => applyMediaDraft("image")}
+              title="Подставит «Нарисуй…» и включит обычный чат"
             >
-              <span className="mode-chip-kicker">Чат</span>
-              <span className="mode-chip-label">Один</span>
+              Картинка
             </button>
             <button
               type="button"
-              className="mode-chip mode-chip-stack"
-              aria-pressed={effective.chatMode === "compare"}
-              onClick={() => setChatMode("compare")}
-              title="Сравнение: без шаблона и с шаблоном"
+              className="composer-media-btn"
+              disabled={busy}
+              onClick={() => applyMediaDraft("video")}
+              title="Подставит запрос на короткое видео"
             >
-              <span className="mode-chip-kicker">Шаблоны</span>
-              <span className="mode-chip-label">×2</span>
+              Видео
             </button>
             <button
               type="button"
-              className="mode-chip mode-chip-stack mode-chip-temp"
-              aria-pressed={effective.chatMode === "temp_studio"}
-              onClick={() => setChatMode("temp_studio")}
-              title="Студия temperature: три значения + автооценка"
+              className="composer-media-btn composer-media-btn--quiet"
+              disabled={busy}
+              onClick={() => applyMediaDraft("comic")}
+              title="Подставит запрос на комикс"
             >
-              <span className="mode-chip-kicker">Темп.</span>
-              <span className="mode-chip-label">×T</span>
-            </button>
-            <button
-              type="button"
-              className="mode-chip mode-chip-stack mode-chip-lab"
-              aria-pressed={effective.chatMode === "lab"}
-              onClick={() => setChatMode("lab")}
-              title="Лаборатория: 4 стратегии промпта"
-            >
-              <span className="mode-chip-kicker">Лаб</span>
-              <span className="mode-chip-label">×4</span>
+              Комикс
             </button>
           </div>
 
-          {effective.chatMode === "lab" && labPresets.length > 0 && (
-            <label className="composer-model-picker composer-lab-preset">
-              <span className="composer-options-label">Пресет</span>
-              <select
-                className="composer-model-select"
-                value={labPresetId}
-                aria-label="Пресет задачи лаборатории"
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setLabPresetId(id);
-                  const preset = labPresets.find((p) => p.id === id);
-                  if (preset) setValue(preset.task);
-                }}
-              >
-                <option value="">Своя задача</option>
-                {labPresets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {effective.chatMode === "lab" && !trimmed && !labPresetId && (
-            <button
-              type="button"
-              className="ghost-button composer-lab-sample"
-              onClick={() => setValue(LAB_SUGGESTION)}
-            >
-              Пример задачи
-            </button>
-          )}
+          <button
+            type="button"
+            className="ghost-button composer-mode-summary"
+            aria-expanded={showModeTools}
+            aria-controls="composer-mode-panel"
+            onClick={() => setModesOpen((open) => !open)}
+            title="Сравнение, температуры, лаборатория"
+          >
+            Режим · {modeLabel}
+          </button>
 
           <button
             type="button"
@@ -334,6 +344,92 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
             {settingsOpen ? "Скрыть" : "Настройки"}
           </button>
         </div>
+
+        {showModeTools ? (
+          <div
+            id="composer-mode-panel"
+            className="composer-mode-panel"
+            role="group"
+            aria-label="Режим ответа"
+          >
+            <div className="composer-mode-toggle" role="group">
+              <button
+                type="button"
+                className="mode-chip mode-chip-stack"
+                aria-pressed={effective.chatMode === "single"}
+                onClick={() => setChatMode("single")}
+                title="Обычный чат — один ответ"
+              >
+                <span className="mode-chip-kicker">Чат</span>
+                <span className="mode-chip-label">Один</span>
+              </button>
+              <button
+                type="button"
+                className="mode-chip mode-chip-stack"
+                aria-pressed={effective.chatMode === "compare"}
+                onClick={() => setChatMode("compare")}
+                title="Сравнение: без шаблона и с шаблоном"
+              >
+                <span className="mode-chip-kicker">Шаблоны</span>
+                <span className="mode-chip-label">×2</span>
+              </button>
+              <button
+                type="button"
+                className="mode-chip mode-chip-stack mode-chip-temp"
+                aria-pressed={effective.chatMode === "temp_studio"}
+                onClick={() => setChatMode("temp_studio")}
+                title="Студия temperature: три значения + автооценка"
+              >
+                <span className="mode-chip-kicker">Темп.</span>
+                <span className="mode-chip-label">×T</span>
+              </button>
+              <button
+                type="button"
+                className="mode-chip mode-chip-stack mode-chip-lab"
+                aria-pressed={effective.chatMode === "lab"}
+                onClick={() => setChatMode("lab")}
+                title="Лаборатория: 4 стратегии промпта"
+              >
+                <span className="mode-chip-kicker">Лаб</span>
+                <span className="mode-chip-label">×4</span>
+              </button>
+            </div>
+
+            {effective.chatMode === "lab" && labPresets.length > 0 && (
+              <label className="composer-model-picker composer-lab-preset">
+                <span className="composer-options-label">Пресет</span>
+                <select
+                  className="composer-model-select"
+                  value={labPresetId}
+                  aria-label="Пресет задачи лаборатории"
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setLabPresetId(id);
+                    const preset = labPresets.find((p) => p.id === id);
+                    if (preset) setValue(preset.task);
+                  }}
+                >
+                  <option value="">Своя задача</option>
+                  {labPresets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {effective.chatMode === "lab" && !trimmed && !labPresetId && (
+              <button
+                type="button"
+                className="ghost-button composer-lab-sample"
+                onClick={() => setValue(LAB_SUGGESTION)}
+              >
+                Пример задачи
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {effective.chatMode === "temp_studio" && (
           <div className="composer-temp-bar" aria-label="Температуры студии ×T">
@@ -464,6 +560,9 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
 
       <p className="hint">
         <kbd>Enter</kbd> — отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка
+        {effective.chatMode === "single"
+          ? " · картинка и видео — кнопки выше или «нарисуй…»"
+          : ""}
         {effective.chatMode === "lab" || effective.chatMode === "temp_studio"
           ? ` · ${effective.chatMode === "lab" ? "×4" : "×T"} не сохраняется в истории сервера`
           : ""}
