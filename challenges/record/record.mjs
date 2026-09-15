@@ -1083,6 +1083,120 @@ async function challenge10(page) {
   await settle(page, 2000);
 }
 
+async function challenge11(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.12);
+  await settle(page, 1600);
+
+  await page.getByRole("heading", { name: /^Агенты$/i }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 900);
+
+  await ensurePersona(page, {
+    name: "Память",
+    system:
+      "Ты помощник по задачам. Отвечай коротко (1–3 предложения). " +
+      "Если в system есть блоки памяти — опирайся на них явно: " +
+      "зови пользователя по имени из профиля, повторяй цель из рабочей памяти.",
+    temperature: "0.2",
+    maxTokens: "140",
+  });
+  await pauseOn(page.locator(".agent-builder").first(), 1600);
+
+  const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
+  if ((await clearBtn.count()) > 0) {
+    await clearBtn.first().click();
+    await settle(page, 900);
+  }
+
+  const memory = page.locator(".agent-memory-panel").first();
+  await memory.waitFor({ timeout: 20_000 });
+  // Ensure panel is open
+  const summary = memory.locator("summary");
+  if ((await summary.count()) > 0) {
+    const open = await memory.evaluate((el) => el.hasAttribute("open"));
+    if (!open) {
+      await summary.click();
+      await settle(page, 400);
+    }
+  }
+  await pauseOn(memory, 3500);
+
+  console.log("11: write working goal…");
+  const goalForm = memory.locator("form.agent-memory-write").filter({
+    has: page.locator('input[name="goal"]'),
+  });
+  await goalForm.locator('input[name="goal"]').fill("Показать три слоя памяти в ответе агента");
+  await settle(page, 600);
+  await goalForm.getByRole("button", { name: /working/i }).click();
+  await settle(page, 1500);
+  await pauseOn(memory.locator(".agent-memory-layer").nth(1), 2800);
+
+  console.log("11: write long-term profile…");
+  const nameForm = memory.locator("form.agent-memory-write").filter({
+    has: page.locator('input[name="name"]'),
+  });
+  await nameForm.locator('input[name="name"]').fill("Артём");
+  await settle(page, 600);
+  await nameForm.getByRole("button", { name: /long-term/i }).click();
+  await settle(page, 1500);
+
+  const decisionForm = memory.locator("form.agent-memory-write").filter({
+    has: page.locator('input[name="decision"]'),
+  });
+  await decisionForm.locator('input[name="decision"]').fill("Стек: FastAPI + React + Postgres");
+  await settle(page, 500);
+  await decisionForm.getByRole("button", { name: /решение/i }).click();
+  await settle(page, 1500);
+  await pauseOn(memory.locator(".agent-memory-layer").nth(2), 3200);
+
+  // Seed short-term with a turn so dialog exists visibly
+  console.log("11: short-term turn + probe with all layers…");
+  await sendSoloAndWait(page, "Привет. Сегодня демо трёх слоёв памяти.", {
+    minChars: 4,
+    timeout: 180_000,
+  });
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 2500);
+
+  await sendSoloAndWait(
+    page,
+    "Кто я и какая сейчас цель задачи? Ответь двумя строками: Имя: … / Цель: …",
+    { minChars: 8, timeout: 180_000 },
+  );
+  const withMem = page.locator(".agent-log-line--assistant").last();
+  const withText = await withMem.innerText();
+  if (!/арт[её]м/i.test(withText)) {
+    console.warn("11 with-memory name weak:", withText.slice(0, 220));
+  }
+  await pauseOn(withMem, 4500);
+  await pauseOn(memory, 2800);
+
+  console.log("11: clear dialog — working gone, long-term stays…");
+  await clearBtn.first().click();
+  await settle(page, 1200);
+  const refresh = memory.getByRole("button", { name: /Обновить слои/i });
+  if ((await refresh.count()) > 0) {
+    await refresh.first().click();
+    await settle(page, 1200);
+  }
+  await pauseOn(memory, 3500);
+
+  await sendSoloAndWait(
+    page,
+    "Кто я и какая сейчас цель задачи? Ответь двумя строками: Имя: … / Цель: …",
+    { minChars: 8, timeout: 180_000 },
+  );
+  const afterClear = page.locator(".agent-log-line--assistant").last();
+  const afterText = await afterClear.innerText();
+  if (!/арт[её]м/i.test(afterText)) {
+    console.warn("11 after-clear name weak:", afterText.slice(0, 220));
+  }
+  await pauseOn(afterClear, 5000);
+  await pauseOn(memory, 3000);
+  await settle(page, 2000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1090,8 +1204,9 @@ const out07 = path.join(__dirname, "../07-context-memory/challenge-07.webm");
 const out08 = path.join(__dirname, "../08-tokens/challenge-08.webm");
 const out09 = path.join(__dirname, "../09-compression/challenge-09.webm");
 const out10 = path.join(__dirname, "../10-context-strategies/challenge-10.webm");
+const out11 = path.join(__dirname, "../11-agent-memory/challenge-11.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1140,5 +1255,9 @@ if (ONLY.includes("09")) {
 if (ONLY.includes("10")) {
   console.log("Recording challenge 10 against", BASE);
   await recordChallenge("10", out10, (page) => challenge10(page));
+}
+if (ONLY.includes("11")) {
+  console.log("Recording challenge 11 against", BASE);
+  await recordChallenge("11", out11, (page) => challenge11(page));
 }
 console.log("done");
