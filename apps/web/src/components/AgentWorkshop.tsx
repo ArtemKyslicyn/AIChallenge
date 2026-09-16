@@ -7,11 +7,16 @@ import {
   getAgentDialogByDraft,
   getAgentMemory,
   listModels,
+  listExpertLenses,
+  listPreferenceProfiles,
+  activatePreferenceProfile,
   runAgentWorkshop,
   writeAgentMemory,
   type AgentDialogMessageDto,
   type AgentMemorySnapshotDto,
+  type ExpertLensDto,
   type ModelCatalogItemDto,
+  type PreferenceProfileDto,
 } from "../api/client";
 import {
   blankDraft,
@@ -132,6 +137,8 @@ export function AgentWorkshop() {
   const [fanIn, setFanIn] = useState(true);
   const [progonAxis, setProgonAxis] = useState<ProgonAxis>("temperature");
   const [progonModelIds, setProgonModelIds] = useState<string[]>([]);
+  const [prefProfiles, setPrefProfiles] = useState<PreferenceProfileDto[]>([]);
+  const [expertLenses, setExpertLenses] = useState<ExpertLensDto[]>([]);
   const abortMap = useRef<Map<string, AbortController>>(new Map());
   const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -227,6 +234,15 @@ export function AgentWorkshop() {
         setProgonModelIds((prev) => (prev.length ? prev : pickDefaultModelIds(list, 3)));
       })
       .catch(() => setModels([]));
+  }, []);
+
+  useEffect(() => {
+    void listPreferenceProfiles()
+      .then(setPrefProfiles)
+      .catch(() => setPrefProfiles([]));
+    void listExpertLenses()
+      .then(setExpertLenses)
+      .catch(() => setExpertLenses([]));
   }, []);
 
   useEffect(() => {
@@ -709,6 +725,7 @@ export function AgentWorkshop() {
           contextMode: persist ? contextMode : "none",
           recentKeep: sess.recentKeep ?? 8,
           summarizeEvery: sess.summarizeEvery ?? 10,
+          expertLensId: sess.activeLensId || "neutral",
         },
       );
       const tokenMeter = result.tokens ?? null;
@@ -1617,6 +1634,80 @@ export function AgentWorkshop() {
                 {hint.label}
               </button>
             ))}
+          </div>
+          <div className="agent-persona-rows" aria-label="Персонализация">
+            <div className="agent-persona-row" role="group" aria-label="Профиль предпочтений">
+              <span className="agent-persona-label">Профиль</span>
+              {prefProfiles.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={
+                    p.is_active
+                      ? "agent-memory-chip is-active"
+                      : "agent-memory-chip"
+                  }
+                  title={`${p.style} · ${p.format}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void activatePreferenceProfile(p.id)
+                      .then((active) => {
+                        setPrefProfiles((prev) =>
+                          prev.map((x) => ({
+                            ...x,
+                            is_active: x.id === active.id,
+                          })),
+                        );
+                        patchSession(draft.id, {
+                          status: `Профиль · ${active.name}`,
+                        });
+                      })
+                      .catch((err) => {
+                        patchSession(draft.id, {
+                          status:
+                            err instanceof ApiError
+                              ? err.message
+                              : "Не удалось активировать профиль",
+                        });
+                      });
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <div className="agent-persona-row" role="group" aria-label="Призма роли">
+              <span className="agent-persona-label">Призма</span>
+              {(expertLenses.length
+                ? expertLenses
+                : [
+                    { id: "neutral", label: "Нейтральный", system_addendum: "" },
+                    { id: "chemist", label: "Химик", system_addendum: "" },
+                    { id: "psychologist", label: "Психолог", system_addendum: "" },
+                    { id: "economist", label: "Экономист", system_addendum: "" },
+                  ]
+              ).map((lens) => (
+                <button
+                  key={lens.id}
+                  type="button"
+                  className={
+                    (session.activeLensId || "neutral") === lens.id
+                      ? "agent-memory-chip is-active"
+                      : "agent-memory-chip"
+                  }
+                  title={lens.system_addendum || lens.label}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    patchSession(draft.id, {
+                      activeLensId: lens.id,
+                      status: `Призма · ${lens.label}`,
+                    });
+                  }}
+                >
+                  {lens.label}
+                </button>
+              ))}
+            </div>
           </div>
           <textarea
             value={session.input}

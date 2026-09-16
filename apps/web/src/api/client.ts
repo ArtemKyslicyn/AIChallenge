@@ -128,7 +128,132 @@ interface SessionStore {
 }
 
 function visitorHeaders(): Record<string, string> {
-  return { "X-Visitor-Id": getVisitorId() };
+  const headers: Record<string, string> = { "X-Visitor-Id": getVisitorId() };
+  try {
+    const token = localStorage.getItem("aichallenge.auth_token");
+    if (token) headers["X-Auth-Token"] = token;
+  } catch {
+    /* ignore */
+  }
+  return headers;
+}
+
+export interface AuthUserDto {
+  id: string;
+  email: string;
+  display_name: string;
+  owner_key: string;
+  anonymous: boolean;
+}
+
+export interface AuthTokenResponseDto {
+  access_token: string;
+  token_type: string;
+  user: AuthUserDto;
+}
+
+export function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem("aichallenge.auth_token");
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem("aichallenge.auth_token", token);
+    else localStorage.removeItem("aichallenge.auth_token");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function authMe(signal?: AbortSignal): Promise<AuthUserDto> {
+  return request<AuthUserDto>("/auth/me", { signal });
+}
+
+export function authRegister(
+  email: string,
+  password: string,
+  displayName = "",
+): Promise<AuthTokenResponseDto> {
+  return request<AuthTokenResponseDto>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      password,
+      display_name: displayName,
+    }),
+  });
+}
+
+export function authLogin(email: string, password: string): Promise<AuthTokenResponseDto> {
+  return request<AuthTokenResponseDto>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password, display_name: "" }),
+  });
+}
+
+export async function authLogout(): Promise<void> {
+  try {
+    await request<{ ok: boolean }>("/auth/logout", { method: "POST", body: "{}" });
+  } finally {
+    setAuthToken(null);
+  }
+}
+
+export interface PreferenceProfileDto {
+  id: string;
+  name: string;
+  style: string;
+  format: string;
+  constraints: string;
+  is_active: boolean;
+}
+
+export interface ExpertLensDto {
+  id: string;
+  label: string;
+  system_addendum: string;
+}
+
+export function listPreferenceProfiles(
+  signal?: AbortSignal,
+): Promise<PreferenceProfileDto[]> {
+  return request<PreferenceProfileDto[]>("/personalization/profiles", { signal });
+}
+
+export function activatePreferenceProfile(
+  profileId: string,
+): Promise<PreferenceProfileDto> {
+  return request<PreferenceProfileDto>(
+    `/personalization/profiles/${encodeURIComponent(profileId)}/activate`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function createPreferenceProfile(payload: {
+  name: string;
+  style?: string;
+  format?: string;
+  constraints?: string;
+  activate?: boolean;
+}): Promise<PreferenceProfileDto> {
+  return request<PreferenceProfileDto>("/personalization/profiles", {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      style: payload.style || "",
+      format: payload.format || "",
+      constraints: payload.constraints || "",
+      activate: Boolean(payload.activate),
+    }),
+  });
+}
+
+export function listExpertLenses(signal?: AbortSignal): Promise<ExpertLensDto[]> {
+  return request<ExpertLensDto[]>("/personalization/lenses", { signal });
 }
 
 async function readError(response: Response): Promise<string> {
@@ -771,6 +896,7 @@ export interface AgentWorkshopRunOptions {
   summarizeEvery?: number | null;
   includeWorkingMemory?: boolean;
   includeLongTermMemory?: boolean;
+  expertLensId?: string | null;
   signal?: AbortSignal;
 }
 
@@ -808,6 +934,9 @@ export function runAgentWorkshop(
   }
   if (opts.includeLongTermMemory === false) {
     body.include_long_term_memory = false;
+  }
+  if (opts.expertLensId) {
+    body.expert_lens_id = opts.expertLensId;
   }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",

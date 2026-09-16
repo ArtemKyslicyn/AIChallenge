@@ -34,6 +34,11 @@ from app.domain.context_strategies.facts import (
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, MessageRole
 from app.domain.errors import AgentsRunDisabledError, MessageValidationError
 from app.domain.generation import GenerationParams
+from app.domain.personalization import (
+    PreferenceProfile,
+    build_personalization_extra,
+    get_expert_lens,
+)
 from app.domain.ports import AgentDialogRepository, ChatRouter
 from app.domain.token_meter import (
     TokenBreakdown,
@@ -175,6 +180,8 @@ async def run_agent_with_dialog(
     long_term: LongTermMemory | None = None,
     include_working_memory: bool = True,
     include_long_term_memory: bool = True,
+    preference: PreferenceProfile | None = None,
+    expert_lens_id: str | None = None,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -187,6 +194,7 @@ async def run_agent_with_dialog(
         raise MessageValidationError("client_visitor_id обязателен для сохранения диалога.")
     vhash = (visitor_hash or "").strip() or None
     mode = resolve_context_mode(context_mode=context_mode, compress=compress)
+    lens = get_expert_lens(expert_lens_id)
 
     now = datetime.now(UTC)
     dialog: AgentDialog | None = None
@@ -319,16 +327,32 @@ async def run_agent_with_dialog(
         )
 
     working = WorkingMemory.from_mapping(dialog.working_memory)
-    memory_extra = build_memory_system_extra(
-        working=working,
+    # Order: LTM identity → preferences → lens → working
+    identity_extra = build_memory_system_extra(
+        working=None,
         long_term=long_term or LongTermMemory(),
-        include_working=include_working_memory,
+        include_working=False,
         include_long_term=include_long_term_memory,
         include_short_term=False,
     )
+    pers_extra = build_personalization_extra(preference=preference, lens=lens)
+    working_extra = build_memory_system_extra(
+        working=working,
+        long_term=None,
+        include_working=include_working_memory,
+        include_long_term=False,
+        include_short_term=False,
+    )
+    memory_parts = [p for p in (identity_extra, pers_extra, working_extra) if p]
+    memory_extra = "\n\n".join(memory_parts)
     system_extra = assembly.system_extra
     if memory_extra:
         system_extra = f"{system_extra}\n\n{memory_extra}".strip() if system_extra else memory_extra
+
+    if expert_lens_id:
+        dialog.active_lens_id = lens.id
+    elif dialog.active_lens_id is None and lens.id != "neutral":
+        dialog.active_lens_id = lens.id
 
     outcome = await run_agent(
         definition=definition,

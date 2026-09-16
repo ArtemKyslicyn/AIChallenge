@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.adapters.api.auth import OptionalAuthUser
 from app.adapters.api.schemas import (
     AgentCompressionResponse,
     AgentContextStrategyResponse,
@@ -25,6 +26,7 @@ from app.adapters.api.schemas import (
 )
 from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
 from app.adapters.persistence.long_term_memory_repo import SqlAlchemyLongTermMemoryRepository
+from app.adapters.persistence.preference_repo import SqlAlchemyPreferenceProfileRepository
 from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
 from app.application.dialog_fork import fork_agent_dialog
 from app.application.llm_catalog import generation_from_api
@@ -53,6 +55,7 @@ from app.domain.context_compress import CompressionInfo
 from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
+from app.domain.owner_key import memory_owner_key
 from app.domain.token_meter import TokenBreakdown
 
 logger = logging.getLogger(__name__)
@@ -152,11 +155,17 @@ def _resolve_context_limit(raw: int | None) -> int:
     return max(64, min(128_000, int(raw)))
 
 
+def _owner_key(visitor_id: str, auth_user: object | None) -> str:
+    user_id = getattr(auth_user, "id", None) if auth_user is not None else None
+    return memory_owner_key(visitor_id=visitor_id, user_id=user_id)
+
+
 @router.post("/run", response_model=AgentWorkshopRunResponse)
 async def run_workshop_agent(
     payload: AgentWorkshopRunRequest,
     request: Request,
     db: DbSession,
+    auth_user: OptionalAuthUser,
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> AgentWorkshopRunResponse:
     container = get_container(request)
@@ -186,16 +195,22 @@ async def run_workshop_agent(
     ctx_limit = _resolve_context_limit(payload.context_limit)
     try:
         if payload.persist:
-            owner = (client_visitor_id or "").strip().lower()
-            if not owner:
+            visitor = (client_visitor_id or "").strip().lower()
+            if not visitor:
                 raise MessageValidationError(
                     "Для сохранения диалога нужен заголовок X-Visitor-Id (client id)."
                 )
+            owner = memory_owner_key(
+                visitor_id=visitor,
+                user_id=auth_user.id if auth_user is not None else None,
+            )
             draft_id = (payload.client_draft_id or "").strip()
             if not draft_id:
                 raise MessageValidationError("Для сохранения диалога передайте client_draft_id.")
-            identity = resolve_visitor_identity(request, owner)
+            identity = resolve_visitor_identity(request, visitor)
             vhash = identity[0] if identity else None
+            preference = await SqlAlchemyPreferenceProfileRepository(db).get_active(owner)
+            lens_id = (payload.expert_lens_id or "").strip() or None
             outcome, dialog = await run_agent_with_dialog(
                 definition=definition,
                 message=payload.message,
@@ -216,6 +231,8 @@ async def run_workshop_agent(
                 long_term=await SqlAlchemyLongTermMemoryRepository(db).get(owner),
                 include_working_memory=payload.include_working_memory,
                 include_long_term_memory=payload.include_long_term_memory,
+                preference=preference,
+                expert_lens_id=lens_id,
             )
             await db.commit()
             content = outcome.result.content
@@ -302,14 +319,19 @@ async def get_dialog_by_draft(
     client_draft_id: str,
     db: DbSession,
     client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
 ) -> AgentDialogResponse:
     """Reload dialog for this browser client id + draft."""
     key = (client_draft_id or "").strip()
     if not key:
         raise MessageValidationError("client_draft_id пуст.")
-    dialog = await SqlAlchemyAgentDialogRepository(db).get_by_client_draft(
-        client_visitor_id=client_visitor_id, client_draft_id=key
-    )
+    owner = _owner_key(client_visitor_id, auth_user)
+    repo = SqlAlchemyAgentDialogRepository(db)
+    dialog = await repo.get_by_client_draft(client_visitor_id=owner, client_draft_id=key)
+    if dialog is None and owner != client_visitor_id:
+        dialog = await repo.get_by_client_draft(
+            client_visitor_id=client_visitor_id, client_draft_id=key
+        )
     if dialog is None:
         raise HTTPException(status_code=404, detail="Диалог не найден.")
     return _dialog_dto(dialog)
@@ -320,15 +342,19 @@ async def clear_dialog_by_draft(
     client_draft_id: str,
     db: DbSession,
     client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
 ) -> AgentDialogResponse:
     """Wipe stored turns but keep the dialog row (definition stays)."""
     from datetime import UTC, datetime
 
     key = (client_draft_id or "").strip()
+    owner = _owner_key(client_visitor_id, auth_user)
     repo = SqlAlchemyAgentDialogRepository(db)
-    dialog = await repo.get_by_client_draft(
-        client_visitor_id=client_visitor_id, client_draft_id=key
-    )
+    dialog = await repo.get_by_client_draft(client_visitor_id=owner, client_draft_id=key)
+    if dialog is None and owner != client_visitor_id:
+        dialog = await repo.get_by_client_draft(
+            client_visitor_id=client_visitor_id, client_draft_id=key
+        )
     if dialog is None:
         raise MessageValidationError("Диалог ещё не создан — нечего очищать.")
     dialog.messages = []
@@ -346,20 +372,22 @@ async def clear_dialog_by_draft(
 async def get_memory_snapshot(
     db: DbSession,
     client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
     client_draft_id: str | None = None,
 ) -> AgentMemorySnapshotResponse:
     """Return all three layers separately (short-term = dialog turns)."""
+    owner = _owner_key(client_visitor_id, auth_user)
     short: list[AgentDialogMessageResponse] = []
     working: dict[str, object] = {}
     draft = (client_draft_id or "").strip()
     if draft:
         dialog = await SqlAlchemyAgentDialogRepository(db).get_by_client_draft(
-            client_visitor_id=client_visitor_id, client_draft_id=draft
+            client_visitor_id=owner, client_draft_id=draft
         )
         if dialog is not None:
             short = [_msg_dto(m) for m in dialog.messages]
             working = dict(dialog.working_memory or {})
-    long_term = await SqlAlchemyLongTermMemoryRepository(db).get(client_visitor_id)
+    long_term = await SqlAlchemyLongTermMemoryRepository(db).get(owner)
     return AgentMemorySnapshotResponse(
         short_term=short,
         working=working,
@@ -377,6 +405,7 @@ async def write_memory_layer(
     payload: AgentMemoryWriteRequest,
     db: DbSession,
     client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
 ) -> AgentMemoryWriteResponse:
     """Explicit write into working or long_term — never auto-routes.
 
@@ -386,6 +415,7 @@ async def write_memory_layer(
     from datetime import UTC, datetime
     from uuid import uuid4
 
+    owner = _owner_key(client_visitor_id, auth_user)
     chat = (payload.chat_text or "").strip()
     write: MemoryWrite | None = None
     if chat:
@@ -422,14 +452,12 @@ async def write_memory_layer(
     if write.layer == MemoryLayer.WORKING:
         if not draft:
             raise MessageValidationError("Для рабочей памяти нужен client_draft_id.")
-        dialog = await dialogs.get_by_client_draft(
-            client_visitor_id=client_visitor_id, client_draft_id=draft
-        )
+        dialog = await dialogs.get_by_client_draft(client_visitor_id=owner, client_draft_id=draft)
         if dialog is None:
             now = datetime.now(UTC)
             dialog = AgentDialog(
                 id=uuid4(),
-                client_visitor_id=client_visitor_id,
+                client_visitor_id=owner,
                 visitor_hash=None,
                 client_draft_id=draft,
                 name=(payload.dialog_name or "Agent").strip()[:120] or "Agent",
@@ -450,17 +478,18 @@ async def write_memory_layer(
         dialog.updated_at = datetime.now(UTC)
         await dialogs.save(dialog)
     else:
-        current = await ltm_repo.get(client_visitor_id)
+        current = await ltm_repo.get(owner)
         try:
             updated_lt = apply_long_term_write(current, write)
         except ValueError as exc:
             raise MessageValidationError(str(exc)) from exc
-        await ltm_repo.save(client_visitor_id, updated_lt)
+        await ltm_repo.save(owner, updated_lt)
 
     await db.commit()
     snap = await get_memory_snapshot(
         db=db,
         client_visitor_id=client_visitor_id,
+        auth_user=auth_user,
         client_draft_id=draft or None,
     )
     return AgentMemoryWriteResponse(

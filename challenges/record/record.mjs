@@ -1219,6 +1219,70 @@ async function challenge11(page) {
   await settle(page, 1800);
 }
 
+async function challenge12(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1400);
+
+  console.log("12: register…");
+  const authBtn = page.getByRole("button", { name: /^Войти$/i });
+  await authBtn.click();
+  await settle(page, 600);
+  await page.getByRole("button", { name: /Регистрация/i }).click();
+  await settle(page, 400);
+  const email = `day12-${Date.now().toString(36)}@example.com`;
+  await page.locator(".auth-panel-form input[type=email]").fill(email);
+  await page.locator(".auth-panel-form input[type=password]").fill("challenge12-pass");
+  await page.locator(".auth-panel-form button[type=submit]").click();
+  await page.locator(".auth-panel-email").waitFor({ timeout: 30_000 });
+  await pauseOn(page.locator(".auth-panel"), 2500);
+
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 800);
+  await ensurePersona(page, {
+    name: "Персонализация",
+    system:
+      "Ты помощник. Соблюдай блоки предпочтений и призмы. Отвечай в запрошенном формате.",
+    temperature: "0.2",
+    maxTokens: "200",
+  });
+
+  const prefs = page.locator(".agent-persona-row").filter({ hasText: /Профиль/i });
+  await prefs.waitFor({ timeout: 20_000 });
+  await pauseOn(prefs, 2200);
+
+  console.log("12: short JSON + chemist…");
+  const shortChip = page.locator(".agent-memory-chip").filter({ hasText: /Кратко/i }).first();
+  if ((await shortChip.count()) > 0) await shortChip.click();
+  await settle(page, 800);
+  const chemist = page.locator(".agent-memory-chip").filter({ hasText: /^Химик$/i }).first();
+  if ((await chemist.count()) > 0) await chemist.click();
+  await settle(page, 600);
+  await sendSoloAndWaitRetry(
+    page,
+    "Объясни буфер обмена в ОС. Одна мысль + формат по предпочтениям.",
+    { minChars: 8, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4000);
+
+  console.log("12: long markdown + economist…");
+  const longChip = page.locator(".agent-memory-chip").filter({ hasText: /Подробно/i }).first();
+  if ((await longChip.count()) > 0) await longChip.click();
+  await settle(page, 800);
+  const econ = page.locator(".agent-memory-chip").filter({ hasText: /^Экономист$/i }).first();
+  if ((await econ.count()) > 0) await econ.click();
+  await settle(page, 600);
+  await sendSoloAndWaitRetry(
+    page,
+    "Объясни буфер обмена в ОС. Одна мысль + формат по предпочтениям.",
+    { minChars: 8, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4500);
+  await pauseOn(page.locator(".agent-persona-rows"), 2500);
+  await settle(page, 1500);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1227,8 +1291,9 @@ const out08 = path.join(__dirname, "../08-tokens/challenge-08.webm");
 const out09 = path.join(__dirname, "../09-compression/challenge-09.webm");
 const out10 = path.join(__dirname, "../10-context-strategies/challenge-10.webm");
 const out11 = path.join(__dirname, "../11-agent-memory/challenge-11.webm");
+const out12 = path.join(__dirname, "../12-personalization/challenge-12.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1281,5 +1346,9 @@ if (ONLY.includes("10")) {
 if (ONLY.includes("11")) {
   console.log("Recording challenge 11 against", BASE);
   await recordChallenge("11", out11, (page) => challenge11(page));
+}
+if (ONLY.includes("12")) {
+  console.log("Recording challenge 12 against", BASE);
+  await recordChallenge("12", out12, (page) => challenge12(page));
 }
 console.log("done");
