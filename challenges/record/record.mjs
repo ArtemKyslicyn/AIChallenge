@@ -1283,6 +1283,53 @@ async function challenge12(page) {
   await settle(page, 1500);
 }
 
+async function challenge13(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1400);
+
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 800);
+  await ensurePersona(page, {
+    name: "Task FSM",
+    system:
+      "Ты помощник по задачам. Соблюдай блок [задача]. После resume не пересказывай план. Кратко.",
+    temperature: "0.2",
+    maxTokens: "220",
+  });
+
+  const strip = page.locator(".agent-task-strip");
+  await strip.waitFor({ timeout: 20_000 });
+  await pauseOn(strip, 2200);
+
+  console.log("13: start…");
+  const input = page.locator(".agent-composer textarea, form textarea").first();
+  await input.fill(
+    "Подготовить чеклист Task State: этапы, пауза, resume",
+  );
+  await settle(page, 400);
+  await strip.getByRole("button", { name: /^Старт$/i }).click();
+  await page.locator(".agent-log-line--assistant").last().waitFor({ timeout: 180_000 });
+  await pauseOn(strip, 2500);
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 3500);
+
+  console.log("13: advance + pause…");
+  await strip.getByRole("button", { name: /^Дальше$/i }).click();
+  await page.locator(".agent-log-line--assistant").last().waitFor({ timeout: 180_000 });
+  await settle(page, 1200);
+  await strip.getByRole("button", { name: /^Пауза$/i }).click();
+  await settle(page, 1000);
+  await pauseOn(strip, 2800);
+
+  console.log("13: resume…");
+  await strip.getByRole("button", { name: /^Продолжить$/i }).click();
+  await page.locator(".agent-log-line--assistant").last().waitFor({ timeout: 180_000 });
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4500);
+  await pauseOn(strip, 2500);
+  await settle(page, 1500);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1292,8 +1339,9 @@ const out09 = path.join(__dirname, "../09-compression/challenge-09.webm");
 const out10 = path.join(__dirname, "../10-context-strategies/challenge-10.webm");
 const out11 = path.join(__dirname, "../11-agent-memory/challenge-11.webm");
 const out12 = path.join(__dirname, "../12-personalization/challenge-12.webm");
+const out13 = path.join(__dirname, "../13-task-state/challenge-13.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1350,5 +1398,9 @@ if (ONLY.includes("11")) {
 if (ONLY.includes("12")) {
   console.log("Recording challenge 12 against", BASE);
   await recordChallenge("12", out12, (page) => challenge12(page));
+}
+if (ONLY.includes("13")) {
+  console.log("Recording challenge 13 against", BASE);
+  await recordChallenge("13", out13, (page) => challenge13(page));
 }
 console.log("done");

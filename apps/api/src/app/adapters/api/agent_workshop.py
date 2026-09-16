@@ -19,6 +19,8 @@ from app.adapters.api.schemas import (
     AgentMemorySnapshotResponse,
     AgentMemoryWriteRequest,
     AgentMemoryWriteResponse,
+    AgentTaskEventRequest,
+    AgentTaskEventResponse,
     AgentTokenTruncationResponse,
     AgentTokenUsageResponse,
     AgentWorkshopRunRequest,
@@ -30,6 +32,7 @@ from app.adapters.persistence.preference_repo import SqlAlchemyPreferenceProfile
 from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
 from app.application.dialog_fork import fork_agent_dialog
 from app.application.llm_catalog import generation_from_api
+from app.application.task_fsm import apply_task_event_to_dialog, ensure_dialog_for_task
 from app.core.deps import (
     ClientVisitorId,
     DbSession,
@@ -56,6 +59,7 @@ from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
 from app.domain.owner_key import memory_owner_key
+from app.domain.task_state import TaskEvent, parse_task_chat_command
 from app.domain.token_meter import TokenBreakdown
 
 logger = logging.getLogger(__name__)
@@ -193,6 +197,7 @@ async def run_workshop_agent(
     compression_out: AgentCompressionResponse | None = None
     strategy_out: AgentContextStrategyResponse | None = None
     ctx_limit = _resolve_context_limit(payload.context_limit)
+    task_just_resumed = False
     try:
         if payload.persist:
             visitor = (client_visitor_id or "").strip().lower()
@@ -209,13 +214,63 @@ async def run_workshop_agent(
                 raise MessageValidationError("Для сохранения диалога передайте client_draft_id.")
             identity = resolve_visitor_identity(request, visitor)
             vhash = identity[0] if identity else None
+            dialogs = SqlAlchemyAgentDialogRepository(db)
+
+            task_ev = parse_task_chat_command(payload.message)
+            if task_ev is not None:
+                dialog = await ensure_dialog_for_task(
+                    dialogs,
+                    owner_key=owner,
+                    client_draft_id=draft_id,
+                    dialog_name=definition.name,
+                    dialog_system_prompt=definition.system_prompt,
+                )
+                if vhash and not dialog.visitor_hash:
+                    dialog.visitor_hash = vhash
+                dialog, label = await apply_task_event_to_dialog(dialog, task_ev, dialogs=dialogs)
+                if task_ev.skip_llm:
+                    from datetime import UTC, datetime
+                    from uuid import uuid4
+
+                    now = datetime.now(UTC)
+                    ack = f"✓ Задача · {label}"
+                    dialog.messages = [
+                        *dialog.messages,
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="user",
+                            content=payload.message.strip(),
+                            created_at=now,
+                            model_id=None,
+                        ),
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="assistant",
+                            content=ack,
+                            created_at=now,
+                            model_id="task-fsm",
+                        ),
+                    ][-80:]
+                    dialog.updated_at = now
+                    dialog = await dialogs.save(dialog)
+                    await db.commit()
+                    return AgentWorkshopRunResponse(
+                        content=ack,
+                        model_id="task-fsm",
+                        dialog_id=dialog.id,
+                        messages=[_msg_dto(m) for m in dialog.messages],
+                    )
+                await db.commit()
+                task_just_resumed = task_ev.name == "resume"
+                # Continue into LLM with updated state (start/advance/resume).
+
             preference = await SqlAlchemyPreferenceProfileRepository(db).get_active(owner)
             lens_id = (payload.expert_lens_id or "").strip() or None
             outcome, dialog = await run_agent_with_dialog(
                 definition=definition,
                 message=payload.message,
                 router=container.router,
-                dialogs=SqlAlchemyAgentDialogRepository(db),
+                dialogs=dialogs,
                 client_visitor_id=owner,
                 client_draft_id=draft_id,
                 enabled=settings.agents_run_enabled,
@@ -233,6 +288,7 @@ async def run_workshop_agent(
                 include_long_term_memory=payload.include_long_term_memory,
                 preference=preference,
                 expert_lens_id=lens_id,
+                task_just_resumed=task_just_resumed,
             )
             await db.commit()
             content = outcome.result.content
@@ -503,6 +559,46 @@ async def write_memory_layer(
             "value": write.value,
         },
         label=describe_memory_write(write),
+    )
+
+
+@router.post("/task", response_model=AgentTaskEventResponse)
+async def apply_task_event_endpoint(
+    payload: AgentTaskEventRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
+) -> AgentTaskEventResponse:
+    """Apply a validated task FSM event (UI chips)."""
+    owner = _owner_key(client_visitor_id, auth_user)
+    draft = (payload.client_draft_id or "").strip()
+    if not draft:
+        raise MessageValidationError("client_draft_id обязателен.")
+    dialogs = SqlAlchemyAgentDialogRepository(db)
+    dialog = await ensure_dialog_for_task(
+        dialogs,
+        owner_key=owner,
+        client_draft_id=draft,
+        dialog_name=payload.dialog_name or "Agent",
+        dialog_system_prompt=payload.dialog_system_prompt or "",
+    )
+    event = TaskEvent(
+        name=payload.event.strip().lower(),
+        goal=payload.goal,
+        step=payload.step,
+        expected_action=payload.expected_action,
+        resume_brief=payload.resume_brief,
+        skip_llm=True,
+    )
+    dialog, label = await apply_task_event_to_dialog(dialog, event, dialogs=dialogs)
+    await db.commit()
+    working = dict(dialog.working_memory or {})
+    task = working.get("task") if isinstance(working.get("task"), dict) else {}
+    return AgentTaskEventResponse(
+        working=working,
+        task=dict(task) if isinstance(task, dict) else {},
+        label=label,
+        dialog_id=dialog.id,
     )
 
 

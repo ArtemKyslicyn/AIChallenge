@@ -871,12 +871,22 @@ export interface AgentDialogDto {
   forked_from_message_id?: string | null;
 }
 
+export interface AgentTaskStateDto {
+  stage?: string;
+  step?: string;
+  expected_action?: string;
+  paused?: boolean;
+  goal?: string;
+  resume_brief?: string;
+}
+
 export interface AgentMemorySnapshotDto {
   short_term: AgentDialogMessageDto[];
   working: {
     goal?: string;
     checklist?: string[];
     scratch?: Record<string, string>;
+    task?: AgentTaskStateDto;
   };
   long_term: {
     profile?: Record<string, string>;
@@ -999,6 +1009,42 @@ export function writeAgentMemory(
       chat_text: write.chatText || null,
       dialog_name: write.dialogName || null,
       dialog_system_prompt: write.dialogSystemPrompt || null,
+    }),
+    signal,
+  });
+}
+
+export interface AgentTaskEventResultDto {
+  working: AgentMemorySnapshotDto["working"];
+  task: AgentTaskStateDto;
+  label: string;
+  dialog_id?: string | null;
+}
+
+export function postAgentTaskEvent(
+  payload: {
+    event: string;
+    clientDraftId: string;
+    goal?: string;
+    step?: string;
+    expectedAction?: string;
+    resumeBrief?: string;
+    dialogName?: string;
+    dialogSystemPrompt?: string;
+  },
+  signal?: AbortSignal,
+): Promise<AgentTaskEventResultDto> {
+  return request<AgentTaskEventResultDto>("/agent-workshop/task", {
+    method: "POST",
+    body: JSON.stringify({
+      event: payload.event,
+      client_draft_id: payload.clientDraftId,
+      goal: payload.goal || "",
+      step: payload.step || "",
+      expected_action: payload.expectedAction || "",
+      resume_brief: payload.resumeBrief || "",
+      dialog_name: payload.dialogName || null,
+      dialog_system_prompt: payload.dialogSystemPrompt || null,
     }),
     signal,
   });
