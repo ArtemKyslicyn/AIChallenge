@@ -371,9 +371,7 @@ async def test_censorship_refusal_skips_agent_not_battle() -> None:
     async for ev in iter_battle_run(arena_payload=arena, router=_FakeRouter(), enabled=True):
         events.append(ev)
     assert events[-1]["event"] == "battle_done"
-    meme = next(
-        e for e in events if e["event"] == "agent_done" and e["data"]["agent_id"] == "meme"
-    )
+    meme = next(e for e in events if e["event"] == "agent_done" and e["data"]["agent_id"] == "meme")
     assert meme["data"]["skipped"] is True
     assert meme["data"].get("skip_reason") == "censored"
 
