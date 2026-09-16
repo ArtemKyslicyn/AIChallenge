@@ -122,6 +122,21 @@ async function sendSoloAndWait(page, text, { minChars = 8, timeout = 180_000 } =
   await waitAgentAssistantAfter(page, prev, { minChars, timeout });
 }
 
+async function sendSoloAndWaitRetry(page, text, opts = {}, attempts = 3) {
+  let last;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await sendSoloAndWait(page, text, opts);
+      return;
+    } catch (err) {
+      last = err;
+      console.warn(`solo retry ${i}/${attempts}:`, err?.message || err);
+      await settle(page, 2800 * i);
+    }
+  }
+  throw last;
+}
+
 /** Day 11 — chat directive writes memory (status line, no assistant). */
 async function sendMemoryDirective(page, text, { timeout = 25_000 } = {}) {
   const prev = await page.locator(".agent-log-line--status").count();
@@ -1157,13 +1172,14 @@ async function challenge11(page) {
   await pauseOn(memory.locator(".agent-memory-layer").nth(2), 3000);
 
   console.log("11: short-term + probe with all layers…");
-  await sendSoloAndWait(page, "Привет. Сегодня демо трёх слоёв памяти.", {
+  await settle(page, 1500);
+  await sendSoloAndWaitRetry(page, "Привет. Сегодня демо трёх слоёв памяти.", {
     minChars: 4,
     timeout: 180_000,
   });
   await pauseOn(page.locator(".agent-log-line--assistant").last(), 2200);
 
-  await sendSoloAndWait(
+  await sendSoloAndWaitRetry(
     page,
     "Кто я и какая сейчас цель задачи? Ответь двумя строками: Имя: … / Цель: …",
     { minChars: 8, timeout: 180_000 },
@@ -1178,7 +1194,7 @@ async function challenge11(page) {
 
   console.log("11: clear dialog — working gone, long-term stays…");
   await clearBtn.first().click();
-  await settle(page, 1200);
+  await settle(page, 1500);
   const refresh = memory.getByRole("button", { name: /Обновить/i });
   if ((await refresh.count()) > 0) {
     await refresh.first().click();
@@ -1186,13 +1202,19 @@ async function challenge11(page) {
   }
   await pauseOn(memory, 3200);
 
-  await sendSoloAndWait(
-    page,
-    "Кто я и какая сейчас цель задачи? Ответь двумя строками: Имя: … / Цель: …",
-    { minChars: 8, timeout: 180_000 },
-  );
-  const afterClear = page.locator(".agent-log-line--assistant").last();
-  await pauseOn(afterClear, 4800);
+  try {
+    await sendSoloAndWaitRetry(
+      page,
+      "Кто я и какая сейчас цель задачи? Ответь двумя строками: Имя: … / Цель: …",
+      { minChars: 8, timeout: 180_000 },
+      3,
+    );
+    const afterClear = page.locator(".agent-log-line--assistant").last();
+    await pauseOn(afterClear, 4800);
+  } catch (err) {
+    console.warn("11 after-clear probe skipped:", err?.message || err);
+    await pauseOn(memory, 4000);
+  }
   await pauseOn(memory, 2800);
   await settle(page, 1800);
 }
