@@ -6535,6 +6535,73 @@ textarea {
   max-width: 42rem;
 }
 
+.battle-world-ticker {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, #163a45 12%, var(--panel, #fff));
+  border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.battle-world-ticker strong {
+  font-weight: 700;
+}
+
+.battle-world-factions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+@media (max-width: 720px) {
+  .battle-world-factions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.battle-world-faction {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem 0.55rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #163a45 10%, var(--panel, #fff));
+  border: 1px solid color-mix(in srgb, #1a4a5c 22%, transparent);
+  font-size: 0.72rem;
+  overflow: hidden;
+}
+
+.battle-world-faction strong {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.battle-world-faction i {
+  display: block;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: #3d7ea6;
+}
+
+.battle-world-faction--pacific i {
+  background: #2f8f6b;
+}
+
+.battle-world-faction--neutral i {
+  background: #c4a35a;
+}
+
+.battle-world-faction--meters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+}
+
 .battle-world-meta {
   font-size: 0.78rem;
   letter-spacing: 0.04em;

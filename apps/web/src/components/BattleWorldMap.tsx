@@ -43,6 +43,8 @@ type Props = {
   selectedAgentId: string | null;
   phase: string | null;
   round: number | null;
+  maxRounds: number;
+  lastDelta: string;
   skippedIds: Set<string>;
   scores: Record<string, number>;
   captions: MapAgentCaption[];
@@ -96,6 +98,8 @@ export function BattleWorldMap({
   selectedAgentId,
   phase,
   round,
+  maxRounds,
+  lastDelta,
   skippedIds,
   scores,
   captions,
@@ -239,24 +243,57 @@ export function BattleWorldMap({
     .filter(Boolean)
     .join(" ");
 
+  const focusName = tokens.find((t) => t.id === focusAgentId)?.name || null;
+  const focusLine = focusCaption?.text
+    ? truncateCaption(focusCaption.text.replace(/^ХОД:\s*/i, ""), 110)
+    : null;
+
   return (
     <section className="battle-world" aria-label="Карта арены">
       <div className="battle-world-head">
         <div>
           <h3 className="battle-section-title">Карта мира</h3>
           <p className="battle-world-hint">
-            Зоны = баланс блоков. Фишки = ход раунда. Кликни фишку — прыжок к её реплике в ленте.
+            Слева блоки мира, справа фишки ходов. Цифры на зонах = tech_lead. Кликни фишку → лента.
           </p>
         </div>
         <div className="battle-world-meta" aria-live="polite">
           {running ? (
             <span className="battle-world-live">
-              LIVE{round != null ? ` · R${round}` : ""}
+              LIVE · шаг {round ?? "—"}/{maxRounds}
               {phase ? ` · ${phaseLabel(phase)}` : ""}
             </span>
           ) : (
-            <span className="battle-board-muted">ожидание запуска</span>
+            <span className="battle-board-muted">ожидание запуска · {maxRounds} шагов</span>
           )}
+        </div>
+      </div>
+
+      <div className="battle-world-ticker" aria-live="polite">
+        <div>
+          <strong>Сейчас:</strong>{" "}
+          {focusName ? focusName : running ? "ждём ход…" : "—"}
+          {focusLine ? ` — ${focusLine}` : ""}
+        </div>
+        <div>
+          <strong>Мир Δ:</strong> {lastDelta || "пока нет изменений"}
+        </div>
+      </div>
+
+      <div className="battle-world-factions" aria-label="Баланс блоков">
+        {FACTION_ZONES.map((zid) => {
+          const score = Math.round(Number(techLead[zid] ?? 50));
+          return (
+            <div key={zid} className={`battle-world-faction battle-world-faction--${zid}`}>
+              <span>{MAP_ZONES[zid].short}</span>
+              <strong>{score}</strong>
+              <i style={{ width: `${Math.max(8, Math.min(100, score))}%` }} />
+            </div>
+          );
+        })}
+        <div className="battle-world-faction battle-world-faction--meters">
+          <span>Стаб. {Math.round(stability)}</span>
+          <span>Паника {Math.round(panic)}</span>
         </div>
       </div>
 

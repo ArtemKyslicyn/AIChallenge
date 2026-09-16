@@ -64,17 +64,21 @@ def test_refusal_marker_keeps_safety_ok() -> None:
 
 
 def test_looks_provider_censored() -> None:
-    from app.domain.agent_battle import REFUSAL_MARKER, looks_provider_censored
+    from app.domain.agent_battle import REFUSAL_MARKER, looks_provider_censored, parse_move_effects
 
     assert looks_provider_censored("As an AI language model, I can't help") is True
-    assert looks_provider_censored("") is True
+    assert looks_provider_censored("") is False
     assert looks_provider_censored(f"No codes. {REFUSAL_MARKER}") is False
     assert looks_provider_censored("Open a backchannel and lower panic") is False
+    delta = parse_move_effects("ХОД: пауза\nЭФФЕКТ: stability:+2 panic:-3 atlantic:+1")
+    assert delta["stability"] == 2
+    assert delta["public_panic"] == -3
+    assert delta["tech_lead"]["atlantic"] == 1
 
 
 def test_clamp_max_rounds() -> None:
-    assert clamp_max_rounds(100) == 8
-    assert clamp_max_rounds(0) == 5
+    assert clamp_max_rounds(100) == 16
+    assert clamp_max_rounds(0) == 12
     assert clamp_max_rounds(3) == 3
 
 
@@ -226,8 +230,8 @@ async def test_exhausted_auto_agent_is_skipped_battle_continues() -> None:
     agent_events = [e for e in events if e["event"] == "agent_done"]
     dove = next(e for e in agent_events if e["data"]["agent_id"] == "dove")
     hawk = next(e for e in agent_events if e["data"]["agent_id"] == "hawk")
-    assert dove["data"].get("skipped") is True
-    assert dove["data"].get("skip_reason")
+    assert dove["data"].get("skipped") is not True
+    assert dove["data"].get("model_id") == "fallback-local"
     assert hawk["data"].get("skipped") is not True
     assert "hawk move" in hawk["data"]["content"]
 
@@ -300,7 +304,7 @@ async def test_pinned_model_failure_skips_only_that_agent() -> None:
     agent_events = [e for e in events if e["event"] == "agent_done"]
     hawk = next(e for e in agent_events if e["data"]["agent_id"] == "hawk")
     dove = next(e for e in agent_events if e["data"]["agent_id"] == "dove")
-    assert hawk["data"]["skipped"] is True
+    assert hawk["data"].get("model_id") == "fallback-local"
     assert dove["data"].get("skipped") is not True
 
 
@@ -372,8 +376,8 @@ async def test_censorship_refusal_skips_agent_not_battle() -> None:
         events.append(ev)
     assert events[-1]["event"] == "battle_done"
     meme = next(e for e in events if e["event"] == "agent_done" and e["data"]["agent_id"] == "meme")
-    assert meme["data"]["skipped"] is True
-    assert meme["data"].get("skip_reason") == "censored"
+    assert meme["data"].get("skipped") is not True
+    assert meme["data"].get("model_id") == "fallback-local"
 
 
 @pytest.mark.asyncio

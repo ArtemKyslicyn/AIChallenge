@@ -3,13 +3,14 @@
 import { createDefaultArena } from "./defaultArena";
 import type { ArenaDoc } from "./types";
 
-const KEY = "aichallenge.battle_arena.v1";
+const KEY = "aichallenge.battle_arena.v2";
+const LEGACY_KEY = "aichallenge.battle_arena.v1";
 
 function isArena(raw: unknown): raw is ArenaDoc {
   if (!raw || typeof raw !== "object") return false;
   const doc = raw as ArenaDoc;
   return (
-    doc.version === 1 &&
+    (doc.version === 1 || doc.version === 2) &&
     typeof doc.id === "string" &&
     typeof doc.name === "string" &&
     !!doc.world &&
@@ -19,12 +20,29 @@ function isArena(raw: unknown): raw is ArenaDoc {
   );
 }
 
+function migrateArena(doc: ArenaDoc): ArenaDoc {
+  return {
+    ...doc,
+    version: 1,
+    rules: {
+      ...doc.rules,
+      max_rounds: Math.max(12, Number(doc.rules.max_rounds) || 12),
+      skip_rebut: true,
+      stop_on_red_line: false,
+    },
+  };
+}
+
 export function loadArena(): ArenaDoc {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY);
     if (!raw) return createDefaultArena();
     const parsed: unknown = JSON.parse(raw);
-    if (isArena(parsed) && parsed.cast.length > 0) return parsed;
+    if (isArena(parsed) && parsed.cast.length > 0) {
+      const migrated = migrateArena(parsed);
+      saveArena(migrated);
+      return migrated;
+    }
   } catch {
     /* ignore */
   }
