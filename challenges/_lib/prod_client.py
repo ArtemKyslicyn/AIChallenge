@@ -43,19 +43,24 @@ def request_json(
     body: dict[str, Any] | None = None,
     timeout: float = 120.0,
     retries: int = 2,
+    headers: dict[str, str] | None = None,
+    visitor_id: str | None = None,
 ) -> Any:
     data = None if body is None else json.dumps(body).encode("utf-8")
     last_err: Exception | None = None
     for attempt in range(retries + 1):
+        hdrs = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Visitor-Id": visitor_id or VISITOR,
+        }
+        if headers:
+            hdrs.update(headers)
         req = urllib.request.Request(
             f"{base.rstrip('/')}{path}",
             data=data,
             method=method,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "X-Visitor-Id": VISITOR,
-            },
+            headers=hdrs,
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:

@@ -149,14 +149,14 @@ class MessageFeedbackRow(Base):
 class AgentDialogRow(Base):
     """Per-client agent workshop dialog; message history in JSONB.
 
-    Owned by browser ``X-Visitor-Id`` (client_visitor_id), not IP-bound
-    visitor_hash — so history survives network / VPN changes.
+    Owned by browser ``X-Visitor-Id`` or claimed ``user:<uuid>`` owner key
+    (stored in client_visitor_id column for backward compatibility).
     """
 
     __tablename__ = "agent_dialogs"
 
     id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
-    client_visitor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    client_visitor_id: Mapped[str] = mapped_column(String(64), nullable=False)
     visitor_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     client_draft_id: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
@@ -177,6 +177,7 @@ class AgentDialogRow(Base):
     working_memory: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
+    active_lens_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     parent_dialog_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("agent_dialogs.id", ondelete="SET NULL"), nullable=True
     )
@@ -197,11 +198,14 @@ class AgentDialogRow(Base):
 
 
 class AgentLongTermMemoryRow(Base):
-    """Visitor-scoped long-term memory (profile / decisions / knowledge)."""
+    """Owner-scoped long-term memory (profile / decisions / knowledge).
+
+    PK ``client_visitor_id`` holds either a visitor UUID or ``user:<uuid>``.
+    """
 
     __tablename__ = "agent_long_term_memory"
 
-    client_visitor_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    client_visitor_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     profile: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
@@ -212,3 +216,46 @@ class AgentLongTermMemoryRow(Base):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class UserRow(Base):
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AuthTokenRow(Base):
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_auth_tokens_user_id", "user_id"),)
+
+
+class AgentPreferenceProfileRow(Base):
+    __tablename__ = "agent_preference_profiles"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    owner_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    style: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    format: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    constraints: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_agent_preference_profiles_owner", "owner_key", "is_active"),
+        UniqueConstraint("owner_key", "name", name="uq_agent_preference_owner_name"),
+    )

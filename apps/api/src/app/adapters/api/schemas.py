@@ -148,7 +148,8 @@ class AgentWorkshopRunRequest(BaseModel):
     #: Day 11 — inject working / long-term memory blocks into system prompt.
     include_working_memory: bool = True
     include_long_term_memory: bool = True
-
+    #: Day 12 — expert lens id (chemist|psychologist|economist|neutral).
+    expert_lens_id: str | None = Field(default=None, max_length=32)
 
 class AgentDialogMessageResponse(BaseModel):
     id: str

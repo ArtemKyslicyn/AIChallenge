@@ -13,6 +13,7 @@ import {
 import { AgentBattle } from "./components/AgentBattle";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
+import { AuthPanel } from "./components/AuthPanel";
 import { BenchmarksBoard } from "./components/BenchmarksBoard";
 import { Chat } from "./components/Chat";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -228,6 +229,8 @@ export default function App() {
                 Битва
               </button>
             </nav>
+
+            <AuthPanel />
 
             <span className="sr-only" aria-live="polite">
               Раздел: {shellLabel}

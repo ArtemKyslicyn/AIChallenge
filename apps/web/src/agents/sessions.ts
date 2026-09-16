@@ -96,6 +96,8 @@ export interface AgentSession {
     decisions?: string[];
     knowledge?: Record<string, string>;
   } | null;
+  /** Day 12 — expert lens overlay id */
+  activeLensId?: string | null;
   branches?: BranchRef[];
   /** When set, persist runs use this draft id instead of agent id (branch). */
   branchDraftId?: string | null;
@@ -130,6 +132,7 @@ export function emptySession(): AgentSession {
     facts: null,
     workingMemory: null,
     longTermMemory: null,
+    activeLensId: "neutral",
     branches: [],
     branchDraftId: null,
   };
@@ -177,6 +180,7 @@ export function loadSessions(): SessionMap {
           s.longTermMemory && typeof s.longTermMemory === "object"
             ? s.longTermMemory
             : null,
+        activeLensId: typeof s.activeLensId === "string" ? s.activeLensId : "neutral",
         branches: Array.isArray(s.branches) ? s.branches : [],
         branchDraftId: typeof s.branchDraftId === "string" ? s.branchDraftId : null,
       };
@@ -204,6 +208,7 @@ export function saveSessions(map: SessionMap): void {
         facts: s.facts ?? null,
         workingMemory: s.workingMemory ?? null,
         longTermMemory: s.longTermMemory ?? null,
+        activeLensId: s.activeLensId ?? "neutral",
         branches: s.branches ?? [],
         branchDraftId: s.branchDraftId ?? null,
       };

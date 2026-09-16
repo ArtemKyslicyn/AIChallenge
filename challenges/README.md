@@ -1,4 +1,4 @@
-# Challenges (Days 4–11)
+# Challenges (Days 4–12)
 
 Автопрогон заданий челленджа через **prod** API платформы AIChallenge.
 
@@ -12,17 +12,18 @@
 | [`09-compression/`](09-compression/) | Сжатие истории (LLM summary) | **Агенты** → Контекст: Сжатие |
 | [`10-context-strategies/`](10-context-strategies/) | Sliding / Facts / Branching | **Агенты** → selector + ветки |
 | [`11-agent-memory/`](11-agent-memory/) | 3 слоя памяти (short/working/LTM) | **Агенты** → Память · 3 слоя |
+| [`12-personalization/`](12-personalization/) | Prefs + ExpertLens + Auth | **Войти** + Профиль / Призма |
 
 ## Прогон (prod)
 
 ```bash
-python3 challenges/11-agent-memory/run.py
+python3 challenges/12-personalization/run.py
 ```
 
 ## Видео UI
 
 ```bash
-cd challenges/record && RECORD_ONLY=11 npm run record
+cd challenges/record && RECORD_ONLY=12 npm run record
 ```
 
-Текст ролика дня 11: [`11-agent-memory/VIDEO.md`](11-agent-memory/VIDEO.md)
+Текст ролика дня 12: [`12-personalization/VIDEO.md`](12-personalization/VIDEO.md)

@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.adapters.api.agent_battle import router as agent_battle_router
 from app.adapters.api.agent_studio import router as agent_studio_router
 from app.adapters.api.agent_workshop import router as agent_workshop_router
+from app.adapters.api.auth import AUTH_TOKEN_HEADER
+from app.adapters.api.auth import router as auth_router
 from app.adapters.api.benchmarks import router as benchmarks_router
 from app.adapters.api.errors import register_error_handlers
 from app.adapters.api.feedback import router as feedback_router
@@ -16,6 +18,7 @@ from app.adapters.api.health import router as health_router
 from app.adapters.api.lab import router as lab_router
 from app.adapters.api.llm import router as llm_router
 from app.adapters.api.media import router as media_router
+from app.adapters.api.personalization import router as personalization_router
 from app.adapters.api.sessions import router as sessions_router
 from app.core.deps import SESSION_TOKEN_HEADER, VISITOR_ID_HEADER, build_container
 from app.core.logging import configure_logging
@@ -52,7 +55,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # DELETE is here for retracting a vote: without it the browser
             # fails the preflight and the thumb can be pressed but never released.
             allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", SESSION_TOKEN_HEADER, VISITOR_ID_HEADER],
+            allow_headers=[
+                "Content-Type",
+                SESSION_TOKEN_HEADER,
+                VISITOR_ID_HEADER,
+                AUTH_TOKEN_HEADER,
+                "Authorization",
+            ],
         )
 
     for router in (
@@ -66,6 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         media_router,
         lab_router,
         feedback_router,
+        auth_router,
+        personalization_router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 
