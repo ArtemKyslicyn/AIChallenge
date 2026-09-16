@@ -70,3 +70,60 @@ def test_system_extra_includes_only_selected_layers() -> None:
 def test_format_blocks_empty_when_blank() -> None:
     assert format_working_block(WorkingMemory()) == ""
     assert format_long_term_block(LongTermMemory()) == ""
+
+
+@pytest.mark.parametrize(
+    ("text", "layer", "kind", "key", "value"),
+    [
+        ("запомни цель: Собрать API", MemoryLayer.WORKING, "goal", "", "Собрать API"),
+        ("в чеклист: migrate", MemoryLayer.WORKING, "checklist_item", "", "migrate"),
+        ("меня зовут Артём", MemoryLayer.LONG_TERM, "profile", "name", "Артём"),
+        ("запомни решение: Postgres", MemoryLayer.LONG_TERM, "decision", "", "Postgres"),
+        (
+            "/mem working goal Показать три слоя",
+            MemoryLayer.WORKING,
+            "goal",
+            "",
+            "Показать три слоя",
+        ),
+        (
+            "/memory long name Артём",
+            MemoryLayer.LONG_TERM,
+            "profile",
+            "name",
+            "Артём",
+        ),
+        (
+            "/w цель: Демо памяти",
+            MemoryLayer.WORKING,
+            "goal",
+            "",
+            "Демо памяти",
+        ),
+        (
+            "запомни знание стек=FastAPI",
+            MemoryLayer.LONG_TERM,
+            "knowledge",
+            "стек",
+            "FastAPI",
+        ),
+    ],
+)
+def test_parse_memory_chat_command(
+    text: str, layer: MemoryLayer, kind: str, key: str, value: str
+) -> None:
+    from app.domain.agent_memory import parse_memory_chat_command
+
+    write = parse_memory_chat_command(text)
+    assert write is not None
+    assert write.layer == layer
+    assert write.kind == kind
+    assert write.key == key
+    assert write.value == value
+
+
+def test_ordinary_chat_is_not_memory_command() -> None:
+    from app.domain.agent_memory import parse_memory_chat_command
+
+    assert parse_memory_chat_command("Кто я и какая цель?") is None
+    assert parse_memory_chat_command("Привет") is None

@@ -736,11 +736,24 @@ export interface AgentMemorySnapshotDto {
 }
 
 export interface AgentMemoryWriteDto {
-  layer: "working" | "long_term";
-  kind: string;
+  layer?: "working" | "long_term";
+  kind?: string;
   key?: string;
-  value: string;
+  value?: string;
   clientDraftId?: string;
+  chatText?: string;
+  dialogName?: string;
+  dialogSystemPrompt?: string;
+}
+
+export interface AgentMemoryWriteResultDto extends AgentMemorySnapshotDto {
+  applied?: {
+    layer: string;
+    kind: string;
+    key: string;
+    value: string;
+  };
+  label?: string;
 }
 
 export interface AgentWorkshopRunOptions {
@@ -820,15 +833,18 @@ export function getAgentMemory(
 export function writeAgentMemory(
   write: AgentMemoryWriteDto,
   signal?: AbortSignal,
-): Promise<AgentMemorySnapshotDto> {
-  return request<AgentMemorySnapshotDto>("/agent-workshop/memory/write", {
+): Promise<AgentMemoryWriteResultDto> {
+  return request<AgentMemoryWriteResultDto>("/agent-workshop/memory/write", {
     method: "POST",
     body: JSON.stringify({
-      layer: write.layer,
-      kind: write.kind,
+      layer: write.layer || null,
+      kind: write.kind || null,
       key: write.key || "",
-      value: write.value,
+      value: write.value || "",
       client_draft_id: write.clientDraftId || null,
+      chat_text: write.chatText || null,
+      dialog_name: write.dialogName || null,
+      dialog_system_prompt: write.dialogSystemPrompt || null,
     }),
     signal,
   });

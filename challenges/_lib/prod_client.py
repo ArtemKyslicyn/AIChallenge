@@ -272,19 +272,22 @@ def agent_memory_get(
 def agent_memory_write(
     base: str,
     *,
-    layer: str,
-    kind: str,
-    value: str,
+    layer: str | None = None,
+    kind: str | None = None,
+    value: str = "",
     key: str = "",
     client_draft_id: str | None = None,
+    chat_text: str | None = None,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "layer": layer,
-        "kind": kind,
-        "key": key,
-        "value": value,
-    }
+    body: dict[str, Any] = {}
+    if chat_text:
+        body["chat_text"] = chat_text
+    else:
+        body["layer"] = layer
+        body["kind"] = kind
+        body["key"] = key
+        body["value"] = value
     if client_draft_id:
         body["client_draft_id"] = client_draft_id
     data = request_json(

@@ -17,6 +17,7 @@ from app.adapters.api.schemas import (
     AgentDialogResponse,
     AgentMemorySnapshotResponse,
     AgentMemoryWriteRequest,
+    AgentMemoryWriteResponse,
     AgentTokenTruncationResponse,
     AgentTokenUsageResponse,
     AgentWorkshopRunRequest,
@@ -44,6 +45,8 @@ from app.domain.agent_memory import (
     WorkingMemory,
     apply_long_term_write,
     apply_working_write,
+    describe_memory_write,
+    parse_memory_chat_command,
 )
 from app.domain.analytics import AnalyticsEvent
 from app.domain.context_compress import CompressionInfo
@@ -369,46 +372,80 @@ async def memory_layer_purpose() -> dict[str, str]:
     return {layer.value: text for layer, text in LAYER_PURPOSE.items()}
 
 
-@router.post("/memory/write", response_model=AgentMemorySnapshotResponse)
+@router.post("/memory/write", response_model=AgentMemoryWriteResponse)
 async def write_memory_layer(
     payload: AgentMemoryWriteRequest,
     db: DbSession,
     client_visitor_id: ClientVisitorId,
-) -> AgentMemorySnapshotResponse:
-    """Explicit write into working or long_term — never auto-routes."""
-    try:
-        layer = MemoryLayer(payload.layer.strip().lower())
-    except ValueError as exc:
-        raise MessageValidationError("layer must be working or long_term") from exc
-    if layer == MemoryLayer.SHORT_TERM:
-        raise MessageValidationError(
-            "Краткосрочная память пишется только репликами диалога (run/persist)."
+) -> AgentMemoryWriteResponse:
+    """Explicit write into working or long_term — never auto-routes.
+
+    Accepts structured fields or chat_text (slash / Russian directives).
+    Creates an empty dialog stub when the first working write arrives.
+    """
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    chat = (payload.chat_text or "").strip()
+    write: MemoryWrite | None = None
+    if chat:
+        write = parse_memory_chat_command(chat)
+        if write is None:
+            raise MessageValidationError(
+                "Не распознана команда памяти. Примеры: «запомни цель: …», "
+                "«меня зовут …», «/mem working goal …»."
+            )
+    else:
+        layer_raw = (payload.layer or "").strip().lower()
+        kind_raw = (payload.kind or "").strip()
+        if not layer_raw or not kind_raw:
+            raise MessageValidationError("Нужны layer+kind+value или chat_text.")
+        try:
+            layer = MemoryLayer(layer_raw)
+        except ValueError as exc:
+            raise MessageValidationError("layer must be working or long_term") from exc
+        if layer == MemoryLayer.SHORT_TERM:
+            raise MessageValidationError(
+                "Краткосрочная память пишется только репликами диалога (run/persist)."
+            )
+        write = MemoryWrite(
+            layer=layer,
+            kind=kind_raw,
+            key=payload.key,
+            value=payload.value,
         )
 
     draft = (payload.client_draft_id or "").strip()
     dialogs = SqlAlchemyAgentDialogRepository(db)
     ltm_repo = SqlAlchemyLongTermMemoryRepository(db)
-    write = MemoryWrite(
-        layer=layer,
-        kind=payload.kind,
-        key=payload.key,
-        value=payload.value,
-    )
 
-    if layer == MemoryLayer.WORKING:
+    if write.layer == MemoryLayer.WORKING:
         if not draft:
             raise MessageValidationError("Для рабочей памяти нужен client_draft_id.")
         dialog = await dialogs.get_by_client_draft(
             client_visitor_id=client_visitor_id, client_draft_id=draft
         )
         if dialog is None:
-            raise MessageValidationError("Сначала создайте диалог (persist run).")
+            now = datetime.now(UTC)
+            dialog = AgentDialog(
+                id=uuid4(),
+                client_visitor_id=client_visitor_id,
+                visitor_hash=None,
+                client_draft_id=draft,
+                name=(payload.dialog_name or "Agent").strip()[:120] or "Agent",
+                system_prompt=(payload.dialog_system_prompt or "").strip(),
+                preferred_model=AUTO_MODEL,
+                temperature=None,
+                max_tokens=None,
+                messages=[],
+                working_memory={},
+                created_at=now,
+                updated_at=now,
+            )
         try:
             updated = apply_working_write(WorkingMemory.from_mapping(dialog.working_memory), write)
         except ValueError as exc:
             raise MessageValidationError(str(exc)) from exc
-        from datetime import UTC, datetime
-
         dialog.working_memory = updated.to_dict()
         dialog.updated_at = datetime.now(UTC)
         await dialogs.save(dialog)
@@ -421,10 +458,22 @@ async def write_memory_layer(
         await ltm_repo.save(client_visitor_id, updated_lt)
 
     await db.commit()
-    return await get_memory_snapshot(
+    snap = await get_memory_snapshot(
         db=db,
         client_visitor_id=client_visitor_id,
         client_draft_id=draft or None,
+    )
+    return AgentMemoryWriteResponse(
+        short_term=snap.short_term,
+        working=snap.working,
+        long_term=snap.long_term,
+        applied={
+            "layer": write.layer.value,
+            "kind": write.kind,
+            "key": write.key,
+            "value": write.value,
+        },
+        label=describe_memory_write(write),
     )
 
 
