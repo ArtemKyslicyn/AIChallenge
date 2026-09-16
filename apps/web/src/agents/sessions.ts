@@ -89,6 +89,14 @@ export interface AgentSession {
     goal?: string;
     checklist?: string[];
     scratch?: Record<string, string>;
+    task?: {
+      stage?: string;
+      step?: string;
+      expected_action?: string;
+      paused?: boolean;
+      goal?: string;
+      resume_brief?: string;
+    };
   } | null;
   /** Day 11 — long-term memory snapshot */
   longTermMemory?: {

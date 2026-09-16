@@ -12,10 +12,12 @@ import {
   activatePreferenceProfile,
   createPreferenceProfile,
   updatePreferenceProfile,
+  postAgentTaskEvent,
   runAgentWorkshop,
   writeAgentMemory,
   type AgentDialogMessageDto,
   type AgentMemorySnapshotDto,
+  type AgentTaskStateDto,
   type ExpertLensDto,
   type ModelCatalogItemDto,
   type PreferenceProfileDto,
@@ -500,6 +502,10 @@ export function AgentWorkshop() {
       const dialog = await getAgentDialogByDraft(agentId);
       if (!dialog) return;
       const wm = dialog.working_memory || {};
+      const taskRaw =
+        wm.task && typeof wm.task === "object" && !Array.isArray(wm.task)
+          ? (wm.task as Record<string, unknown>)
+          : null;
       patchSession(agentId, {
         dialogId: dialog.id,
         log: dialogMessagesToLog(dialog.messages),
@@ -513,6 +519,16 @@ export function AgentWorkshop() {
             wm.scratch && typeof wm.scratch === "object" && !Array.isArray(wm.scratch)
               ? (wm.scratch as Record<string, string>)
               : {},
+          task: taskRaw
+            ? {
+                stage: String(taskRaw.stage || "idle"),
+                step: String(taskRaw.step || ""),
+                expected_action: String(taskRaw.expected_action || ""),
+                paused: Boolean(taskRaw.paused),
+                goal: String(taskRaw.goal || ""),
+                resume_brief: String(taskRaw.resume_brief || ""),
+              }
+            : undefined,
         },
       });
       await refreshMemory(agentId);
@@ -522,11 +538,22 @@ export function AgentWorkshop() {
   }
 
   function applyMemorySnapshot(agentId: string, snap: AgentMemorySnapshotDto) {
+    const task = snap.working?.task as AgentTaskStateDto | undefined;
     patchSession(agentId, {
       workingMemory: {
         goal: snap.working?.goal || "",
         checklist: snap.working?.checklist || [],
         scratch: snap.working?.scratch || {},
+        task: task
+          ? {
+              stage: task.stage || "idle",
+              step: task.step || "",
+              expected_action: task.expected_action || "",
+              paused: Boolean(task.paused),
+              goal: task.goal || "",
+              resume_brief: task.resume_brief || "",
+            }
+          : undefined,
       },
       longTermMemory: {
         profile: snap.long_term?.profile || {},
@@ -534,6 +561,57 @@ export function AgentWorkshop() {
         knowledge: snap.long_term?.knowledge || {},
       },
     });
+  }
+
+  function applyTaskFromResult(
+    agentId: string,
+    working: AgentMemorySnapshotDto["working"],
+    task: AgentTaskStateDto,
+  ) {
+    patchSession(agentId, {
+      workingMemory: {
+        goal: working?.goal || "",
+        checklist: working?.checklist || [],
+        scratch: working?.scratch || {},
+        task: {
+          stage: task.stage || "idle",
+          step: task.step || "",
+          expected_action: task.expected_action || "",
+          paused: Boolean(task.paused),
+          goal: task.goal || "",
+          resume_brief: task.resume_brief || "",
+        },
+      },
+    });
+  }
+
+  async function runTaskEvent(
+    agentId: string,
+    event: string,
+    extra?: { goal?: string },
+  ) {
+    const draft = store.drafts.find((d) => d.id === agentId);
+    try {
+      const res = await postAgentTaskEvent({
+        event,
+        clientDraftId: agentId,
+        goal: extra?.goal,
+        dialogName: draft?.name,
+        dialogSystemPrompt: draft?.system_prompt,
+      });
+      applyTaskFromResult(agentId, res.working, res.task);
+      if (res.dialog_id) {
+        patchSession(agentId, { dialogId: res.dialog_id, status: `Задача · ${res.label}` });
+      } else {
+        patchSession(agentId, { status: `Задача · ${res.label}` });
+      }
+      return res;
+    } catch (e) {
+      const msg =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+      patchSession(agentId, { status: `Задача: ${msg}` });
+      return null;
+    }
   }
 
   async function refreshMemory(agentId: string) {
@@ -1644,6 +1722,158 @@ export function AgentWorkshop() {
                 {hint.label}
               </button>
             ))}
+          </div>
+          <div className="agent-task-strip" aria-label="Состояние задачи">
+            <div className="agent-persona-row" role="group" aria-label="Этап задачи">
+              <span className="agent-persona-label">Задача</span>
+              {(
+                ["planning", "execution", "validation", "done"] as const
+              ).map((st) => {
+                const cur = session.workingMemory?.task?.stage || "idle";
+                return (
+                  <span
+                    key={st}
+                    className={
+                      cur === st
+                        ? "agent-memory-chip is-active"
+                        : "agent-memory-chip agent-task-stage"
+                    }
+                  >
+                    {st}
+                  </span>
+                );
+              })}
+              {session.workingMemory?.task?.paused ? (
+                <span className="agent-memory-chip is-active">пауза</span>
+              ) : null}
+            </div>
+            {(session.workingMemory?.task?.step ||
+              session.workingMemory?.task?.expected_action) && (
+              <p className="agent-task-meta">
+                {session.workingMemory?.task?.step ? (
+                  <span>Шаг: {session.workingMemory.task.step}</span>
+                ) : null}
+                {session.workingMemory?.task?.expected_action ? (
+                  <span>Ожидается: {session.workingMemory.task.expected_action}</span>
+                ) : null}
+              </p>
+            )}
+            <div className="agent-persona-row" role="group" aria-label="Управление задачей">
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const goal =
+                    session.input.trim() ||
+                    session.workingMemory?.goal ||
+                    session.workingMemory?.task?.goal ||
+                    "";
+                  if (!goal) {
+                    patchSession(draft.id, {
+                      status: "Укажите цель в поле ввода, затем Старт",
+                    });
+                    return;
+                  }
+                  void (async () => {
+                    const res = await runTaskEvent(draft.id, "start", { goal });
+                    if (!res) return;
+                    patchSession(draft.id, { input: "" });
+                    appendLog(draft.id, {
+                      id: `s-task-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Задача · ${res.label}`,
+                    });
+                    await runOne(draft.id, "Начни планирование текущей задачи. Кратко.", {
+                      persist: true,
+                      clearInput: false,
+                    });
+                  })();
+                }}
+              >
+                Старт
+              </button>
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runTaskEvent(draft.id, "advance");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-task-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Задача · ${res.label}`,
+                    });
+                    await runOne(draft.id, "Продолжай текущий этап без повтора плана.", {
+                      persist: true,
+                      clearInput: false,
+                    });
+                  })();
+                }}
+              >
+                Дальше
+              </button>
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runTaskEvent(draft.id, "pause");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-task-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Задача · ${res.label}`,
+                    });
+                  })();
+                }}
+              >
+                Пауза
+              </button>
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runTaskEvent(draft.id, "resume");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-task-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Задача · ${res.label}`,
+                    });
+                    await runOne(draft.id, "продолжи", {
+                      persist: true,
+                      clearInput: false,
+                    });
+                  })();
+                }}
+              >
+                Продолжить
+              </button>
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runTaskEvent(draft.id, "reset");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-task-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Задача · ${res.label}`,
+                    });
+                  })();
+                }}
+              >
+                Сброс
+              </button>
+            </div>
           </div>
           <div className="agent-persona-rows" aria-label="Персонализация">
             <div className="agent-persona-row" role="group" aria-label="Профиль предпочтений">

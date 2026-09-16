@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from app.domain.task_state import TaskState
+
 
 class MemoryLayer(StrEnum):
     SHORT_TERM = "short_term"  # current dialog turns
@@ -31,13 +33,17 @@ class WorkingMemory:
     goal: str = ""
     checklist: list[str] = field(default_factory=list)
     scratch: dict[str, str] = field(default_factory=dict)
+    task: TaskState = field(default_factory=TaskState)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "goal": self.goal,
             "checklist": list(self.checklist),
             "scratch": dict(self.scratch),
         }
+        if self.task.stage.value != "idle" or self.task.goal or self.task.paused:
+            out["task"] = self.task.to_dict()
+        return out
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any] | None) -> WorkingMemory:
@@ -48,10 +54,13 @@ class WorkingMemory:
         scratch = data.get("scratch") or {}
         if not isinstance(scratch, Mapping):
             scratch = {}
+        task_raw = data.get("task")
+        task = TaskState.from_mapping(task_raw) if isinstance(task_raw, Mapping) else TaskState()
         return cls(
             goal=str(data.get("goal") or ""),
             checklist=[str(x) for x in checklist][:40],
             scratch={str(k): str(v) for k, v in scratch.items()},
+            task=task,
         )
 
 
@@ -278,6 +287,7 @@ def apply_working_write(mem: WorkingMemory, write: MemoryWrite) -> WorkingMemory
         goal=mem.goal,
         checklist=list(mem.checklist),
         scratch=dict(mem.scratch),
+        task=mem.task,
     )
     kind = write.kind.strip().lower()
     if kind == "goal":

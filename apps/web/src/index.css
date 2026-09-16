@@ -5573,6 +5573,30 @@ textarea {
   min-width: 3.6rem;
 }
 
+.agent-task-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.agent-task-stage {
+  opacity: 0.55;
+}
+
+.agent-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .agent-pref-editor {
   display: grid;
   grid-template-columns: 1fr 1fr;

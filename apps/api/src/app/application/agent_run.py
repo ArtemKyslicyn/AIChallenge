@@ -40,6 +40,7 @@ from app.domain.personalization import (
     get_expert_lens,
 )
 from app.domain.ports import AgentDialogRepository, ChatRouter
+from app.domain.task_state import format_task_state_block
 from app.domain.token_meter import (
     TokenBreakdown,
     build_token_breakdown,
@@ -182,6 +183,7 @@ async def run_agent_with_dialog(
     include_long_term_memory: bool = True,
     preference: PreferenceProfile | None = None,
     expert_lens_id: str | None = None,
+    task_just_resumed: bool = False,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -344,6 +346,12 @@ async def run_agent_with_dialog(
         include_short_term=False,
     )
     memory_parts = [p for p in (identity_extra, pers_extra, working_extra) if p]
+    task_extra = format_task_state_block(
+        working.task,
+        just_resumed=bool(task_just_resumed) and not working.task.paused,
+    )
+    if task_extra:
+        memory_parts.append(task_extra)
     memory_extra = "\n\n".join(memory_parts)
     system_extra = assembly.system_extra
     if memory_extra:

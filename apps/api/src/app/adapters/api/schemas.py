@@ -273,6 +273,30 @@ class AgentMemoryWriteResponse(BaseModel):
     label: str = ""
 
 
+class AgentTaskEventRequest(BaseModel):
+    """Server-authoritative task FSM event (Day 13)."""
+
+    event: str = Field(
+        min_length=1,
+        max_length=32,
+        description="start|advance|set_step|set_expected|pause|resume|reset",
+    )
+    client_draft_id: str = Field(min_length=1, max_length=64)
+    goal: str = Field(default="", max_length=500)
+    step: str = Field(default="", max_length=200)
+    expected_action: str = Field(default="", max_length=500)
+    resume_brief: str = Field(default="", max_length=800)
+    dialog_name: str | None = Field(default=None, max_length=120)
+    dialog_system_prompt: str | None = Field(default=None, max_length=8000)
+
+
+class AgentTaskEventResponse(BaseModel):
+    working: dict[str, object] = Field(default_factory=dict)
+    task: dict[str, object] = Field(default_factory=dict)
+    label: str = ""
+    dialog_id: UUID | None = None
+
+
 class ModelCapabilitiesResponse(BaseModel):
     temperature: bool
     max_tokens: bool
