@@ -44,7 +44,7 @@ async def run_agent_battle(
                 arena_payload=payload.arena,
                 router=container.router,
                 enabled=settings.agents_battle_enabled and settings.agents_run_enabled,
-                max_rounds_cap=8,
+                max_rounds_cap=16,
                 default_rounds=settings.battle_max_rounds,
             ):
                 yield format_frame(item["event"], item["data"])

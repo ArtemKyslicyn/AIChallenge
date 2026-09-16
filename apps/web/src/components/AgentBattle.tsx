@@ -16,19 +16,43 @@ function meter(value: number): string {
   return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
 }
 
+function formatDelta(delta: Record<string, unknown> | null | undefined): string {
+  if (!delta) return "";
+  const bits: string[] = [];
+  const stab = Number(delta.stability);
+  const panic = Number(delta.public_panic);
+  if (Number.isFinite(stab) && stab !== 0) bits.push(`стаб. ${stab > 0 ? "+" : ""}${Math.round(stab)}`);
+  if (Number.isFinite(panic) && panic !== 0)
+    bits.push(`паника ${panic > 0 ? "+" : ""}${Math.round(panic)}`);
+  const tech = delta.tech_lead;
+  if (tech && typeof tech === "object") {
+    for (const [k, v] of Object.entries(tech as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n !== 0) bits.push(`${k} ${n > 0 ? "+" : ""}${Math.round(n)}`);
+    }
+  }
+  return bits.join(" · ");
+}
+
 function applyBattleEvent(
   event: AgentBattleEvent,
   setLog: Dispatch<SetStateAction<LogEntry[]>>,
   setWorld: Dispatch<SetStateAction<Record<string, unknown>>>,
   setScores: Dispatch<SetStateAction<Record<string, number>>>,
   setRunning: Dispatch<SetStateAction<boolean>>,
+  setMaxRounds: Dispatch<SetStateAction<number>>,
+  setLastDelta: Dispatch<SetStateAction<string>>,
 ): void {
   switch (event.type) {
+    case "heartbeat":
+      break;
     case "battle_start":
       setWorld(event.world);
+      setMaxRounds(event.max_rounds);
+      setLastDelta("");
       setLog((prev) => [
         ...prev,
-        { kind: "system", text: `Старт: ${event.name} · раундов ≤ ${event.max_rounds}` },
+        { kind: "system", text: `Старт: ${event.name} · шагов ≤ ${event.max_rounds}` },
       ]);
       break;
     case "round_start":
@@ -59,6 +83,7 @@ function applyBattleEvent(
       break;
     case "verdict": {
       setWorld(event.world);
+      if (event.delta) setLastDelta(formatDelta(event.delta));
       setScores((prev) => {
         const merged = { ...prev };
         for (const s of event.scores) {
@@ -82,6 +107,7 @@ function applyBattleEvent(
     }
     case "world_update":
       setWorld(event.world);
+      if (event.delta) setLastDelta(formatDelta(event.delta));
       break;
     case "battle_done":
       setWorld(event.world);
@@ -97,6 +123,7 @@ function applyBattleEvent(
       ]);
       break;
     case "error":
+      // Soft: keep partial log, mark error, stop spinner — do not wipe progress.
       setRunning(false);
       setLog((prev) => [...prev, { kind: "error", message: event.message }]);
       break;
@@ -112,6 +139,8 @@ export function AgentBattle() {
   const [liveWorld, setLiveWorld] = useState<Record<string, unknown>>({});
   const [scores, setScores] = useState<Record<string, number>>({});
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [maxRounds, setMaxRounds] = useState(arena.rules.max_rounds || 12);
+  const [lastDelta, setLastDelta] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -135,6 +164,7 @@ export function AgentBattle() {
     setScores({});
     setLiveWorld({});
     setSelectedAgentId(null);
+    setLastDelta("");
     setStatus("Арена сброшена к дефолту");
   };
 
@@ -154,6 +184,8 @@ export function AgentBattle() {
     setLog([]);
     setScores({});
     setSelectedAgentId(null);
+    setLastDelta("");
+    setMaxRounds(arena.rules.max_rounds || 12);
     setLiveWorld({
       stability: arena.world.stability,
       public_panic: arena.world.public_panic,
@@ -164,7 +196,15 @@ export function AgentBattle() {
       await runAgentBattleSSE(
         arena,
         (event) => {
-          applyBattleEvent(event, setLog, setLiveWorld, setScores, setRunning);
+          applyBattleEvent(
+            event,
+            setLog,
+            setLiveWorld,
+            setScores,
+            setRunning,
+            setMaxRounds,
+            setLastDelta,
+          );
         },
         ctrl.signal,
       );
@@ -302,6 +342,8 @@ export function AgentBattle() {
         selectedAgentId={selectedAgentId}
         phase={phase}
         round={round}
+        maxRounds={maxRounds}
+        lastDelta={lastDelta}
         skippedIds={skippedIds}
         scores={scores}
         captions={captions}
@@ -549,11 +591,11 @@ export function AgentBattle() {
             <div className="battle-editor-pane">
               <div className="battle-inline-fields">
                 <label>
-                  max_rounds (≤8)
+                  шагов (≤16)
                   <input
                     type="number"
                     min={1}
-                    max={8}
+                    max={16}
                     value={arena.rules.max_rounds}
                     disabled={running}
                     onChange={(e) =>
@@ -561,7 +603,7 @@ export function AgentBattle() {
                         ...arena,
                         rules: {
                           ...arena.rules,
-                          max_rounds: Math.max(1, Math.min(8, Number(e.target.value) || 1)),
+                          max_rounds: Math.max(1, Math.min(16, Number(e.target.value) || 1)),
                         },
                       })
                     }

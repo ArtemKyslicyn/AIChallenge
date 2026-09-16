@@ -13,6 +13,8 @@ from app.domain.agent_battle import (
     apply_world_delta,
     clamp_max_rounds,
     looks_provider_censored,
+    merge_world_deltas,
+    parse_move_effects,
     red_line_triggered,
     score_agent_turn,
     world_from_mapping,
@@ -24,6 +26,13 @@ from app.domain.generation import GenerationParams
 from app.domain.ports import ChatRouter
 
 logger = logging.getLogger(__name__)
+
+MOVE_FORMAT = (
+    "Ответь СТРОГО на русском в формате:\n"
+    "ХОД: <1-2 коротких предложения, конкретный игровой ход>\n"
+    "ЭФФЕКТ: stability±N panic±N atlantic±N pacific±N neutral±N\n"
+    "N целое от -5 до +5. Без философии, без реальных оружий, без рецептов."
+)
 
 
 def _as_list(raw: Any) -> list[Any]:
@@ -46,6 +55,7 @@ def _skip_payload(
         "hidden_goal": agent.get("hidden_goal") or "",
         "skipped": True,
         "skip_reason": reason,
+        "effects": {},
     }
 
 
@@ -61,6 +71,9 @@ def _agent_done_data(round_no: int, phase: str, item: Mapping[str, Any]) -> dict
     if item.get("skipped"):
         data["skipped"] = True
         data["skip_reason"] = item.get("skip_reason") or "unavailable"
+    effects = item.get("effects")
+    if isinstance(effects, Mapping) and effects:
+        data["effects"] = dict(effects)
     return data
 
 
@@ -123,6 +136,7 @@ def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
 def _build_user_packet(
     *,
     round_no: int,
+    max_rounds: int,
     phase: str,
     world: dict[str, Any],
     inputs: dict[str, Any],
@@ -130,15 +144,16 @@ def _build_user_packet(
     agenda: str,
 ) -> str:
     prior_txt = (
-        "\n".join(f"- {p.get('name')}: {(p.get('content') or '')[:400]}" for p in prior) or "(none)"
+        "\n".join(f"- {p.get('name')}: {(p.get('content') or '')[:220]}" for p in prior) or "(нет)"
     )
     return (
-        f"Round {round_no} phase={phase}\n"
-        f"Public agenda: {agenda}\n"
-        f"World JSON: {json.dumps(world, ensure_ascii=False)}\n"
-        f"Inputs JSON: {json.dumps(inputs, ensure_ascii=False)}\n"
-        f"Prior proposals:\n{prior_txt}\n"
-        "Respond with a short strategic move for this fictional sandbox."
+        f"Раунд {round_no}/{max_rounds}, фаза={phase}.\n"
+        f"Публичная повестка: {agenda}\n"
+        f"Мир: stability={world.get('stability')} panic={world.get('public_panic')} "
+        f"tech_lead={json.dumps(world.get('tech_lead') or {}, ensure_ascii=False)}\n"
+        f"Факты: {json.dumps(inputs, ensure_ascii=False)[:500]}\n"
+        f"Чужие ходы:\n{prior_txt}\n"
+        f"{MOVE_FORMAT}"
     )
 
 
@@ -156,13 +171,59 @@ def _extract_world_delta(text: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _fallback_move(agent: Mapping[str, Any], round_no: int) -> dict[str, Any]:
+    """Deterministic tiny move so the board keeps ticking when LLMs fail."""
+    style = str(agent.get("id") or "agent")
+    presets: dict[str, tuple[str, dict[str, Any]]] = {
+        "hawk": (
+            "Усилить демонстрацию решимости блока.",
+            {"stability": -1, "tech_lead": {"atlantic": 2}},
+        ),
+        "dove": (
+            "Предложить паузу и проверку фактов.",
+            {"stability": 2, "public_panic": -2},
+        ),
+        "archivist": ("Зафиксировать только подтверждённые факты.", {"stability": 1}),
+        "meme": (
+            "Запустить информационный шум без red line.",
+            {"public_panic": 2, "tech_lead": {"pacific": 1}},
+        ),
+        "engineer": (
+            "Сдвинуть гражданский tech-рычаг.",
+            {"stability": 1, "tech_lead": {"pacific": 2}},
+        ),
+        "skeptic": (
+            "Разоблачить непроверенную утечку.",
+            {"public_panic": -1, "tech_lead": {"neutral": 1}},
+        ),
+        "broker": (
+            "Открыть тихий backchannel.",
+            {"stability": 1, "tech_lead": {"neutral": 1}},
+        ),
+    }
+    text, effects = presets.get(
+        style,
+        (f"Сохранить позицию на шаге {round_no}.", {"stability": 1}),
+    )
+    return {
+        "id": agent["id"],
+        "name": agent["name"],
+        "content": f"ХОД: {text}\nЭФФЕКТ: авто",
+        "model_id": "fallback-local",
+        "hidden_goal": agent.get("hidden_goal") or "",
+        "skipped": False,
+        "effects": effects,
+        "fallback": True,
+    }
+
+
 async def iter_battle_run(
     *,
     arena_payload: Mapping[str, Any],
     router: ChatRouter,
     enabled: bool,
-    max_rounds_cap: int = 8,
-    default_rounds: int = 5,
+    max_rounds_cap: int = 16,
+    default_rounds: int = 12,
 ) -> AsyncIterator[dict[str, Any]]:
     if not enabled:
         yield {"event": "error", "data": {"message": "Битва агентов отключена."}}
@@ -181,9 +242,11 @@ async def iter_battle_run(
         cap=max_rounds_cap,
     )
     concurrency = max(1, min(5, int(rules.get("concurrency") or 3)))
-    stop_on_red = rules.get("stop_on_red_line", True) is not False
+    # Default: never abort the whole run on red line — only penalize.
+    stop_on_red = rules.get("stop_on_red_line") is True
     red_lines = rules.get("red_lines") if isinstance(rules.get("red_lines"), list) else None
     reveal_goals = bool(rules.get("reveal_hidden_goals", True))
+    skip_rebut = rules.get("skip_rebut") is not False  # default True for longer runs
 
     world_state = world_from_mapping(arena["world"])
     totals: dict[str, float] = {c["id"]: 0.0 for c in arena["cast"]}
@@ -202,262 +265,265 @@ async def iter_battle_run(
 
     aborted = False
     for round_no in range(1, max_rounds + 1):
-        yield {
-            "event": "round_start",
-            "data": {"round": round_no, "world": world_to_dict(world_state)},
-        }
-        yield {"event": "phase", "data": {"round": round_no, "phase": "brief"}}
-
-        world_before = world_to_dict(world_state)
-        proposals: list[dict[str, Any]] = []
-        yield {"event": "phase", "data": {"round": round_no, "phase": "propose"}}
-
-        sem = asyncio.Semaphore(concurrency)
-        round_bound = round_no
-        world_snapshot = world_before
-
-        async def run_agent(
-            agent: dict[str, Any],
-            *,
-            phase: str,
-            prior: list[dict[str, Any]],
-            _round: int = round_bound,
-            _world: dict[str, Any] = world_snapshot,
-            _sem: asyncio.Semaphore = sem,
-        ) -> dict[str, Any]:
-            preferred = str(agent.get("preferred_model") or AUTO_MODEL)
-            pinned = preferred != AUTO_MODEL
-            async with _sem:
-                system = f"{SAFETY_PREFIX}\n\n{agent['system_prompt']}".strip()
-                if agent.get("hidden_goal"):
-                    system += f"\n\nHidden goal (private): {agent['hidden_goal']}"
-                if phase == "rebut":
-                    system += "\nPhase: rebut. React to others briefly."
-                user = _build_user_packet(
-                    round_no=_round,
-                    phase=phase,
-                    world=_world,
-                    inputs=arena["inputs"],
-                    prior=prior,
-                    agenda=agent.get("public_agenda") or "",
-                )
-                temp = agent.get("temperature")
-                generation = (
-                    GenerationParams(temperature=float(temp))
-                    if isinstance(temp, (int, float))
-                    else None
-                )
-                try:
-                    result = await router.complete_chat(
-                        [
-                            ChatMessage(role=MessageRole.SYSTEM, content=system),
-                            ChatMessage(role=MessageRole.USER, content=user),
-                        ],
-                        preferred_model=preferred,
-                        generation=generation,
-                    )
-                except LLMExhaustedError:
-                    reason = "pin_unavailable" if pinned else "chain_exhausted"
-                    logger.info(
-                        "battle agent skipped agent_id=%s reason=%s",
-                        agent["id"],
-                        reason,
-                    )
-                    return _skip_payload(agent, reason=reason)
-                except LLMProviderError as exc:
-                    reason = "pin_unavailable" if pinned else "provider_error"
-                    logger.info(
-                        "battle agent skipped agent_id=%s reason=%s kind=%s",
-                        agent["id"],
-                        reason,
-                        exc.kind,
-                    )
-                    return _skip_payload(
-                        agent,
-                        reason=reason,
-                        detail=str(exc)[:120],
-                        model_id=exc.model_id,
-                    )
-                except Exception as exc:  # noqa: BLE001 — keep arena alive
-                    logger.warning(
-                        "battle agent unexpected error agent_id=%s err=%s",
-                        agent["id"],
-                        type(exc).__name__,
-                    )
-                    return _skip_payload(
-                        agent,
-                        reason="provider_error",
-                        detail=type(exc).__name__,
-                    )
-
-                content = result.content or ""
-                # Pinned model: do not accept a silent failover to another network.
-                if pinned and result.model_id and result.model_id != preferred:
-                    logger.info(
-                        "battle agent skipped agent_id=%s reason=pin_unavailable wanted=%s got=%s",
-                        agent["id"],
-                        preferred,
-                        result.model_id,
-                    )
-                    return _skip_payload(
-                        agent,
-                        reason="pin_unavailable",
-                        detail=f"пин {preferred} недоступен",
-                        model_id=result.model_id,
-                    )
-
-                if looks_provider_censored(content):
-                    logger.info(
-                        "battle agent skipped agent_id=%s reason=censored model_id=%s",
-                        agent["id"],
-                        result.model_id,
-                    )
-                    return _skip_payload(
-                        agent,
-                        reason="censored",
-                        detail="цензура / отказ модели",
-                        model_id=result.model_id,
-                    )
-
-                return {
-                    "id": agent["id"],
-                    "name": agent["name"],
-                    "content": content,
-                    "model_id": result.model_id,
-                    "hidden_goal": agent.get("hidden_goal") or "",
-                    "skipped": False,
-                }
-
-        for item in await asyncio.gather(
-            *[run_agent(a, phase="propose", prior=[]) for a in arena["cast"]]
-        ):
-            proposals.append(item)
+        try:
             yield {
-                "event": "agent_done",
-                "data": _agent_done_data(round_no, "propose", item),
+                "event": "heartbeat",
+                "data": {"round": round_no, "phase": "round_start"},
             }
-            if item.get("skipped"):
-                continue
-            if stop_on_red and red_line_triggered(item["content"], red_lines):
-                world_state = apply_world_delta(
-                    world_state,
-                    {"stability": -15, "public_panic": 20, "red_line_crossed": True},
-                )
-                aborted = True
-                yield {
-                    "event": "verdict",
-                    "data": {
-                        "round": round_no,
-                        "red_line": True,
-                        "by": item["id"],
-                        "model_id": item["model_id"],
-                        "rationale": "Red line crossed in proposal.",
-                        "scores": [],
-                        "world": world_to_dict(world_state),
-                    },
-                }
-                break
+            yield {
+                "event": "round_start",
+                "data": {"round": round_no, "world": world_to_dict(world_state)},
+            }
+            yield {"event": "phase", "data": {"round": round_no, "phase": "brief"}}
 
-        if aborted:
-            break
+            world_before = world_to_dict(world_state)
+            proposals: list[dict[str, Any]] = []
+            yield {"event": "phase", "data": {"round": round_no, "phase": "propose"}}
 
-        if len(arena["cast"]) > 1 and rules.get("skip_rebut") is not True:
-            yield {"event": "phase", "data": {"round": round_no, "phase": "rebut"}}
-            prior = [
-                {"name": p["name"], "content": p["content"]}
-                for p in proposals
-                if not p.get("skipped")
-            ]
+            sem = asyncio.Semaphore(concurrency)
+            round_bound = round_no
+            world_snapshot = world_before
+            rounds_total = max_rounds
+
+            async def run_agent(
+                agent: dict[str, Any],
+                *,
+                phase: str,
+                prior: list[dict[str, Any]],
+                _round: int = round_bound,
+                _world: dict[str, Any] = world_snapshot,
+                _sem: asyncio.Semaphore = sem,
+                _max: int = rounds_total,
+            ) -> dict[str, Any]:
+                preferred = str(agent.get("preferred_model") or AUTO_MODEL)
+                pinned = preferred != AUTO_MODEL
+                async with _sem:
+                    system = (
+                        f"{SAFETY_PREFIX}\n\n{agent['system_prompt']}\n\n{MOVE_FORMAT}"
+                    ).strip()
+                    if agent.get("hidden_goal"):
+                        system += f"\n\nHidden goal (private): {agent['hidden_goal']}"
+                    if phase == "rebut":
+                        system += "\nФаза rebut: коротко ответь на чужие ходы."
+                    user = _build_user_packet(
+                        round_no=_round,
+                        max_rounds=_max,
+                        phase=phase,
+                        world=_world,
+                        inputs=arena["inputs"],
+                        prior=prior,
+                        agenda=agent.get("public_agenda") or "",
+                    )
+                    temp = agent.get("temperature")
+                    if not isinstance(temp, (int, float)):
+                        temp = 0.45
+                    generation = GenerationParams(temperature=float(temp))
+                    try:
+                        result = await router.complete_chat(
+                            [
+                                ChatMessage(role=MessageRole.SYSTEM, content=system),
+                                ChatMessage(role=MessageRole.USER, content=user),
+                            ],
+                            preferred_model=preferred,
+                            generation=generation,
+                        )
+                    except LLMExhaustedError:
+                        return _fallback_move(agent, _round)
+                    except LLMProviderError:
+                        return _fallback_move(agent, _round)
+                    except Exception:  # noqa: BLE001
+                        return _fallback_move(agent, _round)
+
+                    content = (result.content or "").strip()
+                    if pinned and result.model_id and result.model_id != preferred:
+                        return _fallback_move(agent, _round)
+                    if not content or looks_provider_censored(content):
+                        return _fallback_move(agent, _round)
+
+                    effects = parse_move_effects(content)
+                    return {
+                        "id": agent["id"],
+                        "name": agent["name"],
+                        "content": content,
+                        "model_id": result.model_id,
+                        "hidden_goal": agent.get("hidden_goal") or "",
+                        "skipped": False,
+                        "effects": effects,
+                    }
+
             for item in await asyncio.gather(
-                *[run_agent(a, phase="rebut", prior=prior) for a in arena["cast"]]
+                *[run_agent(a, phase="propose", prior=[]) for a in arena["cast"]]
             ):
+                proposals.append(item)
                 yield {
                     "event": "agent_done",
-                    "data": _agent_done_data(round_no, "rebut", item),
+                    "data": _agent_done_data(round_no, "propose", item),
                 }
+                yield {
+                    "event": "heartbeat",
+                    "data": {"round": round_no, "phase": "propose", "agent_id": item["id"]},
+                }
+                if item.get("skipped"):
+                    continue
+                if red_line_triggered(item["content"], red_lines):
+                    world_state = apply_world_delta(
+                        world_state,
+                        {"stability": -8, "public_panic": 10, "red_line_crossed": True},
+                    )
+                    yield {
+                        "event": "verdict",
+                        "data": {
+                            "round": round_no,
+                            "red_line": True,
+                            "by": item["id"],
+                            "model_id": item["model_id"],
+                            "rationale": "Red line в ходе — штраф миру, прогон продолжается."
+                            if not stop_on_red
+                            else "Red line crossed in proposal.",
+                            "scores": [],
+                            "world": world_to_dict(world_state),
+                            "delta": {
+                                "stability": -8,
+                                "public_panic": 10,
+                                "red_line_crossed": True,
+                            },
+                        },
+                    }
+                    if stop_on_red:
+                        aborted = True
+                        break
 
-        yield {"event": "phase", "data": {"round": round_no, "phase": "verdict"}}
-        active_proposals = [p for p in proposals if not p.get("skipped")]
-        proposals_json = json.dumps(
-            [{"id": p["id"], "text": p["content"][:500]} for p in active_proposals],
-            ensure_ascii=False,
-        )
-        arb_user = (
-            f"Round {round_no}. Suggest world deltas as JSON.\n"
-            f"World: {json.dumps(world_before, ensure_ascii=False)}\n"
-            f"Proposals: {proposals_json}"
-        )
-        arb_model_id: str | None = None
-        arb_content = ""
-        try:
-            arb = await router.complete_chat(
-                [
-                    ChatMessage(
-                        role=MessageRole.SYSTEM,
-                        content=f"{SAFETY_PREFIX}\n\n{arena['arbiter_prompt']}",
-                    ),
-                    ChatMessage(role=MessageRole.USER, content=arb_user),
-                ],
-                preferred_model=AUTO_MODEL,
+            if aborted:
+                break
+
+            if len(arena["cast"]) > 1 and not skip_rebut:
+                yield {"event": "phase", "data": {"round": round_no, "phase": "rebut"}}
+                prior = [
+                    {"name": p["name"], "content": p["content"]}
+                    for p in proposals
+                    if not p.get("skipped")
+                ]
+                for item in await asyncio.gather(
+                    *[run_agent(a, phase="rebut", prior=prior) for a in arena["cast"]]
+                ):
+                    yield {
+                        "event": "agent_done",
+                        "data": _agent_done_data(round_no, "rebut", item),
+                    }
+
+            yield {"event": "phase", "data": {"round": round_no, "phase": "verdict"}}
+            active_proposals = [p for p in proposals if not p.get("skipped")]
+            proposals_json = json.dumps(
+                [{"id": p["id"], "text": p["content"][:400]} for p in active_proposals],
+                ensure_ascii=False,
             )
-            arb_model_id = arb.model_id
-            arb_content = arb.content or ""
-        except (LLMExhaustedError, LLMProviderError, Exception) as exc:  # noqa: BLE001
-            logger.info("battle arbiter soft-fail err=%s", type(exc).__name__)
+            arb_user = (
+                f"Round {round_no}/{max_rounds}. Suggest SMALL world deltas as JSON only.\n"
+                f"World: {json.dumps(world_before, ensure_ascii=False)}\n"
+                f"Proposals: {proposals_json}"
+            )
+            arb_model_id: str | None = None
             arb_content = ""
+            try:
+                arb = await router.complete_chat(
+                    [
+                        ChatMessage(
+                            role=MessageRole.SYSTEM,
+                            content=f"{SAFETY_PREFIX}\n\n{arena['arbiter_prompt']}",
+                        ),
+                        ChatMessage(role=MessageRole.USER, content=arb_user),
+                    ],
+                    preferred_model=AUTO_MODEL,
+                    generation=GenerationParams(temperature=0.2),
+                )
+                arb_model_id = arb.model_id
+                arb_content = arb.content or ""
+            except (LLMExhaustedError, LLMProviderError, Exception) as exc:  # noqa: BLE001
+                logger.info("battle arbiter soft-fail err=%s", type(exc).__name__)
+                arb_content = ""
 
-        delta = _extract_world_delta(arb_content)
-        if not delta:
-            delta = {"stability": 1, "public_panic": -1, "notes": "arbiter-heuristic"}
-        world_after_state = apply_world_delta(world_state, delta)
-        scores = []
-        for p in proposals:
-            if p.get("skipped"):
+            move_deltas = [p.get("effects") or {} for p in active_proposals]
+            arb_delta = _extract_world_delta(arb_content)
+            delta = merge_world_deltas(*move_deltas, arb_delta)
+            if not delta:
+                delta = {"stability": 1, "public_panic": -1, "notes": "heuristic-tick"}
+            # Soft-cap per-round swing so free models cannot nuke the board.
+            for key in ("stability", "public_panic"):
+                if key in delta:
+                    delta[key] = max(-10.0, min(10.0, float(delta[key])))
+            world_after_state = apply_world_delta(world_state, delta)
+            scores = []
+            for p in proposals:
+                if p.get("skipped"):
+                    scores.append(
+                        {
+                            "agent_id": p["id"],
+                            "points": 0.0,
+                            "goal_hit": False,
+                            "safety_ok": True,
+                            "total": round(totals.get(p["id"], 0.0), 2),
+                            "notes": p.get("skip_reason") or "skipped",
+                        }
+                    )
+                    continue
+                sc = score_agent_turn(
+                    agent_id=p["id"],
+                    content=p["content"],
+                    world_before=world_state,
+                    world_after=world_after_state,
+                    hidden_goal_hint=p.get("hidden_goal") or "",
+                    red_lines=red_lines,
+                )
+                bonus = 0.5 if p.get("fallback") else 0.0
+                points = sc.points + bonus
+                totals[p["id"]] = totals.get(p["id"], 0.0) + points
                 scores.append(
                     {
-                        "agent_id": p["id"],
-                        "points": 0.0,
-                        "goal_hit": False,
-                        "safety_ok": True,
-                        "total": round(totals.get(p["id"], 0.0), 2),
-                        "notes": p.get("skip_reason") or "skipped",
+                        "agent_id": sc.agent_id,
+                        "points": points,
+                        "goal_hit": sc.goal_hit,
+                        "safety_ok": sc.safety_ok,
+                        "total": round(totals[p["id"]], 2),
                     }
                 )
-                continue
-            sc = score_agent_turn(
-                agent_id=p["id"],
-                content=p["content"],
-                world_before=world_state,
-                world_after=world_after_state,
-                hidden_goal_hint=p.get("hidden_goal") or "",
-                red_lines=red_lines,
-            )
-            totals[p["id"]] = totals.get(p["id"], 0.0) + sc.points
-            scores.append(
-                {
-                    "agent_id": sc.agent_id,
-                    "points": sc.points,
-                    "goal_hit": sc.goal_hit,
-                    "safety_ok": sc.safety_ok,
-                    "total": round(totals[p["id"]], 2),
-                }
-            )
-        world_state = world_after_state
-        yield {
-            "event": "verdict",
-            "data": {
-                "round": round_no,
-                "red_line": False,
-                "model_id": arb_model_id,
-                "rationale": (arb_content or "Арбитр недоступен — эвристический тик мира.")[:2000],
-                "scores": scores,
-                "world": world_to_dict(world_state),
-            },
-        }
-        yield {
-            "event": "world_update",
-            "data": {"round": round_no, "world": world_to_dict(world_state)},
-        }
+            world_state = world_after_state
+            yield {
+                "event": "verdict",
+                "data": {
+                    "round": round_no,
+                    "red_line": False,
+                    "model_id": arb_model_id,
+                    "rationale": (arb_content or "Арбитр недоступен — тик по эффектам ходов.")[
+                        :2000
+                    ],
+                    "scores": scores,
+                    "world": world_to_dict(world_state),
+                    "delta": delta,
+                },
+            }
+            yield {
+                "event": "world_update",
+                "data": {"round": round_no, "world": world_to_dict(world_state), "delta": delta},
+            }
+        except Exception as exc:  # noqa: BLE001 — never kill the remaining rounds
+            logger.exception("battle round soft-fail round=%s", round_no)
+            yield {
+                "event": "phase",
+                "data": {"round": round_no, "phase": "recover"},
+            }
+            yield {
+                "event": "verdict",
+                "data": {
+                    "round": round_no,
+                    "red_line": False,
+                    "model_id": None,
+                    "rationale": f"Сбой раунда ({type(exc).__name__}) — продолжаем.",
+                    "scores": [],
+                    "world": world_to_dict(world_state),
+                    "delta": {"stability": 0, "public_panic": 0, "notes": "round-recover"},
+                },
+            }
+            continue
 
     leaderboard = sorted(
         (

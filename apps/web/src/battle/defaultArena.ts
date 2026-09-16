@@ -145,10 +145,10 @@ export function createDefaultArena(): ArenaDoc {
         SAFETY,
     },
     rules: {
-      max_rounds: 5,
+      max_rounds: 12,
       concurrency: 3,
-      skip_rebut: false,
-      stop_on_red_line: true,
+      skip_rebut: true,
+      stop_on_red_line: false,
       reveal_hidden_goals: true,
     },
   };

@@ -1247,8 +1247,9 @@ export type AgentBattleEvent =
       model_id: string | null;
       scores: { agent_id: string; points: number; notes?: string }[];
       world: Record<string, unknown>;
+      delta?: Record<string, unknown>;
     }
-  | { type: "world_update"; round: number; world: Record<string, unknown> }
+  | { type: "world_update"; round: number; world: Record<string, unknown>; delta?: Record<string, unknown> }
   | {
       type: "battle_done";
       aborted?: boolean;
@@ -1256,7 +1257,8 @@ export type AgentBattleEvent =
       goals_revealed?: { agent_id: string; hidden_goal: string }[];
       world: Record<string, unknown>;
     }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "heartbeat"; round: number; phase: string | null };
 
 function parseBattleFrame(raw: string): AgentBattleEvent | null {
   const lines = raw.split("\n");
@@ -1321,6 +1323,10 @@ function parseBattleFrame(raw: string): AgentBattleEvent | null {
           ? (payload.scores as { agent_id: string; points: number; notes?: string }[])
           : [],
         world: (payload.world as Record<string, unknown>) || {},
+        delta:
+          payload.delta && typeof payload.delta === "object"
+            ? (payload.delta as Record<string, unknown>)
+            : undefined,
       };
     }
     if (event === "world_update") {
@@ -1328,6 +1334,10 @@ function parseBattleFrame(raw: string): AgentBattleEvent | null {
         type: "world_update",
         round: Number(payload.round) || 0,
         world: (payload.world as Record<string, unknown>) || {},
+        delta:
+          payload.delta && typeof payload.delta === "object"
+            ? (payload.delta as Record<string, unknown>)
+            : undefined,
       };
     }
     if (event === "battle_done") {
@@ -1349,6 +1359,13 @@ function parseBattleFrame(raw: string): AgentBattleEvent | null {
     }
     if (event === "error") {
       return { type: "error", message: String(payload.message || "Ошибка") };
+    }
+    if (event === "heartbeat") {
+      return {
+        type: "heartbeat",
+        round: Number(payload.round) || 0,
+        phase: payload.phase == null ? null : String(payload.phase),
+      };
     }
   } catch {
     return null;
