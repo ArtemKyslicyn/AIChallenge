@@ -13,7 +13,7 @@ from app.application.auth import ensure_demo_preference_profiles
 from app.core.deps import ClientVisitorId, DbSession
 from app.domain.errors import MessageValidationError
 from app.domain.owner_key import memory_owner_key
-from app.domain.personalization import EXPERT_LENSES
+from app.domain.personalization import EXPERT_LENSES, PreferenceProfile
 
 router = APIRouter(prefix="/personalization", tags=["personalization"])
 
@@ -48,13 +48,13 @@ def _owner(visitor_id: str, user: OptionalAuthUser) -> str:
     )
 
 
-def _pref_dto(p: object) -> PreferenceProfileResponse:
+def _pref_dto(p: PreferenceProfile) -> PreferenceProfileResponse:
     return PreferenceProfileResponse(
         id=str(p.id),
-        name=str(p.name),
-        style=str(p.style or ""),
-        format=str(p.format or ""),
-        constraints=str(p.constraints or ""),
+        name=p.name,
+        style=p.style or "",
+        format=p.format or "",
+        constraints=p.constraints or "",
         is_active=bool(p.is_active),
     )
 
