@@ -122,6 +122,29 @@ async function sendSoloAndWait(page, text, { minChars = 8, timeout = 180_000 } =
   await waitAgentAssistantAfter(page, prev, { minChars, timeout });
 }
 
+/** Day 11 — chat directive writes memory (status line, no assistant). */
+async function sendMemoryDirective(page, text, { timeout = 25_000 } = {}) {
+  const prev = await page.locator(".agent-log-line--status").count();
+  await page.locator(".agent-compose textarea").first().fill(text);
+  await settle(page, 600);
+  await page.locator(".agent-workshop--solo .agent-send-btn").click();
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const n = await page.locator(".agent-log-line--status").count();
+    if (n > prev) {
+      const last = page.locator(".agent-log-line--status").last();
+      const t = (await last.innerText().catch(() => "")) || "";
+      if (/записано в память|память:/i.test(t)) return;
+    }
+    const status = (await page.locator(".agent-status").allTextContents().catch(() => [])).join(" ");
+    if (/Память:/i.test(status) && /не удалось|ошибка/i.test(status)) {
+      throw new Error(`memory write failed: ${status.slice(0, 160)}`);
+    }
+    await settle(page, 400);
+  }
+  throw new Error(`sendMemoryDirective timeout: ${text}`);
+}
+
 async function waitTeamAnswers(page, { minAnswers = 2, timeout = 300_000 } = {}) {
   await page.waitForFunction(
     ({ minAnswers: min }) => {
@@ -1102,7 +1125,7 @@ async function challenge11(page) {
     temperature: "0.2",
     maxTokens: "140",
   });
-  await pauseOn(page.locator(".agent-builder").first(), 1600);
+  await pauseOn(page.locator(".agent-builder").first(), 1400);
 
   const clearBtn = page.getByRole("button", { name: /Очистить лог/i });
   if ((await clearBtn.count()) > 0) {
@@ -1112,7 +1135,6 @@ async function challenge11(page) {
 
   const memory = page.locator(".agent-memory-panel").first();
   await memory.waitFor({ timeout: 20_000 });
-  // Ensure panel is open
   const summary = memory.locator("summary");
   if ((await summary.count()) > 0) {
     const open = await memory.evaluate((el) => el.hasAttribute("open"));
@@ -1121,43 +1143,25 @@ async function challenge11(page) {
       await settle(page, 400);
     }
   }
-  await pauseOn(memory, 3500);
+  await pauseOn(memory, 3200);
 
-  console.log("11: write working goal…");
-  const goalForm = memory.locator("form.agent-memory-write").filter({
-    has: page.locator('input[name="goal"]'),
-  });
-  await goalForm.locator('input[name="goal"]').fill("Показать три слоя памяти в ответе агента");
-  await settle(page, 600);
-  await goalForm.getByRole("button", { name: /working/i }).click();
-  await settle(page, 1500);
+  console.log("11: chat → working goal…");
+  const chips = page.locator(".agent-memory-chips");
+  await pauseOn(chips, 1800);
+  await sendMemoryDirective(page, "запомни цель: Показать три слоя памяти через чат");
   await pauseOn(memory.locator(".agent-memory-layer").nth(1), 2800);
 
-  console.log("11: write long-term profile…");
-  const nameForm = memory.locator("form.agent-memory-write").filter({
-    has: page.locator('input[name="name"]'),
-  });
-  await nameForm.locator('input[name="name"]').fill("Артём");
-  await settle(page, 600);
-  await nameForm.getByRole("button", { name: /long-term/i }).click();
-  await settle(page, 1500);
+  console.log("11: chat → long-term name…");
+  await sendMemoryDirective(page, "меня зовут Артём");
+  await sendMemoryDirective(page, "запомни решение: FastAPI + React + Postgres");
+  await pauseOn(memory.locator(".agent-memory-layer").nth(2), 3000);
 
-  const decisionForm = memory.locator("form.agent-memory-write").filter({
-    has: page.locator('input[name="decision"]'),
-  });
-  await decisionForm.locator('input[name="decision"]').fill("Стек: FastAPI + React + Postgres");
-  await settle(page, 500);
-  await decisionForm.getByRole("button", { name: /решение/i }).click();
-  await settle(page, 1500);
-  await pauseOn(memory.locator(".agent-memory-layer").nth(2), 3200);
-
-  // Seed short-term with a turn so dialog exists visibly
-  console.log("11: short-term turn + probe with all layers…");
+  console.log("11: short-term + probe with all layers…");
   await sendSoloAndWait(page, "Привет. Сегодня демо трёх слоёв памяти.", {
     minChars: 4,
     timeout: 180_000,
   });
-  await pauseOn(page.locator(".agent-log-line--assistant").last(), 2500);
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 2200);
 
   await sendSoloAndWait(
     page,
@@ -1169,18 +1173,18 @@ async function challenge11(page) {
   if (!/арт[её]м/i.test(withText)) {
     console.warn("11 with-memory name weak:", withText.slice(0, 220));
   }
-  await pauseOn(withMem, 4500);
-  await pauseOn(memory, 2800);
+  await pauseOn(withMem, 4200);
+  await pauseOn(memory, 2500);
 
   console.log("11: clear dialog — working gone, long-term stays…");
   await clearBtn.first().click();
   await settle(page, 1200);
-  const refresh = memory.getByRole("button", { name: /Обновить слои/i });
+  const refresh = memory.getByRole("button", { name: /Обновить/i });
   if ((await refresh.count()) > 0) {
     await refresh.first().click();
-    await settle(page, 1200);
+    await settle(page, 1000);
   }
-  await pauseOn(memory, 3500);
+  await pauseOn(memory, 3200);
 
   await sendSoloAndWait(
     page,
@@ -1188,13 +1192,9 @@ async function challenge11(page) {
     { minChars: 8, timeout: 180_000 },
   );
   const afterClear = page.locator(".agent-log-line--assistant").last();
-  const afterText = await afterClear.innerText();
-  if (!/арт[её]м/i.test(afterText)) {
-    console.warn("11 after-clear name weak:", afterText.slice(0, 220));
-  }
-  await pauseOn(afterClear, 5000);
-  await pauseOn(memory, 3000);
-  await settle(page, 2000);
+  await pauseOn(afterClear, 4800);
+  await pauseOn(memory, 2800);
+  await settle(page, 1800);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");

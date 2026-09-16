@@ -241,15 +241,34 @@ class AgentMemorySnapshotResponse(BaseModel):
 
 
 class AgentMemoryWriteRequest(BaseModel):
-    """Explicit write — caller chooses the layer; nothing auto-promotes."""
+    """Explicit write — caller chooses the layer; nothing auto-promotes.
 
-    layer: str = Field(description="working | long_term")
-    kind: str = Field(
-        description="working: goal|checklist_item|scratch; long_term: profile|decision|knowledge"
+    Either pass layer+kind+value, or chat_text (parsed server-side).
+    """
+
+    layer: str | None = Field(default=None, description="working | long_term")
+    kind: str | None = Field(
+        default=None,
+        description="working: goal|checklist_item|scratch; long_term: profile|decision|knowledge",
     )
     key: str = Field(default="", max_length=64)
     value: str = Field(default="", max_length=2000)
     client_draft_id: str | None = Field(default=None, max_length=64)
+    #: Natural / slash command from chat — parsed into an explicit MemoryWrite.
+    chat_text: str | None = Field(default=None, max_length=2000)
+    #: Optional stub fields when creating a dialog for the first working write.
+    dialog_name: str | None = Field(default=None, max_length=120)
+    dialog_system_prompt: str | None = Field(default=None, max_length=8000)
+
+
+class AgentMemoryWriteResponse(BaseModel):
+    """Snapshot plus human confirmation of what was written."""
+
+    short_term: list[AgentDialogMessageResponse] = Field(default_factory=list)
+    working: dict[str, object] = Field(default_factory=dict)
+    long_term: dict[str, object] = Field(default_factory=dict)
+    applied: dict[str, str] = Field(default_factory=dict)
+    label: str = ""
 
 
 class ModelCapabilitiesResponse(BaseModel):

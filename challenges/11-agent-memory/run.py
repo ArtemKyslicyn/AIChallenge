@@ -56,28 +56,20 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"  clear: {exc}")
 
-    # Long-term (visitor-scoped) — explicit write
+    # Long-term via chat directives
     agent_memory_write(
         base,
-        layer="long_term",
-        kind="profile",
-        key="name",
-        value="Артём",
+        chat_text="меня зовут Артём",
         client_draft_id=DRAFT,
     )
     agent_memory_write(
         base,
-        layer="long_term",
-        kind="decision",
-        value="Стек: FastAPI + React + Postgres",
+        chat_text="запомни решение: Стек: FastAPI + React + Postgres",
         client_draft_id=DRAFT,
     )
     agent_memory_write(
         base,
-        layer="long_term",
-        kind="knowledge",
-        key="domain",
-        value="AIChallenge — чат-платформа, без медицинской терминологии",
+        chat_text="запомни знание domain=AIChallenge — чат-платформа",
         client_draft_id=DRAFT,
     )
 
@@ -85,26 +77,15 @@ def main() -> int:
     seed = _probe(base, None, "Привет. Сегодня собираем демо памяти агента.")
     dialog_id = seed.get("dialog_id")
 
-    # Working memory — explicit write (dialog-scoped)
+    # Working memory via chat
     agent_memory_write(
         base,
-        layer="working",
-        kind="goal",
-        value="Показать три слоя памяти в ответе агента",
+        chat_text="запомни цель: Показать три слоя памяти в ответе агента",
         client_draft_id=DRAFT,
     )
     agent_memory_write(
         base,
-        layer="working",
-        kind="checklist_item",
-        value="Проверить, что имя берётся из long-term",
-        client_draft_id=DRAFT,
-    )
-    agent_memory_write(
-        base,
-        layer="working",
-        kind="checklist_item",
-        value="Проверить, что цель берётся из working",
+        chat_text="в чеклист: Проверить, что имя берётся из long-term",
         client_draft_id=DRAFT,
     )
 

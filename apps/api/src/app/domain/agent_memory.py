@@ -5,6 +5,7 @@ Layers are stored separately; writes are always explicit (caller picks the layer
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -94,6 +95,180 @@ class MemoryWrite:
     kind: str  # goal | checklist_item | scratch | profile | decision | knowledge
     key: str = ""
     value: str = ""
+
+
+def describe_memory_write(write: MemoryWrite) -> str:
+    """Short human label for UI / status lines."""
+    layer = "рабочая" if write.layer == MemoryLayer.WORKING else "долговременная"
+    kind = write.kind.strip().lower()
+    if kind == "goal":
+        return f"{layer} · цель: {write.value}"
+    if kind == "checklist_item":
+        return f"{layer} · чеклист: {write.value}"
+    if kind == "scratch":
+        return f"{layer} · черновик {write.key or 'note'}: {write.value}"
+    if kind == "profile":
+        return f"{layer} · профиль {write.key or 'name'}: {write.value}"
+    if kind == "decision":
+        return f"{layer} · решение: {write.value}"
+    if kind == "knowledge":
+        return f"{layer} · знание {write.key or 'fact'}: {write.value}"
+    return f"{layer} · {kind}: {write.value}"
+
+
+def _split_kv(raw: str) -> tuple[str, str]:
+    text = raw.strip()
+    for sep in ("=", ":"):
+        if sep in text:
+            left, right = text.split(sep, 1)
+            key = left.strip()
+            value = right.strip()
+            if key and value:
+                return key, value
+    return "", text
+
+
+def parse_memory_chat_command(text: str) -> MemoryWrite | None:
+    """Parse an explicit chat command into a MemoryWrite.
+
+    Returns None if the message is ordinary chat (not a memory directive).
+    The caller always chooses the layer via wording — no auto-routing.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    # --- Slash /mem | /memory | /память ---
+    slash = re.match(
+        r"^/(?:mem(?:ory)?|память)\s+(\S+)\s+(\S+)\s+(.+)$",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if slash:
+        layer_tok, kind_tok, rest = slash.group(1), slash.group(2), slash.group(3).strip()
+        layer_l = layer_tok.lower()
+        kind_l = kind_tok.lower()
+        if layer_l in {"working", "w", "рабочая", "работа", "task"}:
+            if kind_l in {"goal", "цель"}:
+                return MemoryWrite(layer=MemoryLayer.WORKING, kind="goal", value=rest)
+            if kind_l in {"check", "checklist", "checklist_item", "чеклист", "todo"}:
+                return MemoryWrite(layer=MemoryLayer.WORKING, kind="checklist_item", value=rest)
+            if kind_l in {"scratch", "note", "черновик"}:
+                key, value = _split_kv(rest)
+                return MemoryWrite(
+                    layer=MemoryLayer.WORKING,
+                    kind="scratch",
+                    key=key or "note",
+                    value=value,
+                )
+        if layer_l in {"long", "long_term", "lt", "долговременная", "долго", "ltm"}:
+            if kind_l in {"name", "имя"}:
+                return MemoryWrite(
+                    layer=MemoryLayer.LONG_TERM, kind="profile", key="name", value=rest
+                )
+            if kind_l in {"profile", "профиль"}:
+                key, value = _split_kv(rest)
+                return MemoryWrite(
+                    layer=MemoryLayer.LONG_TERM,
+                    kind="profile",
+                    key=key or "name",
+                    value=value,
+                )
+            if kind_l in {"decision", "решение"}:
+                return MemoryWrite(layer=MemoryLayer.LONG_TERM, kind="decision", value=rest)
+            if kind_l in {"knowledge", "знание", "know"}:
+                key, value = _split_kv(rest)
+                return MemoryWrite(
+                    layer=MemoryLayer.LONG_TERM,
+                    kind="knowledge",
+                    key=key or "fact",
+                    value=value,
+                )
+        return None
+
+    # Short aliases: /w цель: … · /l имя: …
+    short = re.match(
+        r"^/(w|l|р|д)\s+(цель|чеклист|имя|решение|знание|goal|check|name|decision|knowledge)\s*[:：]?\s*(.+)$",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if short:
+        layer_flag, kind_tok, rest = (
+            short.group(1).lower(),
+            short.group(2).lower(),
+            short.group(3).strip(),
+        )
+        working = layer_flag in {"w", "р"}
+        if working and kind_tok in {"цель", "goal"}:
+            return MemoryWrite(layer=MemoryLayer.WORKING, kind="goal", value=rest)
+        if working and kind_tok in {"чеклист", "check"}:
+            return MemoryWrite(layer=MemoryLayer.WORKING, kind="checklist_item", value=rest)
+        if not working and kind_tok in {"имя", "name"}:
+            return MemoryWrite(layer=MemoryLayer.LONG_TERM, kind="profile", key="name", value=rest)
+        if not working and kind_tok in {"решение", "decision"}:
+            return MemoryWrite(layer=MemoryLayer.LONG_TERM, kind="decision", value=rest)
+        if not working and kind_tok in {"знание", "knowledge"}:
+            key, value = _split_kv(rest)
+            return MemoryWrite(
+                layer=MemoryLayer.LONG_TERM,
+                kind="knowledge",
+                key=key or "fact",
+                value=value,
+            )
+        return None
+
+    # Russian / explicit phrases (must name the layer or a dedicated verb)
+    m = re.match(r"^запомни\s+в\s+рабоч\w*\s+цель\s*[:：]\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(layer=MemoryLayer.WORKING, kind="goal", value=m.group(1).strip())
+
+    m = re.match(r"^запомни\s+цель\s*[:：]\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(layer=MemoryLayer.WORKING, kind="goal", value=m.group(1).strip())
+
+    m = re.match(r"^(?:в\s+чеклист|чеклист)\s*[:：]\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(
+            layer=MemoryLayer.WORKING, kind="checklist_item", value=m.group(1).strip()
+        )
+
+    m = re.match(
+        r"^запомни\s+в\s+долговременн\w*\s+(?:имя|профиль)\s*[:：]\s*(.+)$",
+        raw,
+        re.I | re.DOTALL,
+    )
+    if m:
+        return MemoryWrite(
+            layer=MemoryLayer.LONG_TERM, kind="profile", key="name", value=m.group(1).strip()
+        )
+
+    m = re.match(r"^(?:запомни\s+меня|меня\s+зовут)\s*[:：]?\s+(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(
+            layer=MemoryLayer.LONG_TERM, kind="profile", key="name", value=m.group(1).strip()
+        )
+
+    m = re.match(r"^запомни\s+имя\s*[:：]\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(
+            layer=MemoryLayer.LONG_TERM, kind="profile", key="name", value=m.group(1).strip()
+        )
+
+    m = re.match(r"^запомни\s+решение\s*[:：]\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        return MemoryWrite(layer=MemoryLayer.LONG_TERM, kind="decision", value=m.group(1).strip())
+
+    m = re.match(r"^запомни\s+знание\s*[:：]?\s*(.+)$", raw, re.I | re.DOTALL)
+    if m:
+        key, value = _split_kv(m.group(1))
+        return MemoryWrite(
+            layer=MemoryLayer.LONG_TERM,
+            kind="knowledge",
+            key=key or "fact",
+            value=value,
+        )
+
+    return None
 
 
 def apply_working_write(mem: WorkingMemory, write: MemoryWrite) -> WorkingMemory:
