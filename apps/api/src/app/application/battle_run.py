@@ -294,8 +294,7 @@ async def iter_battle_run(
                 # Pinned model: do not accept a silent failover to another network.
                 if pinned and result.model_id and result.model_id != preferred:
                     logger.info(
-                        "battle agent skipped agent_id=%s reason=pin_unavailable "
-                        "wanted=%s got=%s",
+                        "battle agent skipped agent_id=%s reason=pin_unavailable wanted=%s got=%s",
                         agent["id"],
                         preferred,
                         result.model_id,
@@ -479,7 +478,6 @@ async def iter_battle_run(
     }
     if reveal_goals:
         done["goals_revealed"] = [
-            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""}
-            for c in arena["cast"]
+            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""} for c in arena["cast"]
         ]
     yield {"event": "battle_done", "data": done}
