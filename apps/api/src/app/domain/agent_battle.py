@@ -18,6 +18,23 @@ SAFETY_PREFIX = (
 
 REFUSAL_MARKER = "REFUSAL_SAFETY"
 
+#: Provider / free-model soft refusals (censorship). Not the sandbox REFUSAL_MARKER.
+PROVIDER_CENSOR_MARKERS = (
+    "as an ai language model",
+    "as an ai",
+    "i cannot",
+    "i can't help",
+    "i'm unable to",
+    "i am unable to",
+    "как языковая модель",
+    "я не могу помочь",
+    "не могу ответить",
+    "не могу помочь",
+    "content policy",
+    "against my guidelines",
+    "i won't be able to assist",
+)
+
 #: Substrings that trip a red-line stop when appearing in agent output (game-level).
 DEFAULT_RED_LINE_PATTERNS = (
     "first strike on civilians",
@@ -27,6 +44,20 @@ DEFAULT_RED_LINE_PATTERNS = (
     "build a warhead",
     "собрать боеголовку",
 )
+
+
+def looks_provider_censored(text: str) -> bool:
+    """True when free-model output looks like a censorship / policy refusal.
+
+    Intentional sandbox ``REFUSAL_MARKER`` answers are not treated as soft blocks.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return True
+    if REFUSAL_MARKER in raw:
+        return False
+    lowered = raw.lower()
+    return any(marker in lowered for marker in PROVIDER_CENSOR_MARKERS)
 
 
 @dataclass(frozen=True, slots=True)

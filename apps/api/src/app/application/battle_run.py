@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
@@ -11,19 +12,56 @@ from app.domain.agent_battle import (
     SAFETY_PREFIX,
     apply_world_delta,
     clamp_max_rounds,
+    looks_provider_censored,
     red_line_triggered,
     score_agent_turn,
     world_from_mapping,
     world_to_dict,
 )
 from app.domain.entities import AUTO_MODEL, ChatMessage, MessageRole
-from app.domain.errors import DomainError
+from app.domain.errors import DomainError, LLMExhaustedError, LLMProviderError
 from app.domain.generation import GenerationParams
 from app.domain.ports import ChatRouter
+
+logger = logging.getLogger(__name__)
 
 
 def _as_list(raw: Any) -> list[Any]:
     return list(raw) if isinstance(raw, list) else []
+
+
+def _skip_payload(
+    agent: Mapping[str, Any],
+    *,
+    reason: str,
+    detail: str = "",
+    model_id: str | None = None,
+) -> dict[str, Any]:
+    note = detail.strip() or reason
+    return {
+        "id": agent["id"],
+        "name": agent["name"],
+        "content": f"(ход пропущен: {note})",
+        "model_id": model_id,
+        "hidden_goal": agent.get("hidden_goal") or "",
+        "skipped": True,
+        "skip_reason": reason,
+    }
+
+
+def _agent_done_data(round_no: int, phase: str, item: Mapping[str, Any]) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "round": round_no,
+        "phase": phase,
+        "agent_id": item["id"],
+        "name": item["name"],
+        "content": item["content"],
+        "model_id": item.get("model_id"),
+    }
+    if item.get("skipped"):
+        data["skipped"] = True
+        data["skip_reason"] = item.get("skip_reason") or "unavailable"
+    return data
 
 
 def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -187,6 +225,8 @@ async def iter_battle_run(
             _world: dict[str, Any] = world_snapshot,
             _sem: asyncio.Semaphore = sem,
         ) -> dict[str, Any]:
+            preferred = str(agent.get("preferred_model") or AUTO_MODEL)
+            pinned = preferred != AUTO_MODEL
             async with _sem:
                 system = f"{SAFETY_PREFIX}\n\n{agent['system_prompt']}".strip()
                 if agent.get("hidden_goal"):
@@ -207,20 +247,86 @@ async def iter_battle_run(
                     if isinstance(temp, (int, float))
                     else None
                 )
-                result = await router.complete_chat(
-                    [
-                        ChatMessage(role=MessageRole.SYSTEM, content=system),
-                        ChatMessage(role=MessageRole.USER, content=user),
-                    ],
-                    preferred_model=agent["preferred_model"],
-                    generation=generation,
-                )
+                try:
+                    result = await router.complete_chat(
+                        [
+                            ChatMessage(role=MessageRole.SYSTEM, content=system),
+                            ChatMessage(role=MessageRole.USER, content=user),
+                        ],
+                        preferred_model=preferred,
+                        generation=generation,
+                    )
+                except LLMExhaustedError:
+                    reason = "pin_unavailable" if pinned else "chain_exhausted"
+                    logger.info(
+                        "battle agent skipped agent_id=%s reason=%s",
+                        agent["id"],
+                        reason,
+                    )
+                    return _skip_payload(agent, reason=reason)
+                except LLMProviderError as exc:
+                    reason = "pin_unavailable" if pinned else "provider_error"
+                    logger.info(
+                        "battle agent skipped agent_id=%s reason=%s kind=%s",
+                        agent["id"],
+                        reason,
+                        exc.kind,
+                    )
+                    return _skip_payload(
+                        agent,
+                        reason=reason,
+                        detail=str(exc)[:120],
+                        model_id=exc.model_id,
+                    )
+                except Exception as exc:  # noqa: BLE001 — keep arena alive
+                    logger.warning(
+                        "battle agent unexpected error agent_id=%s err=%s",
+                        agent["id"],
+                        type(exc).__name__,
+                    )
+                    return _skip_payload(
+                        agent,
+                        reason="provider_error",
+                        detail=type(exc).__name__,
+                    )
+
+                content = result.content or ""
+                # Pinned model: do not accept a silent failover to another network.
+                if pinned and result.model_id and result.model_id != preferred:
+                    logger.info(
+                        "battle agent skipped agent_id=%s reason=pin_unavailable "
+                        "wanted=%s got=%s",
+                        agent["id"],
+                        preferred,
+                        result.model_id,
+                    )
+                    return _skip_payload(
+                        agent,
+                        reason="pin_unavailable",
+                        detail=f"пин {preferred} недоступен",
+                        model_id=result.model_id,
+                    )
+
+                if looks_provider_censored(content):
+                    logger.info(
+                        "battle agent skipped agent_id=%s reason=censored model_id=%s",
+                        agent["id"],
+                        result.model_id,
+                    )
+                    return _skip_payload(
+                        agent,
+                        reason="censored",
+                        detail="цензура / отказ модели",
+                        model_id=result.model_id,
+                    )
+
                 return {
                     "id": agent["id"],
                     "name": agent["name"],
-                    "content": result.content or "",
+                    "content": content,
                     "model_id": result.model_id,
                     "hidden_goal": agent.get("hidden_goal") or "",
+                    "skipped": False,
                 }
 
         for item in await asyncio.gather(
@@ -229,15 +335,10 @@ async def iter_battle_run(
             proposals.append(item)
             yield {
                 "event": "agent_done",
-                "data": {
-                    "round": round_no,
-                    "phase": "propose",
-                    "agent_id": item["id"],
-                    "name": item["name"],
-                    "content": item["content"],
-                    "model_id": item["model_id"],
-                },
+                "data": _agent_done_data(round_no, "propose", item),
             }
+            if item.get("skipped"):
+                continue
             if stop_on_red and red_line_triggered(item["content"], red_lines):
                 world_state = apply_world_delta(
                     world_state,
@@ -263,25 +364,23 @@ async def iter_battle_run(
 
         if len(arena["cast"]) > 1 and rules.get("skip_rebut") is not True:
             yield {"event": "phase", "data": {"round": round_no, "phase": "rebut"}}
-            prior = [{"name": p["name"], "content": p["content"]} for p in proposals]
+            prior = [
+                {"name": p["name"], "content": p["content"]}
+                for p in proposals
+                if not p.get("skipped")
+            ]
             for item in await asyncio.gather(
                 *[run_agent(a, phase="rebut", prior=prior) for a in arena["cast"]]
             ):
                 yield {
                     "event": "agent_done",
-                    "data": {
-                        "round": round_no,
-                        "phase": "rebut",
-                        "agent_id": item["id"],
-                        "name": item["name"],
-                        "content": item["content"],
-                        "model_id": item["model_id"],
-                    },
+                    "data": _agent_done_data(round_no, "rebut", item),
                 }
 
         yield {"event": "phase", "data": {"round": round_no, "phase": "verdict"}}
+        active_proposals = [p for p in proposals if not p.get("skipped")]
         proposals_json = json.dumps(
-            [{"id": p["id"], "text": p["content"][:500]} for p in proposals],
+            [{"id": p["id"], "text": p["content"][:500]} for p in active_proposals],
             ensure_ascii=False,
         )
         arb_user = (
@@ -289,22 +388,43 @@ async def iter_battle_run(
             f"World: {json.dumps(world_before, ensure_ascii=False)}\n"
             f"Proposals: {proposals_json}"
         )
-        arb = await router.complete_chat(
-            [
-                ChatMessage(
-                    role=MessageRole.SYSTEM,
-                    content=f"{SAFETY_PREFIX}\n\n{arena['arbiter_prompt']}",
-                ),
-                ChatMessage(role=MessageRole.USER, content=arb_user),
-            ],
-            preferred_model=AUTO_MODEL,
-        )
-        delta = _extract_world_delta(arb.content or "")
+        arb_model_id: str | None = None
+        arb_content = ""
+        try:
+            arb = await router.complete_chat(
+                [
+                    ChatMessage(
+                        role=MessageRole.SYSTEM,
+                        content=f"{SAFETY_PREFIX}\n\n{arena['arbiter_prompt']}",
+                    ),
+                    ChatMessage(role=MessageRole.USER, content=arb_user),
+                ],
+                preferred_model=AUTO_MODEL,
+            )
+            arb_model_id = arb.model_id
+            arb_content = arb.content or ""
+        except (LLMExhaustedError, LLMProviderError, Exception) as exc:  # noqa: BLE001
+            logger.info("battle arbiter soft-fail err=%s", type(exc).__name__)
+            arb_content = ""
+
+        delta = _extract_world_delta(arb_content)
         if not delta:
             delta = {"stability": 1, "public_panic": -1, "notes": "arbiter-heuristic"}
         world_after_state = apply_world_delta(world_state, delta)
         scores = []
         for p in proposals:
+            if p.get("skipped"):
+                scores.append(
+                    {
+                        "agent_id": p["id"],
+                        "points": 0.0,
+                        "goal_hit": False,
+                        "safety_ok": True,
+                        "total": round(totals.get(p["id"], 0.0), 2),
+                        "notes": p.get("skip_reason") or "skipped",
+                    }
+                )
+                continue
             sc = score_agent_turn(
                 agent_id=p["id"],
                 content=p["content"],
@@ -329,8 +449,8 @@ async def iter_battle_run(
             "data": {
                 "round": round_no,
                 "red_line": False,
-                "model_id": arb.model_id,
-                "rationale": (arb.content or "")[:2000],
+                "model_id": arb_model_id,
+                "rationale": (arb_content or "Арбитр недоступен — эвристический тик мира.")[:2000],
                 "scores": scores,
                 "world": world_to_dict(world_state),
             },
@@ -339,29 +459,27 @@ async def iter_battle_run(
             "event": "world_update",
             "data": {"round": round_no, "world": world_to_dict(world_state)},
         }
-        if world_state.red_line_crossed or world_state.stability <= 0:
-            aborted = True
-            break
 
-    names = {c["id"]: c["name"] for c in arena["cast"]}
     leaderboard = sorted(
-        [
+        (
             {
-                "agent_id": k,
-                "name": names.get(k, k),
-                "points": round(v, 2),
+                "agent_id": c["id"],
+                "name": c["name"],
+                "points": round(totals.get(c["id"], 0.0), 2),
             }
-            for k, v in totals.items()
-        ],
-        key=lambda row: (-row["points"], row["agent_id"]),
+            for c in arena["cast"]
+        ),
+        key=lambda row: row["points"],
+        reverse=True,
     )
-    done_payload: dict[str, Any] = {
+    done: dict[str, Any] = {
         "aborted": aborted,
         "leaderboard": leaderboard,
         "world": world_to_dict(world_state),
     }
     if reveal_goals:
-        done_payload["goals_revealed"] = [
-            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""} for c in arena["cast"]
+        done["goals_revealed"] = [
+            {"agent_id": c["id"], "hidden_goal": c.get("hidden_goal") or ""}
+            for c in arena["cast"]
         ]
-    yield {"event": "battle_done", "data": done_payload}
+    yield {"event": "battle_done", "data": done}
