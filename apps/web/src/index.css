@@ -5573,6 +5573,38 @@ textarea {
   min-width: 3.6rem;
 }
 
+.agent-pref-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.6rem;
+  padding: 0.55rem 0.65rem;
+  margin: 0 0 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.agent-pref-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+.agent-pref-editor input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.agent-pref-editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
 .auth-panel {
   position: relative;
   margin-left: auto;

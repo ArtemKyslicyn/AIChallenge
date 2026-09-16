@@ -52,3 +52,12 @@ class SqlAlchemyLongTermMemoryRepository:
             row.updated_at = now
         await self._db.flush()
         return memory
+
+    async def delete(self, client_visitor_id: str) -> None:
+        owner = (client_visitor_id or "").strip().lower()
+        if not owner:
+            return
+        row = await self._db.get(AgentLongTermMemoryRow, owner)
+        if row is not None:
+            await self._db.delete(row)
+            await self._db.flush()

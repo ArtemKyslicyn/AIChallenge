@@ -10,6 +10,8 @@ import {
   listExpertLenses,
   listPreferenceProfiles,
   activatePreferenceProfile,
+  createPreferenceProfile,
+  updatePreferenceProfile,
   runAgentWorkshop,
   writeAgentMemory,
   type AgentDialogMessageDto,
@@ -139,6 +141,14 @@ export function AgentWorkshop() {
   const [progonModelIds, setProgonModelIds] = useState<string[]>([]);
   const [prefProfiles, setPrefProfiles] = useState<PreferenceProfileDto[]>([]);
   const [expertLenses, setExpertLenses] = useState<ExpertLensDto[]>([]);
+  const [prefEditorOpen, setPrefEditorOpen] = useState(false);
+  const [prefDraft, setPrefDraft] = useState({
+    name: "",
+    style: "",
+    format: "",
+    constraints: "",
+  });
+  const [prefEditId, setPrefEditId] = useState<string | null>(null);
   const abortMap = useRef<Map<string, AbortController>>(new Map());
   const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -1675,7 +1685,130 @@ export function AgentWorkshop() {
                   {p.name}
                 </button>
               ))}
+              <button
+                type="button"
+                className="agent-memory-chip"
+                title="Создать или изменить профиль"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const active = prefProfiles.find((x) => x.is_active) ?? prefProfiles[0];
+                  if (active) {
+                    setPrefEditId(active.id);
+                    setPrefDraft({
+                      name: active.name,
+                      style: active.style,
+                      format: active.format,
+                      constraints: active.constraints,
+                    });
+                  } else {
+                    setPrefEditId(null);
+                    setPrefDraft({
+                      name: "Новый профиль",
+                      style: "",
+                      format: "",
+                      constraints: "",
+                    });
+                  }
+                  setPrefEditorOpen((v) => !v);
+                }}
+              >
+                {prefEditorOpen ? "Скрыть" : "Править"}
+              </button>
             </div>
+            {prefEditorOpen ? (
+              <div
+                className="agent-pref-editor"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <label>
+                  Имя
+                  <input
+                    value={prefDraft.name}
+                    onChange={(e) => setPrefDraft((d) => ({ ...d, name: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  Стиль
+                  <input
+                    value={prefDraft.style}
+                    onChange={(e) => setPrefDraft((d) => ({ ...d, style: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  Формат
+                  <input
+                    value={prefDraft.format}
+                    onChange={(e) => setPrefDraft((d) => ({ ...d, format: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  Ограничения
+                  <input
+                    value={prefDraft.constraints}
+                    onChange={(e) =>
+                      setPrefDraft((d) => ({ ...d, constraints: e.target.value }))
+                    }
+                  />
+                </label>
+                <div className="agent-pref-editor-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      setPrefEditId(null);
+                      setPrefDraft({
+                        name: "Новый профиль",
+                        style: "",
+                        format: "",
+                        constraints: "",
+                      });
+                    }}
+                  >
+                    Новый
+                  </button>
+                  <button
+                    type="button"
+                    className="agent-send-btn"
+                    onClick={() => {
+                      const payload = {
+                        name: prefDraft.name.trim() || "Профиль",
+                        style: prefDraft.style,
+                        format: prefDraft.format,
+                        constraints: prefDraft.constraints,
+                        activate: true,
+                      };
+                      const op = prefEditId
+                        ? updatePreferenceProfile(prefEditId, payload)
+                        : createPreferenceProfile(payload);
+                      void op
+                        .then((saved) => {
+                          setPrefProfiles((prev) => {
+                            const without = prev.filter((x) => x.id !== saved.id);
+                            return [...without, { ...saved, is_active: true }].map((x) => ({
+                              ...x,
+                              is_active: x.id === saved.id,
+                            }));
+                          });
+                          setPrefEditId(saved.id);
+                          setPrefEditorOpen(false);
+                          patchSession(draft.id, { status: `Профиль · ${saved.name}` });
+                        })
+                        .catch((err) => {
+                          patchSession(draft.id, {
+                            status:
+                              err instanceof ApiError
+                                ? err.message
+                                : "Не удалось сохранить профиль",
+                          });
+                        });
+                    }}
+                  >
+                    Сохранить
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="agent-persona-row" role="group" aria-label="Призма роли">
               <span className="agent-persona-label">Призма</span>
               {(expertLenses.length

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.persistence.models import AgentDialogRow
@@ -162,3 +162,15 @@ class SqlAlchemyAgentDialogRepository:
                 row.updated_at = dialog.updated_at
         await self._db.flush()
         return _to_domain(row)
+
+    async def rekey_client_visitor(self, *, from_key: str, to_key: str) -> None:
+        src = (from_key or "").strip().lower()
+        dst = (to_key or "").strip().lower()
+        if not src or not dst or src == dst:
+            return
+        await self._db.execute(
+            update(AgentDialogRow)
+            .where(AgentDialogRow.client_visitor_id == src)
+            .values(client_visitor_id=dst, updated_at=datetime.now(UTC))
+        )
+        await self._db.flush()
