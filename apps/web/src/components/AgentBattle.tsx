@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { ApiError, runAgentBattleSSE, type AgentBattleEvent } from "../api/client";
+import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
 import type {
   AgentPersona,
@@ -9,6 +10,7 @@ import type {
   LogEntry,
   NuclearPosture,
 } from "../battle/types";
+import { BattleWorldMap, type MapAgentCaption } from "./BattleWorldMap";
 
 function meter(value: number): string {
   return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
@@ -50,6 +52,8 @@ function applyBattleEvent(
           name: event.name,
           content: event.content,
           model_id: event.model_id,
+          skipped: event.skipped,
+          skip_reason: event.skip_reason,
         },
       ]);
       break;
@@ -107,7 +111,9 @@ export function AgentBattle() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [liveWorld, setLiveWorld] = useState<Record<string, unknown>>({});
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     saveArena(arena);
@@ -123,10 +129,12 @@ export function AgentBattle() {
   const onReset = () => {
     if (running) return;
     const fresh = resetDefaultArena();
+    clearMapPositions();
     setArena(fresh);
     setLog([]);
     setScores({});
     setLiveWorld({});
+    setSelectedAgentId(null);
     setStatus("Арена сброшена к дефолту");
   };
 
@@ -145,6 +153,7 @@ export function AgentBattle() {
     setStatus("Идёт прогон…");
     setLog([]);
     setScores({});
+    setSelectedAgentId(null);
     setLiveWorld({
       stability: arena.world.stability,
       public_panic: arena.world.public_panic,
@@ -173,6 +182,76 @@ export function AgentBattle() {
 
   const stability = Number(liveWorld.stability ?? arena.world.stability);
   const panic = Number(liveWorld.public_panic ?? arena.world.public_panic);
+  const techLead =
+    (liveWorld.tech_lead as Record<string, number> | undefined) ?? arena.world.tech_lead;
+
+  const focusAgentId = useMemo(() => {
+    for (let i = log.length - 1; i >= 0; i -= 1) {
+      const entry = log[i];
+      if (entry.kind === "agent" && !entry.skipped) return entry.agent_id;
+    }
+    return null;
+  }, [log]);
+
+  const phase = useMemo(() => {
+    for (let i = log.length - 1; i >= 0; i -= 1) {
+      const entry = log[i];
+      if (entry.kind === "phase") return entry.phase;
+      if (entry.kind === "agent") return entry.phase;
+    }
+    return null;
+  }, [log]);
+
+  const round = useMemo(() => {
+    for (let i = log.length - 1; i >= 0; i -= 1) {
+      const entry = log[i];
+      if (entry.kind === "phase") return entry.round;
+      if (entry.kind === "agent") return entry.round;
+      if (entry.kind === "verdict") return entry.round;
+    }
+    return null;
+  }, [log]);
+
+  const skippedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of log) {
+      if (entry.kind === "agent" && entry.skipped) ids.add(entry.agent_id);
+    }
+    return ids;
+  }, [log]);
+
+  const captions = useMemo(() => {
+    const latest = new Map<string, MapAgentCaption>();
+    for (const entry of log) {
+      if (entry.kind !== "agent") continue;
+      latest.set(entry.agent_id, {
+        agentId: entry.agent_id,
+        text: entry.content,
+        phase: entry.phase,
+        skipped: entry.skipped,
+      });
+    }
+    return [...latest.values()];
+  }, [log]);
+
+  const redLine = useMemo(() => {
+    if (liveWorld.red_line_crossed) return true;
+    for (let i = log.length - 1; i >= 0; i -= 1) {
+      const entry = log[i];
+      if (entry.kind === "verdict" && entry.red_line) return true;
+    }
+    return false;
+  }, [log, liveWorld]);
+
+  useEffect(() => {
+    if (!selectedAgentId || !logRef.current) return;
+    const node = logRef.current.querySelector(
+      `[data-agent-id="${CSS.escape(selectedAgentId)}"]`,
+    );
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedAgentId, log]);
 
   return (
     <div className="battle-board">
@@ -215,6 +294,23 @@ export function AgentBattle() {
           </div>
         </div>
       </div>
+
+      <BattleWorldMap
+        cast={arena.cast}
+        running={running}
+        focusAgentId={focusAgentId}
+        selectedAgentId={selectedAgentId}
+        phase={phase}
+        round={round}
+        skippedIds={skippedIds}
+        scores={scores}
+        captions={captions}
+        stability={stability}
+        panic={panic}
+        techLead={techLead}
+        redLine={redLine}
+        onSelectAgent={setSelectedAgentId}
+      />
 
       <div className="battle-layout">
         <aside className="battle-editors">
@@ -557,7 +653,7 @@ export function AgentBattle() {
             <p className="battle-board-muted">Запустите арену — здесь появятся очки и ходы.</p>
           )}
 
-          <div className="battle-log">
+          <div className="battle-log" ref={logRef}>
             {log.map((entry, idx) => {
               if (entry.kind === "system") {
                 return (
@@ -574,11 +670,29 @@ export function AgentBattle() {
                 );
               }
               if (entry.kind === "agent") {
+                const highlighted = selectedAgentId === entry.agent_id;
                 return (
-                  <article key={idx} className="battle-log-card">
+                  <article
+                    key={idx}
+                    data-agent-id={entry.agent_id}
+                    className={[
+                      "battle-log-card",
+                      entry.skipped ? "battle-log-card--skip" : "",
+                      highlighted ? "battle-log-card--focus" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
                     <header>
-                      <strong>{entry.name}</strong>
-                      <code>{entry.model_id || "—"}</code>
+                      <strong>
+                        {entry.name}
+                        {entry.skipped ? " · пропуск" : ""}
+                      </strong>
+                      <code>
+                        {entry.skipped
+                          ? entry.skip_reason || "skipped"
+                          : entry.model_id || "—"}
+                      </code>
                     </header>
                     <p>{entry.content}</p>
                   </article>

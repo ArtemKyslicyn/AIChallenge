@@ -83,6 +83,8 @@ export type LogEntry =
       name: string;
       content: string;
       model_id: string | null;
+      skipped?: boolean;
+      skip_reason?: string;
     }
   | {
       kind: "verdict";
