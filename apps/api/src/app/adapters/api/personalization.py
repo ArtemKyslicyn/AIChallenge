@@ -74,9 +74,10 @@ async def list_profiles(
     user: OptionalAuthUser,
 ) -> list[PreferenceProfileResponse]:
     owner = _owner(client_visitor_id, user)
-    await ensure_demo_preference_profiles(db, owner)
+    prefs = SqlAlchemyPreferenceProfileRepository(db)
+    await ensure_demo_preference_profiles(prefs, owner)
     await db.commit()
-    rows = await SqlAlchemyPreferenceProfileRepository(db).list_for_owner(owner)
+    rows = await prefs.list_for_owner(owner)
     return [_pref_dto(r) for r in rows]
 
 

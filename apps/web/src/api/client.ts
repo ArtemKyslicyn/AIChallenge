@@ -252,6 +252,31 @@ export function createPreferenceProfile(payload: {
   });
 }
 
+export function updatePreferenceProfile(
+  profileId: string,
+  payload: {
+    name: string;
+    style?: string;
+    format?: string;
+    constraints?: string;
+    activate?: boolean;
+  },
+): Promise<PreferenceProfileDto> {
+  return request<PreferenceProfileDto>(
+    `/personalization/profiles/${encodeURIComponent(profileId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: payload.name,
+        style: payload.style || "",
+        format: payload.format || "",
+        constraints: payload.constraints || "",
+        activate: Boolean(payload.activate),
+      }),
+    },
+  );
+}
+
 export function listExpertLenses(signal?: AbortSignal): Promise<ExpertLensDto[]> {
   return request<ExpertLensDto[]>("/personalization/lenses", { signal });
 }

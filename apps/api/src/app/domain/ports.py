@@ -8,6 +8,8 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.agent_dialog import AgentDialog
+from app.domain.agent_memory import LongTermMemory
+from app.domain.auth import UserAccount
 from app.domain.cascade import CascadeSummary
 from app.domain.entities import (
     AUTO_MODEL,
@@ -22,6 +24,7 @@ from app.domain.entities import (
 from app.domain.feedback import MessageFeedback, ModelFeedbackStats, PreferenceRow
 from app.domain.generation import GenerationParams
 from app.domain.media import MediaArtifact, StoredMedia
+from app.domain.personalization import PreferenceProfile
 from app.domain.tracing import AttemptRecord, ModelAggregate, RunTrace
 
 
@@ -175,6 +178,71 @@ class AgentDialogRepository(Protocol):
     ) -> AgentDialog | None: ...
 
     async def save(self, dialog: AgentDialog) -> AgentDialog: ...
+
+    async def rekey_client_visitor(self, *, from_key: str, to_key: str) -> None: ...
+
+
+class LongTermMemoryRepository(Protocol):
+    async def get(self, client_visitor_id: str) -> LongTermMemory: ...
+
+    async def save(self, client_visitor_id: str, memory: LongTermMemory) -> LongTermMemory: ...
+
+    async def delete(self, client_visitor_id: str) -> None: ...
+
+
+class PreferenceProfileRepository(Protocol):
+    async def list_for_owner(self, owner_key: str) -> list[PreferenceProfile]: ...
+
+    async def get(self, profile_id: UUID) -> PreferenceProfile | None: ...
+
+    async def get_active(self, owner_key: str) -> PreferenceProfile | None: ...
+
+    async def save(self, profile: PreferenceProfile) -> PreferenceProfile: ...
+
+    async def create(
+        self,
+        *,
+        owner_key: str,
+        name: str,
+        style: str = "",
+        format: str = "",
+        constraints: str = "",
+        activate: bool = False,
+    ) -> PreferenceProfile: ...
+
+    async def activate(self, owner_key: str, profile_id: UUID) -> PreferenceProfile: ...
+
+    async def delete(self, owner_key: str, profile_id: UUID) -> None: ...
+
+    async def rekey_owner(self, *, from_key: str, to_key: str) -> None: ...
+
+
+class UserRepository(Protocol):
+    async def get(self, user_id: UUID) -> UserAccount | None: ...
+
+    async def get_by_email(self, email: str) -> UserAccount | None: ...
+
+    async def create(
+        self,
+        *,
+        email: str,
+        password_hash: str,
+        display_name: str = "",
+    ) -> UserAccount: ...
+
+
+class AuthTokenRepository(Protocol):
+    async def create(
+        self,
+        *,
+        user_id: UUID,
+        plaintext_token: str,
+        ttl_days: int = 30,
+    ) -> None: ...
+
+    async def find_user_id(self, plaintext_token: str) -> UUID | None: ...
+
+    async def revoke_token(self, plaintext_token: str) -> None: ...
 
 
 class MediaStore(Protocol):

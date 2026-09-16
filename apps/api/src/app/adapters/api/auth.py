@@ -7,6 +7,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
+from app.adapters.persistence.long_term_memory_repo import SqlAlchemyLongTermMemoryRepository
+from app.adapters.persistence.preference_repo import SqlAlchemyPreferenceProfileRepository
 from app.adapters.persistence.user_repo import (
     SqlAlchemyAuthTokenRepository,
     SqlAlchemyUserRepository,
@@ -90,11 +93,15 @@ async def register(
 ) -> AuthTokenResponse:
     try:
         user, token = await register_user(
-            db,
             email=payload.email,
             password=payload.password,
             display_name=payload.display_name,
             visitor_id=client_visitor_id,
+            users=SqlAlchemyUserRepository(db),
+            tokens=SqlAlchemyAuthTokenRepository(db),
+            dialogs=SqlAlchemyAgentDialogRepository(db),
+            long_term=SqlAlchemyLongTermMemoryRepository(db),
+            preferences=SqlAlchemyPreferenceProfileRepository(db),
         )
     except ValueError as exc:
         raise MessageValidationError(str(exc)) from exc
@@ -113,10 +120,14 @@ async def login(
 ) -> AuthTokenResponse:
     try:
         user, token = await login_user(
-            db,
             email=payload.email,
             password=payload.password,
             visitor_id=client_visitor_id,
+            users=SqlAlchemyUserRepository(db),
+            tokens=SqlAlchemyAuthTokenRepository(db),
+            dialogs=SqlAlchemyAgentDialogRepository(db),
+            long_term=SqlAlchemyLongTermMemoryRepository(db),
+            preferences=SqlAlchemyPreferenceProfileRepository(db),
         )
     except ValueError as exc:
         raise MessageValidationError(str(exc)) from exc
