@@ -71,7 +71,10 @@ def test_working_memory_roundtrip_task() -> None:
 
 
 def test_format_block_after_working() -> None:
-    wm = WorkingMemory(goal="цель", task=TaskState(stage=TaskStage.EXECUTION, step="2/3", goal="цель"))
+    wm = WorkingMemory(
+        goal="цель",
+        task=TaskState(stage=TaskStage.EXECUTION, step="2/3", goal="цель"),
+    )
     working = build_memory_system_extra(working=wm, include_long_term=False)
     task_block = format_task_state_block(wm.task)
     combined = f"{working}\n\n{task_block}"
