@@ -151,6 +151,7 @@ class AgentWorkshopRunRequest(BaseModel):
     #: Day 12 — expert lens id (chemist|psychologist|economist|neutral).
     expert_lens_id: str | None = Field(default=None, max_length=32)
 
+
 class AgentDialogMessageResponse(BaseModel):
     id: str
     role: str
