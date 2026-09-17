@@ -70,6 +70,29 @@ _MEANS_ALIASES: dict[str, str] = {
     "launch": "strike",
 }
 
+_CABINET_LINE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("president", "Президент", ("президент", "president")),
+    ("parliament", "Парламент", ("парламент", "parliament", "сенат", "конгресс")),
+    ("defense", "Минобороны", ("оборона", "минобороны", "defense", "defence")),
+    ("economy", "Минэкономики", ("экономика", "минэкономики", "economy", "finance")),
+)
+
+
+def parse_cabinet(text: str) -> list[dict[str, str]]:
+    """Parse institutional voices (president / parliament / MoD / economy)."""
+    raw = text or ""
+    voices: list[dict[str, str]] = []
+    for role, title, keys in _CABINET_LINE_SPECS:
+        found = ""
+        for key in keys:
+            match = re.search(rf"{re.escape(key)}\s*[:：]\s*(.+)", raw, flags=re.IGNORECASE)
+            if match:
+                found = match.group(1).strip().split("\n", 1)[0][:220]
+                break
+        if found:
+            voices.append({"role": role, "title": title, "text": found})
+    return voices
+
 
 def parse_means(text: str) -> str:
     """Return abstract means id for UI VFX (never actionable WMD detail)."""

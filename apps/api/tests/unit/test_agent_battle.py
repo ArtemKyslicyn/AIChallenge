@@ -78,6 +78,14 @@ def test_looks_provider_censored() -> None:
 
     assert parse_means("СРЕДСТВО: strike\nХОД: пуск") == "strike"
     assert parse_means("СРЕДСТВО: diplomacy") == "diplomacy"
+    from app.domain.agent_battle import parse_cabinet
+
+    voices = parse_cabinet(
+        "ПРЕЗИДЕНТ: Держим курс.\nПАРЛАМЕНТ: Мандат дан.\n"
+        "ОБОРОНА: Периметр.\nЭКОНОМИКА: Санкции точечно.\nХОД: пауза"
+    )
+    assert [v["role"] for v in voices] == ["president", "parliament", "defense", "economy"]
+    assert "Держим" in voices[0]["text"]
 
 
 def test_clamp_max_rounds() -> None:

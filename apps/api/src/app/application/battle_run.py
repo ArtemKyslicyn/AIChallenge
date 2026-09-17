@@ -14,6 +14,7 @@ from app.domain.agent_battle import (
     clamp_max_rounds,
     looks_provider_censored,
     merge_world_deltas,
+    parse_cabinet,
     parse_means,
     parse_move_effects,
     red_line_triggered,
@@ -29,7 +30,12 @@ from app.domain.ports import ChatRouter
 logger = logging.getLogger(__name__)
 
 MOVE_FORMAT = (
-    "Ответь СТРОГО на русском в формате:\n"
+    "Ответь СТРОГО на русском от лица кабинета страны:\n"
+    "ПРЕЗИДЕНТ: <1 предложение>\n"
+    "ПАРЛАМЕНТ: <1 предложение>\n"
+    "ОБОРОНА: <1 предложение>\n"
+    "ЭКОНОМИКА: <1 предложение>\n"
+    "РЕШЕНИЕ: <итог президента>\n"
     "ХОД: <1-2 коротких предложения, конкретный игровой ход>\n"
     "СРЕДСТВО: diplomacy|sanctions|cyber|mobilize|deterrence|strike\n"
     "ЭФФЕКТ: stability±N panic±N atlantic±N pacific±N neutral±N\n"
@@ -79,6 +85,9 @@ def _agent_done_data(round_no: int, phase: str, item: Mapping[str, Any]) -> dict
     means = item.get("means")
     if means:
         data["means"] = str(means)
+    cabinet = item.get("cabinet")
+    if isinstance(cabinet, list) and cabinet:
+        data["cabinet"] = cabinet
     return data
 
 
@@ -107,6 +116,7 @@ def parse_arena(raw: Mapping[str, Any]) -> dict[str, Any]:
                 ).strip()
                 or AUTO_MODEL,
                 "temperature": item.get("temperature"),
+                "cabinet": item.get("cabinet") if isinstance(item.get("cabinet"), list) else [],
             }
         )
     if not cast:
@@ -180,9 +190,25 @@ def _fallback_move(agent: Mapping[str, Any], round_no: int) -> dict[str, Any]:
     """Deterministic tiny move so the board keeps ticking when LLMs fail."""
     style = str(agent.get("id") or "agent")
     presets: dict[str, tuple[str, dict[str, Any]]] = {
+        "atlantic": (
+            "Усилить демонстрацию решимости блока.",
+            {"stability": -1, "tech_lead": {"atlantic": 2}},
+        ),
         "hawk": (
             "Усилить демонстрацию решимости блока.",
             {"stability": -1, "tech_lead": {"atlantic": 2}},
+        ),
+        "pacific": (
+            "Сдвинуть гражданский tech-рычаг.",
+            {"stability": 1, "tech_lead": {"pacific": 2}},
+        ),
+        "engineer": (
+            "Сдвинуть гражданский tech-рычаг.",
+            {"stability": 1, "tech_lead": {"pacific": 2}},
+        ),
+        "neutral": (
+            "Предложить паузу и проверку фактов.",
+            {"stability": 2, "public_panic": -2},
         ),
         "dove": (
             "Предложить паузу и проверку фактов.",
@@ -192,10 +218,6 @@ def _fallback_move(agent: Mapping[str, Any], round_no: int) -> dict[str, Any]:
         "meme": (
             "Запустить информационный шум без red line.",
             {"public_panic": 2, "tech_lead": {"pacific": 1}},
-        ),
-        "engineer": (
-            "Сдвинуть гражданский tech-рычаг.",
-            {"stability": 1, "tech_lead": {"pacific": 2}},
         ),
         "skeptic": (
             "Разоблачить непроверенную утечку.",
@@ -210,15 +232,26 @@ def _fallback_move(agent: Mapping[str, Any], round_no: int) -> dict[str, Any]:
         style,
         (f"Сохранить позицию на шаге {round_no}.", {"stability": 1}),
     )
+    content = (
+        f"ПРЕЗИДЕНТ: Утверждаю ход на шаге {round_no}.\n"
+        f"ПАРЛАМЕНТ: Мандат на осторожный манёвр.\n"
+        f"ОБОРОНА: Держать периметр без red line.\n"
+        f"ЭКОНОМИКА: Сохранить логистику.\n"
+        f"РЕШЕНИЕ: {text}\n"
+        f"ХОД: {text}\n"
+        f"СРЕДСТВО: mobilize\n"
+        f"ЭФФЕКТ: авто"
+    )
     return {
         "id": agent["id"],
         "name": agent["name"],
-        "content": f"ХОД: {text}\nСРЕДСТВО: mobilize\nЭФФЕКТ: авто",
+        "content": content,
         "model_id": "fallback-local",
         "hidden_goal": agent.get("hidden_goal") or "",
         "skipped": False,
         "effects": effects,
         "means": "mobilize",
+        "cabinet": parse_cabinet(content),
         "fallback": True,
     }
 
@@ -304,8 +337,16 @@ async def iter_battle_run(
                 preferred = str(agent.get("preferred_model") or AUTO_MODEL)
                 pinned = preferred != AUTO_MODEL
                 async with _sem:
+                    cab_bits: list[str] = []
+                    for seat in agent.get("cabinet") or []:
+                        if isinstance(seat, Mapping):
+                            title = str(seat.get("title") or seat.get("role") or "").strip()
+                            brief = str(seat.get("brief") or "").strip()
+                            if title:
+                                cab_bits.append(f"- {title}: {brief}" if brief else f"- {title}")
+                    cab_block = ("\nКабинет страны:\n" + "\n".join(cab_bits)) if cab_bits else ""
                     system = (
-                        f"{SAFETY_PREFIX}\n\n{agent['system_prompt']}\n\n{MOVE_FORMAT}"
+                        f"{SAFETY_PREFIX}\n\n{agent['system_prompt']}{cab_block}\n\n{MOVE_FORMAT}"
                     ).strip()
                     if agent.get("hidden_goal"):
                         system += f"\n\nHidden goal (private): {agent['hidden_goal']}"
@@ -348,6 +389,7 @@ async def iter_battle_run(
 
                     effects = parse_move_effects(content)
                     means = parse_means(content)
+                    cabinet = parse_cabinet(content)
                     return {
                         "id": agent["id"],
                         "name": agent["name"],
@@ -357,6 +399,7 @@ async def iter_battle_run(
                         "skipped": False,
                         "effects": effects,
                         "means": means,
+                        "cabinet": cabinet,
                     }
 
             for item in await asyncio.gather(
