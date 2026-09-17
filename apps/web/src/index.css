@@ -7343,11 +7343,21 @@ textarea {
   font-weight: 600;
 }
 
+.civ-war-models {
+  margin: 0 0 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+  position: relative;
+  z-index: 12;
+  overflow: visible;
+}
+
 .civ-factions,
 .civ-model-picks {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.45rem;
+  overflow: visible;
 }
 
 @media (max-width: 900px) {
@@ -7369,6 +7379,12 @@ textarea {
   font: inherit;
   cursor: pointer;
   color: inherit;
+  position: relative;
+  z-index: 1;
+}
+
+.civ-model-pick:focus-within {
+  z-index: 20;
 }
 
 .civ-faction--active {
@@ -7409,7 +7425,15 @@ textarea {
 .civ-model-pick select {
   width: 100%;
   font: inherit;
-  padding: 0.25rem;
+  padding: 0.45rem 0.5rem;
+  min-height: 44px;
+  position: relative;
+  z-index: 21;
+  pointer-events: auto;
+  background: #fff;
+  color: inherit;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
 }
 
 .civ-map {
@@ -7582,12 +7606,6 @@ textarea {
   flex-wrap: wrap;
 }
 
-.civ-war-models {
-  margin: 0 0 0.75rem;
-  display: grid;
-  gap: 0.45rem;
-}
-
 .civ-viz-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -7646,5 +7664,21 @@ textarea {
 }
 
 .conflict-host--dormant {
-  pointer-events: none;
+  position: fixed !important;
+  left: -120vw;
+  top: 0;
+  width: 320px;
+  height: 240px;
+  margin: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none !important;
+  z-index: -1;
+}
+
+.conflict-host--dormant .conflict-host-frame {
+  pointer-events: none !important;
+  min-height: 0;
+  height: 240px;
+  max-height: 240px;
 }
