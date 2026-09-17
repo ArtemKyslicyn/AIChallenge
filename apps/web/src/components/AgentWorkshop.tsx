@@ -1753,7 +1753,6 @@ export function AgentWorkshop() {
                 title="Примерно токены (len/4). Низкое значение — демо обрезки истории."
               />
             </label>
-          </div>
           <div className="agent-memory-chips" role="group" aria-label="Запись в память">
             {MEMORY_CHAT_HINTS.map((hint) => (
               <button
@@ -1927,10 +1926,10 @@ export function AgentWorkshop() {
             </div>
           </div>
           <div className="agent-invariant-strip" aria-label="Инварианты">
-            <div className="agent-persona-row" role="group" aria-label="Список инвариантов">
+            <div className="agent-persona-row" role="group" aria-label="Инварианты диалога">
               <span className="agent-persona-label">Инварианты</span>
               {(session.invariants || []).length === 0 ? (
-                <span className="agent-task-meta">отдельно от диалога · пусто</span>
+                <span className="agent-task-meta">отдельно от диалога</span>
               ) : (
                 (session.invariants || []).map((inv) => (
                   <button
@@ -1953,29 +1952,17 @@ export function AgentWorkshop() {
                       })();
                     }}
                   >
-                    {INVARIANT_KIND_LABELS[inv.kind] || inv.kind}
+                    <span className="agent-invariant-chip-text">
+                      {INVARIANT_KIND_LABELS[inv.kind] || inv.kind}
+                      {" · "}
+                      {inv.statement}
+                    </span>
                     <span className="agent-invariant-x" aria-hidden>
                       ×
                     </span>
                   </button>
                 ))
               )}
-            </div>
-            {(session.invariants || []).length > 0 ? (
-              <ul className="agent-invariant-list">
-                {(session.invariants || []).map((inv) => (
-                  <li key={`${inv.id}-stmt`}>
-                    <strong>{INVARIANT_KIND_LABELS[inv.kind] || inv.kind}</strong>
-                    {inv.statement}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="agent-task-meta">
-                Хранятся в JSON колонки, не в чате. Конфликт запроса → отказ без LLM.
-              </p>
-            )}
-            <div className="agent-persona-row" role="group" aria-label="Управление инвариантами">
               <button
                 type="button"
                 className="agent-memory-chip"
@@ -2243,6 +2230,7 @@ export function AgentWorkshop() {
                 </button>
               ))}
             </div>
+          </div>
           </div>
           <textarea
             value={session.input}
