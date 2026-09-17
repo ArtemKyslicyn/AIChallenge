@@ -21,6 +21,8 @@ function isArena(raw: unknown): raw is ArenaDoc {
 }
 
 function migrateArena(doc: ArenaDoc): ArenaDoc {
+  const hasNations = doc.cast.some((c) => c.id === "atlantic") && doc.cast.length === 3;
+  if (!hasNations) return createDefaultArena();
   return {
     ...doc,
     version: 1,
