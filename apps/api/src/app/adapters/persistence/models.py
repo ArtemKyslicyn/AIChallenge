@@ -177,6 +177,9 @@ class AgentDialogRow(Base):
     working_memory: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
+    invariants: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     active_lens_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     parent_dialog_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("agent_dialogs.id", ondelete="SET NULL"), nullable=True

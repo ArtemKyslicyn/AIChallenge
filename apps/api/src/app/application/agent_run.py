@@ -34,6 +34,12 @@ from app.domain.context_strategies.facts import (
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, MessageRole
 from app.domain.errors import AgentsRunDisabledError, MessageValidationError
 from app.domain.generation import GenerationParams
+from app.domain.invariants import (
+    build_refusal_reply,
+    find_invariant_conflicts,
+    format_invariants_block,
+    parse_invariants,
+)
 from app.domain.personalization import (
     PreferenceProfile,
     build_personalization_extra,
@@ -68,6 +74,7 @@ class AgentRunOutcome:
     tokens: TokenBreakdown
     compression: CompressionInfo | None = None
     strategy: StrategyMeta | None = None
+    invariant_conflict: bool = False
 
 
 def merge_system_extra(system_prompt: str, system_extra: str) -> str:
@@ -237,6 +244,54 @@ async def run_agent_with_dialog(
             dialog.visitor_hash = vhash
 
     history = list(dialog.messages)
+    inv_items = parse_invariants(dialog.invariants)
+    conflicts = find_invariant_conflicts(inv_items, message)
+    if conflicts:
+        refusal = build_refusal_reply(conflicts, message.strip())
+        _, truncation = fit_history_to_budget(
+            system_prompt=definition.system_prompt.strip(),
+            history=history,
+            user_message=message.strip(),
+            context_limit=context_limit,
+            max_tokens=definition.max_tokens
+            if definition.max_tokens is not None
+            else (generation.max_tokens if generation else None),
+        )
+        tokens = build_token_breakdown(
+            system_prompt=definition.system_prompt.strip(),
+            history_before=history,
+            history_after=history,
+            user_message=message.strip(),
+            completion=refusal,
+            model_id="invariants",
+            truncation=truncation,
+        )
+        user_msg = AgentDialogMessage(
+            id=str(uuid4()),
+            role="user",
+            content=message.strip(),
+            created_at=now,
+            model_id=None,
+        )
+        assistant_msg = AgentDialogMessage(
+            id=str(uuid4()),
+            role="assistant",
+            content=refusal,
+            created_at=datetime.now(UTC),
+            model_id="invariants",
+        )
+        dialog.messages = [*history, user_msg, assistant_msg][-MAX_STORED_MESSAGES:]
+        dialog.updated_at = datetime.now(UTC)
+        saved = await dialogs.save(dialog)
+        return (
+            AgentRunOutcome(
+                result=CompletionResult(content=refusal, model_id="invariants"),
+                tokens=tokens,
+                invariant_conflict=True,
+            ),
+            saved,
+        )
+
     state = ContextState(
         summary_text=dialog.summary_text or "",
         summary_until_count=int(dialog.summary_until_count or 0),
@@ -352,6 +407,9 @@ async def run_agent_with_dialog(
     )
     if task_extra:
         memory_parts.append(task_extra)
+    inv_extra = format_invariants_block(inv_items)
+    if inv_extra:
+        memory_parts.append(inv_extra)
     memory_extra = "\n\n".join(memory_parts)
     system_extra = assembly.system_extra
     if memory_extra:

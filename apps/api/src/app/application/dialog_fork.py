@@ -55,6 +55,7 @@ async def fork_agent_dialog(
         summary_until_count=min(int(source.summary_until_count or 0), len(prefix)),
         facts=dict(source.facts or {}),
         working_memory=dict(source.working_memory or {}),
+        invariants=list(source.invariants or []),
         parent_dialog_id=source.id,
         branch_label=label,
         forked_from_message_id=mid,

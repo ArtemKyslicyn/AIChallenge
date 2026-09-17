@@ -16,6 +16,8 @@ from app.adapters.api.schemas import (
     AgentDialogForkRequest,
     AgentDialogMessageResponse,
     AgentDialogResponse,
+    AgentInvariantEventRequest,
+    AgentInvariantEventResponse,
     AgentMemorySnapshotResponse,
     AgentMemoryWriteRequest,
     AgentMemoryWriteResponse,
@@ -31,6 +33,10 @@ from app.adapters.persistence.long_term_memory_repo import SqlAlchemyLongTermMem
 from app.adapters.persistence.preference_repo import SqlAlchemyPreferenceProfileRepository
 from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agent_with_dialog
 from app.application.dialog_fork import fork_agent_dialog
+from app.application.invariants_ops import (
+    apply_invariant_event_to_dialog,
+    ensure_dialog_for_invariants,
+)
 from app.application.llm_catalog import generation_from_api
 from app.application.task_fsm import apply_task_event_to_dialog, ensure_dialog_for_task
 from app.core.deps import (
@@ -58,6 +64,7 @@ from app.domain.context_compress import CompressionInfo
 from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
+from app.domain.invariants import InvariantEvent, parse_invariant_chat_command
 from app.domain.owner_key import memory_owner_key
 from app.domain.task_state import TaskEvent, parse_task_chat_command
 from app.domain.token_meter import TokenBreakdown
@@ -99,6 +106,7 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
         summary_until_count=int(dialog.summary_until_count or 0),
         facts=dict(dialog.facts or {}),
         working_memory=dict(dialog.working_memory or {}),
+        invariants=list(dialog.invariants or []),
         parent_dialog_id=dialog.parent_dialog_id,
         branch_label=dialog.branch_label,
         forked_from_message_id=dialog.forked_from_message_id,
@@ -264,6 +272,54 @@ async def run_workshop_agent(
                 task_just_resumed = task_ev.name == "resume"
                 # Continue into LLM with updated state (start/advance/resume).
 
+            inv_ev = parse_invariant_chat_command(payload.message)
+            if inv_ev is not None:
+                dialog = await ensure_dialog_for_invariants(
+                    dialogs,
+                    owner_key=owner,
+                    client_draft_id=draft_id,
+                    dialog_name=definition.name,
+                    dialog_system_prompt=definition.system_prompt,
+                )
+                if vhash and not dialog.visitor_hash:
+                    dialog.visitor_hash = vhash
+                dialog, label = await apply_invariant_event_to_dialog(
+                    dialog, inv_ev, dialogs=dialogs
+                )
+                if inv_ev.skip_llm:
+                    from datetime import UTC, datetime
+                    from uuid import uuid4
+
+                    now = datetime.now(UTC)
+                    ack = f"✓ Инварианты · {label}"
+                    dialog.messages = [
+                        *dialog.messages,
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="user",
+                            content=payload.message.strip(),
+                            created_at=now,
+                            model_id=None,
+                        ),
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="assistant",
+                            content=ack,
+                            created_at=now,
+                            model_id="invariants",
+                        ),
+                    ][-80:]
+                    dialog.updated_at = now
+                    dialog = await dialogs.save(dialog)
+                    await db.commit()
+                    return AgentWorkshopRunResponse(
+                        content=ack,
+                        model_id="invariants",
+                        dialog_id=dialog.id,
+                        messages=[_msg_dto(m) for m in dialog.messages],
+                        invariants=list(dialog.invariants or []),
+                    )
+
             preference = await SqlAlchemyPreferenceProfileRepository(db).get_active(owner)
             lens_id = (payload.expert_lens_id or "").strip() or None
             outcome, dialog = await run_agent_with_dialog(
@@ -308,6 +364,8 @@ async def run_workshop_agent(
                 tokens=tokens_out,
                 compression=compression_out,
                 context_strategy=strategy_out,
+                invariant_conflict=bool(outcome.invariant_conflict),
+                invariants=list(dialog.invariants or []),
             )
 
         outcome = await run_agent(
@@ -597,6 +655,42 @@ async def apply_task_event_endpoint(
     return AgentTaskEventResponse(
         working=working,
         task=dict(task) if isinstance(task, dict) else {},
+        label=label,
+        dialog_id=dialog.id,
+    )
+
+
+@router.post("/invariants", response_model=AgentInvariantEventResponse)
+async def apply_invariant_event_endpoint(
+    payload: AgentInvariantEventRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+    auth_user: OptionalAuthUser,
+) -> AgentInvariantEventResponse:
+    """Add / seed / remove invariants (UI chips). Stored apart from chat turns."""
+    owner = _owner_key(client_visitor_id, auth_user)
+    draft = (payload.client_draft_id or "").strip()
+    if not draft:
+        raise MessageValidationError("client_draft_id обязателен.")
+    dialogs = SqlAlchemyAgentDialogRepository(db)
+    dialog = await ensure_dialog_for_invariants(
+        dialogs,
+        owner_key=owner,
+        client_draft_id=draft,
+        dialog_name=payload.dialog_name or "Agent",
+        dialog_system_prompt=payload.dialog_system_prompt or "",
+    )
+    event = InvariantEvent(
+        name=payload.event.strip().lower(),
+        kind=payload.kind,
+        statement=payload.statement,
+        invariant_id=payload.invariant_id,
+        skip_llm=True,
+    )
+    dialog, label = await apply_invariant_event_to_dialog(dialog, event, dialogs=dialogs)
+    await db.commit()
+    return AgentInvariantEventResponse(
+        invariants=list(dialog.invariants or []),
         label=label,
         dialog_id=dialog.id,
     )

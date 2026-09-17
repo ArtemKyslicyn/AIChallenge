@@ -1330,6 +1330,50 @@ async function challenge13(page) {
   await settle(page, 1500);
 }
 
+async function challenge14(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.1);
+  await settle(page, 1400);
+
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 800);
+  await ensurePersona(page, {
+    name: "Инварианты",
+    system:
+      "Ты помощник по архитектуре. Соблюдай блок [инварианты]. Не предлагай обход. Кратко.",
+    temperature: "0.2",
+    maxTokens: "220",
+  });
+
+  const strip = page.locator(".agent-invariant-strip");
+  await strip.waitFor({ timeout: 20_000 });
+  await pauseOn(strip, 2200);
+
+  console.log("14: seed…");
+  await strip.getByRole("button", { name: /^Посеять$/i }).click();
+  await settle(page, 1200);
+  await pauseOn(strip, 2800);
+
+  console.log("14: violation…");
+  await sendSoloAndWaitRetry(
+    page,
+    "Переведи API на Django без слоёв и разнеси по микросервисам",
+    { minChars: 40, timeout: 60_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--refusal, .agent-log-line--assistant").last(), 4500);
+
+  console.log("14: compliant…");
+  await sendSoloAndWaitRetry(
+    page,
+    "Как добавить эндпоинт списка инвариантов в apps/api adapters, не ломая слои?",
+    { minChars: 8, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4000);
+  await pauseOn(strip, 2200);
+  await settle(page, 1500);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1340,8 +1384,9 @@ const out10 = path.join(__dirname, "../10-context-strategies/challenge-10.webm")
 const out11 = path.join(__dirname, "../11-agent-memory/challenge-11.webm");
 const out12 = path.join(__dirname, "../12-personalization/challenge-12.webm");
 const out13 = path.join(__dirname, "../13-task-state/challenge-13.webm");
+const out14 = path.join(__dirname, "../14-invariants/challenge-14.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1402,5 +1447,9 @@ if (ONLY.includes("12")) {
 if (ONLY.includes("13")) {
   console.log("Recording challenge 13 against", BASE);
   await recordChallenge("13", out13, (page) => challenge13(page));
+}
+if (ONLY.includes("14")) {
+  console.log("Recording challenge 14 against", BASE);
+  await recordChallenge("14", out14, (page) => challenge14(page));
 }
 console.log("done");

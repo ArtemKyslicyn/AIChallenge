@@ -1,4 +1,4 @@
-# Challenges (Days 4–13)
+# Challenges (Days 4–14)
 
 Автопрогон заданий челленджа через **prod** API платформы AIChallenge.
 
@@ -14,17 +14,18 @@
 | [`11-agent-memory/`](11-agent-memory/) | 3 слоя памяти (short/working/LTM) | **Агенты** → Память · 3 слоя |
 | [`12-personalization/`](12-personalization/) | Prefs + ExpertLens + Auth | **Войти** + Профиль / Призма |
 | [`13-task-state/`](13-task-state/) | Task FSM + пауза/resume | **Агенты** → полоса Задача |
+| [`14-invariants/`](14-invariants/) | Инварианты + отказ при конфликте | **Агенты** → полоса Инварианты |
 
 ## Прогон (prod)
 
 ```bash
-python3 challenges/13-task-state/run.py
+python3 challenges/14-invariants/run.py
 ```
 
 ## Видео UI
 
 ```bash
-cd challenges/record && RECORD_ONLY=13 npm run record
+cd challenges/record && RECORD_ONLY=14 npm run record
 ```
 
-Текст ролика дня 13: [`13-task-state/VIDEO.md`](13-task-state/VIDEO.md)
+Текст ролика дня 14: [`14-invariants/VIDEO.md`](14-invariants/VIDEO.md)
