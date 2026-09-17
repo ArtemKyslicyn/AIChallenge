@@ -147,16 +147,13 @@ DEFAULT_INVARIANTS: tuple[dict[str, str], ...] = (
     {
         "id": "decision-model-id",
         "kind": "decision",
-        "statement": (
-            "Каждый ответ ассистента атрибутирует model_id (API, SSE, UI, БД)."
-        ),
+        "statement": ("Каждый ответ ассистента атрибутирует model_id (API, SSE, UI, БД)."),
     },
     {
         "id": "business-domain-names",
         "kind": "business",
         "statement": (
-            "Доменные имена нейтральные: без patient/doctor в коде, API и "
-            "дефолтных сценариях."
+            "Доменные имена нейтральные: без patient/doctor в коде, API и дефолтных сценариях."
         ),
     },
 )
@@ -197,9 +194,7 @@ def normalize_kind(raw: str) -> str:
     key = (raw or "").strip().lower()
     kind = _KIND_ALIASES.get(key)
     if kind is None:
-        raise MessageValidationError(
-            "kind инварианта: architecture | stack | decision | business."
-        )
+        raise MessageValidationError("kind инварианта: architecture | stack | decision | business.")
     return kind
 
 
@@ -348,9 +343,7 @@ def apply_invariant_event(
         iid = (event.invariant_id or "").strip()[:64] or f"{kind[:8]}-{uuid4().hex[:8]}"
         if any(i.id == iid for i in current):
             current = [i for i in current if i.id != iid]
-        current.append(
-            Invariant(id=iid, kind=kind, statement=statement[:500], active=True)
-        )
+        current.append(Invariant(id=iid, kind=kind, statement=statement[:500], active=True))
         return current, f"добавлен [{KIND_LABELS_RU[kind]}]"
     if name == "remove":
         iid = (event.invariant_id or "").strip()

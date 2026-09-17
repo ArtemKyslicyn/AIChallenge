@@ -79,9 +79,7 @@ def test_add_remove() -> None:
         InvariantEvent(name="add", kind="стек", statement="Только Postgres"),
     )
     assert items[0].kind == "stack"
-    items, _ = apply_invariant_event(
-        items, InvariantEvent(name="remove", invariant_id=items[0].id)
-    )
+    items, _ = apply_invariant_event(items, InvariantEvent(name="remove", invariant_id=items[0].id))
     assert items == []
     with pytest.raises(MessageValidationError):
         apply_invariant_event([], InvariantEvent(name="remove", invariant_id="missing"))
