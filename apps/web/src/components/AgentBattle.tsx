@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { ApiError, listModels, runAgentBattleSSE, type AgentBattleEvent, type ModelCatalogItemDto } from "../api/client";
 import { parseCabinetVoices, type CabinetVoice } from "../battle/cabinet";
 import { battleToConflictPatch, type ConflictView } from "../battle/conflictBridge";
-import { publishWorldBus } from "../battle/worldBus";
 import { parseMeans, type BattleMeans } from "../battle/means";
 import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
@@ -22,8 +21,8 @@ import {
   type WarBoard,
 } from "../battle/warBoard";
 import { BattleCivMap } from "./BattleCivMap";
+import { BattleLiveTheater } from "./BattleLiveTheater";
 import { BattleModelMenu } from "./BattleModelMenu";
-import { ConflictEmulationHost } from "./ConflictEmulationHost";
 
 type VizMode = "civ" | ConflictView;
 
@@ -367,9 +366,43 @@ export function AgentBattle() {
     ],
   );
 
-  useEffect(() => {
-    publishWorldBus(conflictPatch);
-  }, [conflictPatch]);
+  const liveFeed = useMemo(() => {
+    const orders: NonNullable<ReturnType<typeof battleToConflictPatch>["lastOrders"]> = [];
+    const arcs: NonNullable<ReturnType<typeof battleToConflictPatch>["arcs"]> = [];
+    for (const entry of log) {
+      if (entry.kind !== "agent" || entry.skipped) continue;
+      const means = parseMeans(entry.means || entry.content);
+      const voices =
+        entry.cabinet?.map((v) => ({
+          role: v.role as CabinetVoice["role"],
+          title: v.title,
+          text: v.text,
+        })) ?? [];
+      const slice = battleToConflictPatch({
+        round: entry.round,
+        stability,
+        panic,
+        techLead,
+        escalation,
+        means,
+        meansActor: entry.agent_id,
+        lastDelta,
+        cabinet: voices,
+        cabinetNationId: entry.agent_id,
+      });
+      if (slice.lastOrders) orders.push(...slice.lastOrders);
+      if (slice.arcs) arcs.push(...slice.arcs);
+    }
+    if (conflictPatch.lastOrders) {
+      for (const o of conflictPatch.lastOrders) {
+        if (!orders.some((x) => x.actor === o.actor && x.action === o.action && x.rationale === o.rationale)) {
+          orders.push(o);
+        }
+      }
+    }
+    if (conflictPatch.arcs) arcs.push(...conflictPatch.arcs);
+    return { orders, arcs };
+  }, [log, stability, panic, techLead, escalation, lastDelta, conflictPatch]);
 
   useEffect(() => {
     const done = [...log].reverse().find((e) => e.kind === "done");
@@ -501,7 +534,7 @@ export function AgentBattle() {
         ))}
       </nav>
       <p className="battle-world-hint civ-viz-hint">
-        Живая проекция: города и каскады двигаются от хода битвы. Strike запускает planet / strategy / arcs.
+        Все вкладки читают один live-state битвы (ходы, кабинеты, эскалация) — без iframe-демо.
       </p>
 
       {vizMode === "civ" ? (
@@ -527,13 +560,16 @@ export function AgentBattle() {
           winnerLabel={winnerLabel}
           onSelectAgent={setSelectedAgentId}
         />
-      ) : null}
-
-      <ConflictEmulationHost
-        view={vizMode === "civ" ? "llm" : vizMode}
-        livePatch={conflictPatch}
-        active={vizMode !== "civ"}
-      />
+      ) : (
+        <BattleLiveTheater
+          view={vizMode}
+          patch={conflictPatch}
+          arcs={liveFeed.arcs}
+          orders={liveFeed.orders}
+          running={running}
+          cast={arena.cast}
+        />
+      )}
 
       <div className="civ-elo-board" aria-label="Таблица побед моделей">
         <div className="civ-elo-head">
