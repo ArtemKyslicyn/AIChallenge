@@ -22,6 +22,7 @@ import {
   type WarBoard,
 } from "../battle/warBoard";
 import { BattleCivMap } from "./BattleCivMap";
+import { BattleModelMenu } from "./BattleModelMenu";
 import { ConflictEmulationHost } from "./ConflictEmulationHost";
 
 type VizMode = "civ" | ConflictView;
@@ -464,25 +465,16 @@ export function AgentBattle() {
         </p>
         <div className="civ-model-picks">
           {arena.cast.filter((c) => c.enabled).map((p) => (
-            <label key={p.id} className="civ-model-pick">
+            <div key={p.id} className="civ-model-pick">
               <span>{p.name}</span>
-              <select
-                value={p.preferred_model}
+              <BattleModelMenu
+                value={p.preferred_model || "auto"}
                 disabled={running}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) =>
-                  updatePersona(p.id, { preferred_model: e.target.value || "auto" })
-                }
-              >
-                <option value="auto">auto (цепочка)</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id}
-                  </option>
-                ))}
-              </select>
-            </label>
+                ariaLabel={`Модель ${p.name}`}
+                options={models.map((m) => ({ id: m.id }))}
+                onChange={(id) => updatePersona(p.id, { preferred_model: id || "auto" })}
+              />
+            </div>
           ))}
         </div>
       </div>
