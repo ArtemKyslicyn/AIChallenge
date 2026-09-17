@@ -469,6 +469,8 @@ export function AgentBattle() {
               <select
                 value={p.preferred_model}
                 disabled={running}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) =>
                   updatePersona(p.id, { preferred_model: e.target.value || "auto" })
                 }

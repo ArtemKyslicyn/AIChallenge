@@ -78,18 +78,17 @@ export function ConflictEmulationHost({ view, livePatch, active = true }: Props)
     <div
       className={active ? "conflict-host" : "conflict-host conflict-host--dormant"}
       aria-hidden={!active}
-      hidden={!active ? undefined : undefined}
-      style={active ? undefined : { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}
+      inert={!active ? true : undefined}
     >
       <iframe
         ref={iframeRef}
         className="conflict-host-frame"
         title="Conflict emulation board"
         src="/conflict/index.html?embed=1"
+        tabIndex={active ? undefined : -1}
         onLoad={() => {
           readyRef.current = false;
           post({ type: "aichallenge.conflict.ping" });
-          // Retry flush: board may signal ready slightly later
           window.setTimeout(() => post({ type: "aichallenge.conflict.ping" }), 200);
           window.setTimeout(() => post({ type: "aichallenge.conflict.ping" }), 800);
         }}
