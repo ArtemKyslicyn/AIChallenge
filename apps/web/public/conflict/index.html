@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conflict Emulation Board</title>
+  <link rel="stylesheet" href="styles/host-shim.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="app-header" data-embed-hide>
+      <div>
+        <h1 class="app-title">Conflict Emulation Board</h1>
+        <p class="app-sub">
+          Demo of LLM-shaped conflict pipeline · WarAgent / WarGames / cascade practices ·
+          embedded in AIChallenge Agent Battle with live world bridge
+        </p>
+      </div>
+      <nav class="app-nav" aria-label="Views" data-embed-hide>
+        <button type="button" class="vis-button" data-view="llm" aria-current="page">LLM board</button>
+        <button type="button" class="vis-button" data-view="planet">3D planet</button>
+        <button type="button" class="vis-button" data-view="parchment">Strategy board</button>
+        <button type="button" class="vis-button" data-view="arcs">Conflict arcs</button>
+        <button type="button" class="vis-button" data-view="about">Architecture</button>
+      </nav>
+    </header>
+
+    <p id="view-status" class="vis-text-small vis-text-muted" aria-live="polite" data-embed-hide></p>
+
+    <main id="main">
+      <section id="panel-llm" class="app-panel" data-src="views/llm-board.fragment.html" tabindex="-1"></section>
+      <section id="panel-planet" class="app-panel" data-src="views/planet.fragment.html" hidden tabindex="-1"></section>
+      <section id="panel-parchment" class="app-panel" data-src="views/parchment.fragment.html" hidden tabindex="-1"></section>
+      <section id="panel-arcs" class="app-panel" data-src="views/arcs.fragment.html" hidden tabindex="-1"></section>
+      <section id="panel-about" class="app-panel" hidden tabindex="-1">
+        <div class="vis-section-stack">
+          <h2>Architecture</h2>
+          <p class="vis-text-muted">
+            Vendored into AIChallenge (<code>/conflict/</code>). LLM board accepts live patches from
+            Agent Battle via <code>postMessage</code> (<code>aichallenge.conflict.live</code>).
+            Planet / parchment / arcs remain cinematic siblings until a full shared bus lands.
+          </p>
+          <ol>
+            <li>Briefing / fog of war per country agent</li>
+            <li>Structured action space only</li>
+            <li>Secretary / schema validation</li>
+            <li>Game master deterministic resolve</li>
+            <li>Cascades: oil · shipping · sanctions · escalation ladder</li>
+            <li>Narrator recap separate from decision agents</li>
+            <li>Live bridge: battle meters → LLM-board worldState</li>
+          </ol>
+          <h3>References</h3>
+          <ul class="vis-text-small">
+            <li><a href="https://github.com/agiresearch/waragent">agiresearch/WarAgent</a></li>
+            <li><a href="https://github.com/NoblerWorks-HQ/WarGames">NoblerWorks-HQ/WarGames</a></li>
+            <li><a href="https://github.com/RomanTsisyk/multi-agent-simulation-engine">multi-agent-simulation-engine</a></li>
+            <li><a href="https://github.com/Max-Highsmith/panopticon">Panopticon escalation ladder</a></li>
+            <li><a href="https://github.com/siddhantkhariwal/ai-geopolitical-arena">AI Geopolitical Arena</a></li>
+            <li><a href="https://github.com/ArtemKyslicyn/conflict-emulation">conflict-emulation source</a></li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer" data-embed-hide>
+      Illustrative simulation · not predictive · AIChallenge live bridge on LLM board
+    </footer>
+  </div>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

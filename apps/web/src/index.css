@@ -7583,6 +7583,56 @@ textarea {
 }
 
 .civ-war-models {
+  margin: 0 0 0.85rem;
+}
+
+.civ-viz-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+}
+
+.civ-viz-tab {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
+  background: color-mix(in srgb, #0e2a32 8%, transparent);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.civ-viz-tab--on,
+.civ-viz-tab[aria-current="page"] {
+  border-color: #3d7ea6;
+  color: #2a6a8a;
+}
+
+.civ-viz-hint {
+  margin: 0 0 0.65rem;
+}
+
+.conflict-host {
+  margin: 0 0 1rem;
+  min-height: 640px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #1a4a5c 22%, transparent);
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.conflict-host-frame {
+  display: block;
+  width: 100%;
+  min-height: 720px;
+  height: 78vh;
+  max-height: 960px;
+  border: 0;
+  background: #0b0f14;
+}
   margin: 0 0 0.75rem;
   display: grid;
   gap: 0.45rem;

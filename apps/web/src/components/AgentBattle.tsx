@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 
 import { ApiError, listModels, runAgentBattleSSE, type AgentBattleEvent, type ModelCatalogItemDto } from "../api/client";
 import { parseCabinetVoices, type CabinetVoice } from "../battle/cabinet";
+import { battleToConflictPatch, type ConflictView } from "../battle/conflictBridge";
 import { parseMeans, type BattleMeans } from "../battle/means";
 import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
@@ -20,6 +21,9 @@ import {
   type WarBoard,
 } from "../battle/warBoard";
 import { BattleCivMap } from "./BattleCivMap";
+import { ConflictEmulationHost } from "./ConflictEmulationHost";
+
+type VizMode = "civ" | ConflictView;
 
 function meter(value: number): string {
   return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
@@ -178,6 +182,7 @@ export function AgentBattle() {
   const [lastMeansActor, setLastMeansActor] = useState<string | null>(null);
   const [lastCabinet, setLastCabinet] = useState<CabinetVoice[]>([]);
   const [cabinetNation, setCabinetNation] = useState<string | null>(null);
+  const [vizMode, setVizMode] = useState<VizMode>("civ");
   const [warBoard, setWarBoard] = useState<WarBoard>(() => loadWarBoard());
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [winnerLabel, setWinnerLabel] = useState<string | null>(null);
@@ -332,6 +337,34 @@ export function AgentBattle() {
     return Math.max(0, Math.min(5, e));
   }, [panic, redLine, lastMeans]);
 
+  const conflictPatch = useMemo(
+    () =>
+      battleToConflictPatch({
+        round,
+        stability,
+        panic,
+        techLead,
+        escalation,
+        means: lastMeans,
+        meansActor: lastMeansActor,
+        lastDelta,
+        cabinet: lastCabinet,
+        cabinetNationId: cabinetNation,
+      }),
+    [
+      round,
+      stability,
+      panic,
+      techLead,
+      escalation,
+      lastMeans,
+      lastMeansActor,
+      lastDelta,
+      lastCabinet,
+      cabinetNation,
+    ],
+  );
+
   useEffect(() => {
     const done = [...log].reverse().find((e) => e.kind === "done");
     if (!done || done.kind !== "done" || recordedWarRef.current) return;
@@ -447,28 +480,61 @@ export function AgentBattle() {
         </div>
       </div>
 
-      <BattleCivMap
-        cast={arena.cast}
-        running={running}
-        focusAgentId={focusAgentId}
-        selectedAgentId={selectedAgentId}
-        phase={phase}
-        round={round}
-        maxRounds={maxRounds}
-        lastDelta={lastDelta}
-        lastMeans={lastMeans}
-        lastMeansActor={lastMeansActor}
-        lastCabinet={lastCabinet}
-        cabinetNationId={cabinetNation}
-        scores={scores}
-        stability={stability}
-        panic={panic}
-        techLead={techLead}
-        escalation={escalation}
-        redLine={redLine}
-        winnerLabel={winnerLabel}
-        onSelectAgent={setSelectedAgentId}
-      />
+      <nav className="civ-viz-tabs" aria-label="Визуализации войны">
+        {(
+          [
+            ["civ", "Civ hex"],
+            ["llm", "LLM board"],
+            ["planet", "3D planet"],
+            ["parchment", "Strategy"],
+            ["arcs", "Arcs"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={vizMode === id ? "civ-viz-tab civ-viz-tab--on" : "civ-viz-tab"}
+            aria-current={vizMode === id ? "page" : undefined}
+            onClick={() => setVizMode(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <p className="battle-world-hint civ-viz-hint">
+        Civ — живая арена. LLM board / planet / strategy / arcs — из{" "}
+        <a href="https://github.com/ArtemKyslicyn/conflict-emulation" target="_blank" rel="noreferrer">
+          conflict-emulation
+        </a>
+        ; LLM board слушает live-мост (stability / panic / means).
+      </p>
+
+      {vizMode === "civ" ? (
+        <BattleCivMap
+          cast={arena.cast}
+          running={running}
+          focusAgentId={focusAgentId}
+          selectedAgentId={selectedAgentId}
+          phase={phase}
+          round={round}
+          maxRounds={maxRounds}
+          lastDelta={lastDelta}
+          lastMeans={lastMeans}
+          lastMeansActor={lastMeansActor}
+          lastCabinet={lastCabinet}
+          cabinetNationId={cabinetNation}
+          scores={scores}
+          stability={stability}
+          panic={panic}
+          techLead={techLead}
+          escalation={escalation}
+          redLine={redLine}
+          winnerLabel={winnerLabel}
+          onSelectAgent={setSelectedAgentId}
+        />
+      ) : (
+        <ConflictEmulationHost view={vizMode} livePatch={conflictPatch} />
+      )}
 
       <div className="civ-elo-board" aria-label="Таблица побед моделей">
         <div className="civ-elo-head">
