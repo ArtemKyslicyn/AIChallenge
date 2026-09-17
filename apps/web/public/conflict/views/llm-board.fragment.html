@@ -1,0 +1,565 @@
+<div id="llm-conflict-sim" class="vis-section-stack">
+  <p class="vis-sr-only">
+    LLM-bound conflict simulation board. Visualization is a projection of structured world state. Practices from WarAgent, WarGames, multi-agent simulation engines, and geopolitical LLM demos. Demo turn uses embedded illustrative decisions, not a live model call.
+  </p>
+  <div class="vis-column">
+    <h2>LLM conflict emulation board</h2>
+    <p class="vis-text-muted">
+      State → briefing → country agents → game master → cascades → viz. Prior graphs kept.
+    </p>
+  </div>
+  <div class="vis-controls">
+    <button type="button" id="llm-sim-run" class="vis-button">Run demo turn</button>
+    <button type="button" id="llm-sim-reset" class="vis-button">Reset state</button>
+    <label class="vis-form-label" for="llm-sim-focus">Focus
+      <select id="llm-sim-focus">
+        <option value="all">All actors</option>
+        <option value="ATL">Atlantic Union</option>
+        <option value="PAC">Pacific Consortium</option>
+        <option value="NEU">Neutral League</option>
+        <option value="UA">Ukraine</option>
+        <option value="RU">Russia</option>
+        <option value="IR">Iran</option>
+        <option value="IL">Israel</option>
+        <option value="US">USA</option>
+        <option value="CN">China</option>
+      </select>
+    </label>
+  </div>
+  <div class="vis-grid" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px;">
+    <svg
+      id="llm-sim-svg"
+      role="img"
+      width="100%"
+      viewBox="0 0 640 520"
+      aria-labelledby="llm-sim-title llm-sim-desc"
+    >
+      <title id="llm-sim-title">State-driven conflict globe</title>
+      <desc id="llm-sim-desc">
+        Globe and arcs rendered from world-state JSON after each simulated LLM turn.
+      </desc>
+      <defs>
+        <clipPath id="llm-globe-clip"><circle cx="320" cy="250" r="175" /></clipPath>
+        <marker id="llm-head" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="light-dark(#e03131, #ff8787)" />
+        </marker>
+      </defs>
+      <style>
+        #llm-conflict-sim {
+          --void: light-dark(#0c1220, #060910);
+          --ocean: light-dark(#1a3a52, #0c2436);
+          --land: light-dark(#3f6b48, #243f2c);
+          --land2: light-dark(#6a9458, #3a5f38);
+          --rim: light-dark(#74c0fc, #4dabf7);
+          --ink: light-dark(#e9eef7, #e9eef7);
+          --muted: light-dark(#8b9bb4, #8b9bb4);
+          --war: light-dark(#e03131, #ff6b6b);
+          --sanction: light-dark(#f08c00, #ffc078);
+          --trade: light-dark(#1971c2, #74c0fc);
+          --ally: light-dark(#2f9e44, #69db7c);
+          --panel: light-dark(#121826, #0d121c);
+          --line: light-dark(#2c3648, #2c3648);
+        }
+        #llm-sim-svg .void { fill: var(--void); }
+        #llm-sim-svg .ocean { fill: var(--ocean); }
+        #llm-sim-svg .land { fill: var(--land); }
+        #llm-sim-svg .land2 { fill: var(--land2); }
+        #llm-sim-svg .rim { fill: none; stroke: var(--rim); stroke-width: 2.5; }
+        #llm-sim-svg .shade { fill: #000; opacity: 0.35; }
+        #llm-sim-svg .city { fill: light-dark(#ffe066, #ffec99); }
+        #llm-sim-svg .city-core { fill: #fff; }
+        #llm-sim-svg .label { fill: var(--ink); font-size: 11px; font-weight: 500; }
+        #llm-sim-svg .arc { fill: none; stroke-width: 2.2; stroke-linecap: round; marker-end: url(#llm-head); opacity: 0.9; }
+        #llm-sim-svg .arc-war { stroke: var(--war); }
+        #llm-sim-svg .arc-sanction { stroke: var(--sanction); stroke-dasharray: 5 4; }
+        #llm-sim-svg .arc-trade { stroke: var(--trade); stroke-dasharray: 2 3; }
+        #llm-sim-svg .arc-ally { stroke: var(--ally); }
+        #llm-sim-svg .missile { fill: #fff; opacity: 0; }
+        #llm-sim-svg .flash { fill: #ffd43b; opacity: 0; }
+        #llm-sim-svg .esc-dot { stroke: var(--ink); stroke-width: 1; }
+        #llm-sim-svg .meta { fill: var(--muted); font-size: 11px; }
+      </style>
+      <rect class="void" width="640" height="520" />
+      <circle class="ocean" cx="320" cy="250" r="175" />
+      <circle class="rim" cx="320" cy="250" r="175" />
+      <g clip-path="url(#llm-globe-clip)">
+        <path class="land" d="M220 180 C260 140, 320 145, 350 185 C370 215, 355 255, 320 270 C280 285, 230 260, 220 220 Z" />
+        <path class="land2" d="M360 200 C410 165, 480 180, 505 230 C520 265, 500 310, 455 325 C410 340, 360 310, 350 260 Z" />
+        <path class="land" d="M280 310 C330 295, 380 320, 400 355 C410 380, 385 410, 340 415 C295 420, 265 385, 270 350 Z" />
+        <ellipse class="shade" cx="390" cy="290" rx="110" ry="130" />
+      </g>
+      <g id="llm-sim-cities"></g>
+      <g id="llm-sim-arcs"></g>
+      <g id="llm-sim-missiles"></g>
+      <text id="llm-sim-turn-label" class="meta" x="24" y="28">turn 0 · peacetime</text>
+      <text class="meta" x="24" y="500">viz = f(worldState) · not freehand art</text>
+    </svg>
+    <div class="vis-column" style="gap: 12px;">
+      <div>
+        <h3>Pipeline (GitHub practices)</h3>
+        <ol class="vis-text-small" id="llm-sim-pipeline" style="margin: 0; padding-left: 1.2rem;">
+          <li>Briefing / fog of war per country agent</li>
+          <li>Faction debate optional (hawk / dove / realist)</li>
+          <li>Structured action space only</li>
+          <li>Secretary / schema validate</li>
+          <li>Game master deterministic resolve</li>
+          <li>Cascades: oil · shipping · sanctions · morale</li>
+          <li>Narrator recap separate from decision agents</li>
+          <li>Export JSON → drive globe / arcs / meters</li>
+        </ol>
+      </div>
+      <div>
+        <h3>World state</h3>
+        <pre id="llm-sim-state" class="vis-text-small" style="margin:0; white-space:pre-wrap; max-height:220px; overflow:auto; background:light-dark(#121826,#0d121c); color:light-dark(#e9eef7,#e9eef7); padding:10px; border-radius:6px;"></pre>
+      </div>
+      <div>
+        <h3>Last agent orders</h3>
+        <div id="llm-sim-orders" class="vis-text-small vis-column" style="gap:6px;"></div>
+      </div>
+      <div>
+        <h3>Briefings (demo payload)</h3>
+        <div id="llm-sim-briefings" class="vis-text-small vis-column" style="gap:6px;"></div>
+      </div>
+      <div>
+        <h3>Cascades</h3>
+        <div id="llm-sim-cascades" class="vis-row" style="gap:12px; flex-wrap:wrap;"></div>
+      </div>
+      <p id="llm-sim-narrator" class="vis-text-small vis-text-muted" aria-live="polite"></p>
+    </div>
+  </div>
+  <p id="llm-sim-status" class="vis-text-small vis-text-muted" aria-live="polite">
+    Demo mode: embedded schema-valid orders (not a live LLM). Refs: WarAgent · WarGames · cascade engines · Panopticon.
+  </p>
+</div>
+<script>
+(function () {
+  var root = document.getElementById("llm-conflict-sim");
+  if (!root) return;
+  var svg = document.getElementById("llm-sim-svg");
+  var stateEl = document.getElementById("llm-sim-state");
+  var ordersEl = document.getElementById("llm-sim-orders");
+  var briefingsEl = document.getElementById("llm-sim-briefings");
+  var runBtn = document.getElementById("llm-sim-run");
+  var cascadesEl = document.getElementById("llm-sim-cascades");
+  var narratorEl = document.getElementById("llm-sim-narrator");
+  var statusEl = document.getElementById("llm-sim-status");
+  var turnLabel = document.getElementById("llm-sim-turn-label");
+  var citiesG = document.getElementById("llm-sim-cities");
+  var arcsG = document.getElementById("llm-sim-arcs");
+  var missilesG = document.getElementById("llm-sim-missiles");
+  var focusSel = document.getElementById("llm-sim-focus");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var busy = false;
+
+  /* Action space: LLM may only emit these codes (Hackathon-Demo / WarGames practice) */
+  var ACTION_SPACE = [
+    "DIPLOMATIZE",
+    "SANCTION",
+    "TRADE",
+    "FORTIFY",
+    "DECLARE_WAR",
+    "STRIKE",
+    "DEESCALATE",
+    "ALLY",
+  ];
+
+  var ACTORS = {
+    ATL: { id: "ATL", name: "Atlantic", x: 250, y: 235, bloc: "west" },
+    PAC: { id: "PAC", name: "Pacific", x: 460, y: 245, bloc: "east" },
+    NEU: { id: "NEU", name: "Neutral", x: 340, y: 310, bloc: "neutral" },
+    UA: { id: "UA", name: "Ukraine", x: 300, y: 230, bloc: "west" },
+    RU: { id: "RU", name: "Russia", x: 380, y: 200, bloc: "east" },
+    IR: { id: "IR", name: "Iran", x: 420, y: 280, bloc: "axis" },
+    IL: { id: "IL", name: "Israel", x: 360, y: 300, bloc: "west" },
+    US: { id: "US", name: "USA", x: 240, y: 240, bloc: "west" },
+    CN: { id: "CN", name: "China", x: 470, y: 250, bloc: "east" },
+  };
+
+  function baseState() {
+    return {
+      turn: 0,
+      escalation: "peacetime",
+      oil: 78,
+      shippingRisk: 0.18,
+      sanctionsPressure: 0.35,
+      warSupport: {
+        ATL: 0.55,
+        PAC: 0.52,
+        NEU: 0.4,
+        UA: 0.72,
+        RU: 0.61,
+        IR: 0.55,
+        IL: 0.68,
+        US: 0.41,
+        CN: 0.33,
+      },
+      relations: {
+        "ATL-PAC": "rival",
+        "ATL-NEU": "aligned",
+        "PAC-NEU": "rival",
+        "UA-RU": "war",
+        "IR-IL": "hostile",
+        "US-RU": "hostile",
+        "US-IR": "sanctioned",
+        "CN-US": "rival",
+        "CN-RU": "aligned",
+        "US-IL": "allied",
+        "US-UA": "allied",
+      },
+      arcs: [
+        { from: "ATL", to: "PAC", kind: "sanction" },
+        { from: "PAC", to: "NEU", kind: "trade" },
+        { from: "NEU", to: "ATL", kind: "ally" },
+        { from: "UA", to: "RU", kind: "war" },
+        { from: "US", to: "RU", kind: "sanction" },
+        { from: "IR", to: "IL", kind: "war" },
+      ],
+      lastOrders: [],
+      narrator: "Waiting for agent turn / live battle bridge.",
+    };
+  }
+
+  var world = baseState();
+
+  /* Embedded demo LLM outputs — illustrative, schema-valid (not live API) */
+  var DEMO_TURN = {
+    briefings: {
+      UA: "Front stable; ammo constrained; seek air defense + sanctions sustain.",
+      RU: "Attrition acceptable; energy leverage; deter NATO deep strike.",
+      IR: "Proxy pressure + missile signaling; Hormuz as bargaining chip.",
+      IL: "Multi-front defense; degrade IR projectile capacity.",
+      US: "Support UA/IL; contain IR; avoid direct RU war.",
+      CN: "Keep RU trade; avoid secondary sanctions; Taiwan quiet.",
+    },
+    orders: [
+      { actor: "UA", action: "FORTIFY", target: "UA", rationale: "Hold line; preserve cities." },
+      { actor: "RU", action: "STRIKE", target: "UA", rationale: "Pressure logistics hubs." },
+      { actor: "IR", action: "STRIKE", target: "IL", rationale: "Signal ladder step." },
+      { actor: "IL", action: "STRIKE", target: "IR", rationale: "Counter-battery / deterrence." },
+      { actor: "US", action: "SANCTION", target: "IR", rationale: "Price oil risk, limit payloads." },
+      { actor: "CN", action: "TRADE", target: "RU", rationale: "Energy imports; stay non-belligerent." },
+    ],
+  };
+
+  function validateOrder(order) {
+    if (!ACTION_SPACE.includes(order.action)) return false;
+    if (!ACTORS[order.actor]) return false;
+    if (order.target && !ACTORS[order.target]) return false;
+    return true;
+  }
+
+  function resolveTurn(state, orders) {
+    var next = JSON.parse(JSON.stringify(state));
+    next.turn += 1;
+    next.lastOrders = [];
+    var strikeCount = 0;
+    var warDeclared = false;
+
+    orders.forEach(function (raw) {
+      if (!validateOrder(raw)) {
+        next.lastOrders.push({
+          actor: raw.actor,
+          action: "REJECTED",
+          target: raw.target,
+          rationale: "secretary: invalid action/schema",
+        });
+        return;
+      }
+      next.lastOrders.push(raw);
+      if (raw.action === "STRIKE" || raw.action === "DECLARE_WAR") {
+        strikeCount += 1;
+        warDeclared = true;
+        var key = [raw.actor, raw.target].sort().join("-");
+        /* normalize pair keys we track */
+        var pair = raw.actor + "-" + raw.target;
+        var rev = raw.target + "-" + raw.actor;
+        if (next.relations[pair] !== undefined) next.relations[pair] = "war";
+        if (next.relations[rev] !== undefined) next.relations[rev] = "war";
+        ensureArc(next, raw.actor, raw.target, "war");
+      }
+      if (raw.action === "SANCTION") {
+        next.sanctionsPressure = Math.min(1, next.sanctionsPressure + 0.08);
+        ensureArc(next, raw.actor, raw.target, "sanction");
+      }
+      if (raw.action === "TRADE") {
+        ensureArc(next, raw.actor, raw.target, "trade");
+      }
+      if (raw.action === "ALLY") {
+        ensureArc(next, raw.actor, raw.target, "ally");
+      }
+      if (raw.action === "FORTIFY" && next.warSupport[raw.actor] != null) {
+        next.warSupport[raw.actor] = Math.min(1, next.warSupport[raw.actor] + 0.03);
+      }
+    });
+
+    /* Cascades (multi-agent-simulation-engine practice) */
+    if (strikeCount > 0) {
+      next.oil = Math.round(next.oil + 4 + strikeCount * 2.5);
+      next.shippingRisk = Math.min(1, next.shippingRisk + 0.07 * strikeCount);
+      next.escalation =
+        strikeCount >= 3 ? "launch_ready" : strikeCount === 2 ? "dispersal" : "elevated";
+    }
+    if (next.sanctionsPressure > 0.5) {
+      next.oil = Math.round(next.oil + 2);
+    }
+
+    /* Narrator separate from decision agents (WarGames practice) */
+    next.briefingsShown = DEMO_TURN.briefings;
+    next.narrator =
+      "Turn " +
+      next.turn +
+      ": " +
+      strikeCount +
+      " strike-class actions resolved. Escalation=" +
+      next.escalation +
+      ". Oil≈$" +
+      next.oil +
+      ". Shipping risk " +
+      Math.round(next.shippingRisk * 100) +
+      "%.";
+
+    if (warDeclared && next.escalation === "peacetime") next.escalation = "elevated";
+    return next;
+  }
+
+  function ensureArc(state, from, to, kind) {
+    var exists = state.arcs.some(function (a) {
+      return a.from === from && a.to === to && a.kind === kind;
+    });
+    if (!exists) state.arcs.push({ from: from, to: to, kind: kind });
+  }
+
+  function curve(a, b) {
+    var mx = (a.x + b.x) / 2;
+    var my = (a.y + b.y) / 2 - 40 - Math.abs(a.x - b.x) * 0.08;
+    return "M" + a.x + " " + a.y + " Q " + mx + " " + my + " " + b.x + " " + b.y;
+  }
+
+  function render() {
+    var focus = focusSel.value;
+    turnLabel.textContent =
+      "turn " + world.turn + " · " + world.escalation + " · oil $" + world.oil;
+
+    stateEl.textContent = JSON.stringify(
+      {
+        turn: world.turn,
+        escalation: world.escalation,
+        oil: world.oil,
+        shippingRisk: world.shippingRisk,
+        sanctionsPressure: world.sanctionsPressure,
+        relations: world.relations,
+        arcs: world.arcs,
+      },
+      null,
+      2
+    );
+
+    ordersEl.innerHTML = "";
+    if (!world.lastOrders.length) {
+      var empty = document.createElement("p");
+      empty.className = "vis-text-muted";
+      empty.textContent = "No orders yet.";
+      ordersEl.appendChild(empty);
+    } else {
+      world.lastOrders.forEach(function (o) {
+        var row = document.createElement("div");
+        row.textContent =
+          o.actor +
+          " → " +
+          o.action +
+          (o.target ? " @" + o.target : "") +
+          " — " +
+          (o.rationale || "");
+        ordersEl.appendChild(row);
+      });
+    }
+
+    cascadesEl.innerHTML = "";
+    [
+      ["Oil", "$" + world.oil],
+      ["Shipping risk", Math.round(world.shippingRisk * 100) + "%"],
+      ["Sanctions", Math.round(world.sanctionsPressure * 100) + "%"],
+      ["Escalation", world.escalation],
+    ].forEach(function (pair) {
+      var chip = document.createElement("div");
+      chip.innerHTML =
+        "<strong>" +
+        pair[0] +
+        "</strong><div class='vis-text-muted'>" +
+        pair[1] +
+        "</div>";
+      cascadesEl.appendChild(chip);
+    });
+
+    narratorEl.textContent = world.narrator;
+
+    if (briefingsEl) {
+      briefingsEl.innerHTML = "";
+      var briefs = (world.briefingsShown || DEMO_TURN.briefings);
+      Object.keys(briefs).forEach(function (id) {
+        var row = document.createElement("div");
+        row.textContent = id + ": " + briefs[id];
+        briefingsEl.appendChild(row);
+      });
+    }
+
+    citiesG.innerHTML = "";
+    Object.keys(ACTORS).forEach(function (id) {
+      var a = ACTORS[id];
+      if (focus !== "all" && focus !== id) return;
+      var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("transform", "translate(" + a.x + " " + a.y + ")");
+      var h = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      h.setAttribute("class", "city");
+      h.setAttribute("r", "7");
+      h.setAttribute("opacity", "0.35");
+      var c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      c.setAttribute("class", "city-core");
+      c.setAttribute("r", "2.4");
+      var t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      t.setAttribute("class", "label");
+      t.setAttribute("x", "10");
+      t.setAttribute("y", "4");
+      t.textContent = a.name;
+      g.appendChild(h);
+      g.appendChild(c);
+      g.appendChild(t);
+      citiesG.appendChild(g);
+    });
+
+    arcsG.innerHTML = "";
+    missilesG.innerHTML = "";
+    world.arcs.forEach(function (arc, idx) {
+      var from = ACTORS[arc.from];
+      var to = ACTORS[arc.to];
+      if (!from || !to) return;
+      if (focus !== "all" && focus !== arc.from && focus !== arc.to) return;
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("class", "arc arc-" + arc.kind);
+      path.setAttribute("d", curve(from, to));
+      path.setAttribute("pathLength", "100");
+      path.id = "llm-arc-" + idx;
+      arcsG.appendChild(path);
+      var m = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      m.setAttribute("class", "missile");
+      m.setAttribute("points", "0,-3 12,0 0,3");
+      m.setAttribute("data-arc", path.id);
+      missilesG.appendChild(m);
+    });
+  }
+
+  function pointAt(path, t) {
+    var len = path.getTotalLength();
+    var u = Math.max(0, Math.min(1, t));
+    var a = path.getPointAtLength(u * len);
+    var b = path.getPointAtLength(Math.min(1, u + 0.012) * len);
+    return {
+      x: a.x,
+      y: a.y,
+      angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
+    };
+  }
+
+  function animateMissiles() {
+    var paths = arcsG.querySelectorAll(".arc-war");
+    var missiles = missilesG.querySelectorAll(".missile");
+    if (reduce || !paths.length) return;
+    var start = null;
+    var dur = 1600;
+    missiles.forEach(function (m) {
+      m.style.opacity = "1";
+    });
+    function frame(ts) {
+      if (!start) start = ts;
+      var t = Math.min(1, (ts - start) / dur);
+      var ease = 1 - Math.pow(1 - t, 3);
+      missiles.forEach(function (m) {
+        var path = document.getElementById(m.getAttribute("data-arc"));
+        if (!path || !path.classList.contains("arc-war")) {
+          m.style.opacity = "0";
+          return;
+        }
+        var pt = pointAt(path, ease);
+        m.setAttribute(
+          "transform",
+          "translate(" + pt.x + " " + pt.y + ") rotate(" + pt.angle + ")"
+        );
+      });
+      if (t < 1) requestAnimationFrame(frame);
+      else missiles.forEach(function (m) {
+        m.style.opacity = "0";
+      });
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function runTurn() {
+    if (busy) return;
+    busy = true;
+    if (runBtn) { runBtn.disabled = true; runBtn.setAttribute("aria-busy", "true"); }
+    statusEl.textContent =
+      "1) briefing 2) agent orders 3) secretary validate 4) GM resolve 5) cascades 6) viz…";
+
+    /* Simulate sequential pipeline timing without live LLM */
+    window.setTimeout(function () {
+      world = resolveTurn(world, DEMO_TURN.orders);
+      render();
+      animateMissiles();
+      statusEl.textContent =
+        "Turn applied from structured LLM-shaped orders (demo). Live models plug in at getFactionOrders().";
+      busy = false;
+      if (runBtn) { runBtn.disabled = false; runBtn.removeAttribute("aria-busy"); }
+    }, 450);
+  }
+
+  function reset() {
+    world = baseState();
+    render();
+    statusEl.textContent = "State reset to peacetime baseline.";
+  }
+
+  function applyLivePatch(patch) {
+    if (!patch || typeof patch !== "object") return;
+    if (patch.reset) world = baseState();
+    if (patch.turn != null) world.turn = Number(patch.turn) || 0;
+    if (patch.escalation) world.escalation = String(patch.escalation);
+    if (patch.oil != null) world.oil = Number(patch.oil);
+    if (patch.shippingRisk != null) world.shippingRisk = Number(patch.shippingRisk);
+    if (patch.sanctionsPressure != null) world.sanctionsPressure = Number(patch.sanctionsPressure);
+    if (patch.warSupport && typeof patch.warSupport === "object") {
+      Object.keys(patch.warSupport).forEach(function (k) {
+        world.warSupport[k] = patch.warSupport[k];
+      });
+    }
+    if (Array.isArray(patch.arcs)) {
+      patch.arcs.forEach(function (a) {
+        if (a && a.from && a.to && a.kind) ensureArc(world, a.from, a.to, a.kind);
+      });
+    }
+    if (Array.isArray(patch.lastOrders)) world.lastOrders = patch.lastOrders;
+    if (patch.briefingsShown && typeof patch.briefingsShown === "object") {
+      world.briefingsShown = patch.briefingsShown;
+    }
+    if (patch.narrator) world.narrator = String(patch.narrator);
+    render();
+    if (patch.animate) animateMissiles();
+    if (statusEl) {
+      statusEl.textContent =
+        "Live bridge from AIChallenge Agent Battle · turn " + world.turn + " · " + world.escalation;
+    }
+  }
+
+  window.getElementById("llm-sim-run").addEventListener("click", runTurn);
+  document.getElementById("llm-sim-reset").addEventListener("click", reset);
+  focusSel.addEventListener("change", render);
+
+  window.addEventListener("message", function (ev) {
+    var data = ev.data;
+    if (!data || typeof data !== "object") return;
+    if (data.type === "aichallenge.conflict.live") applyLivePatch(data.patch || {});
+  });
+  window.__aichallengeConflictBoard = { applyLivePatch: applyLivePatch, render: render };
+
+  render();
+})();
+</script>

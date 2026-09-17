@@ -1,0 +1,455 @@
+<div id="ron-war-cine" class="vis-section-stack">
+  <p class="vis-sr-only">
+    Cinematic strategy-board scene inspired by classic nation strategy games. Abstract territories, not a real geographic map. Press Declare war to launch missiles.
+  </p>
+  <div class="vis-column"><h2>Strategy war board</h2><p class="vis-text-muted">Rise-of-Nations-style declare-war beat · cinematic sibling</p></div>
+  <div class="vis-controls">
+    <button type="button" id="ron-war-cine-go" class="vis-button">Declare war</button>
+    <button type="button" id="ron-war-cine-reset" class="vis-button">Reset board</button>
+  </div>
+  <svg
+    id="ron-war-cine-svg"
+    role="img"
+    width="100%"
+    viewBox="0 0 960 640"
+    aria-labelledby="ron-war-cine-title ron-war-cine-desc"
+  >
+    <title id="ron-war-cine-title">Strategy war declaration with rising missiles</title>
+    <desc id="ron-war-cine-desc">
+      Stylized parchment strategy board with abstract continents. When war is declared, radar rings pulse and missiles climb then arc across the board.
+    </desc>
+    <defs>
+      <pattern id="ron-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <line x1="0" y1="0" x2="0" y2="8" stroke="light-dark(#8b7355, #3d3428)" stroke-width="1" opacity="0.35" />
+      </pattern>
+      <pattern id="ron-dots" width="10" height="10" patternUnits="userSpaceOnUse">
+        <circle cx="1.5" cy="1.5" r="1" fill="light-dark(#6b5a42, #2a241c)" opacity="0.4" />
+      </pattern>
+      <marker id="ron-arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="light-dark(#d9480f, #ffa94d)" />
+      </marker>
+    </defs>
+    <style>
+      #ron-war-cine {
+        --parchment: light-dark(#e8d9b8, #1a1610);
+        --ink: light-dark(#2b2118, #f3e6c8);
+        --muted-ink: light-dark(#6b5843, #a89070);
+        --sea: light-dark(#7ba3b8, #1c3340);
+        --sea-deep: light-dark(#5a8499, #12242e);
+        --land-a: light-dark(#8fad6e, #3d5a32);
+        --land-b: light-dark(#c4a574, #5a4630);
+        --land-c: light-dark(#9a7b5a, #4a3828);
+        --empire: light-dark(#3b6ea5, #6ea8e0);
+        --foe: light-dark(#b33b2e, #e07060);
+        --gold: light-dark(#c4922a, #e8b84a);
+        --smoke: light-dark(#8a7a66, #6a5a48);
+        --alert: light-dark(#c92a2a, #ff6b6b);
+      }
+      #ron-war-cine-svg .board { fill: var(--parchment); }
+      #ron-war-cine-svg .sea { fill: var(--sea); }
+      #ron-war-cine-svg .sea-deep { fill: var(--sea-deep); }
+      #ron-war-cine-svg .land-a { fill: var(--land-a); }
+      #ron-war-cine-svg .land-b { fill: var(--land-b); }
+      #ron-war-cine-svg .land-c { fill: var(--land-c); }
+      #ron-war-cine-svg .border-ink {
+        fill: none;
+        stroke: light-dark(#3d3226, #cbb892);
+        stroke-width: 2.5;
+      }
+      #ron-war-cine-svg .frame {
+        fill: none;
+        stroke: var(--gold);
+        stroke-width: 6;
+      }
+      #ron-war-cine-svg .frame-inner {
+        fill: none;
+        stroke: light-dark(#5c4a32, #8a7355);
+        stroke-width: 2;
+      }
+      #ron-war-cine-svg .grid {
+        stroke: light-dark(#b9a586, #3a3228);
+        stroke-width: 0.8;
+        opacity: 0.45;
+      }
+      #ron-war-cine-svg .city {
+        fill: var(--ink);
+      }
+      #ron-war-cine-svg .city-ring {
+        fill: none;
+        stroke: var(--gold);
+        stroke-width: 1.5;
+      }
+      #ron-war-cine-svg .label {
+        fill: var(--ink);
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+      }
+      #ron-war-cine-svg .label-sm {
+        fill: var(--muted-ink);
+        font-size: 11px;
+      }
+      #ron-war-cine-svg .banner {
+        fill: var(--alert);
+      }
+      #ron-war-cine-svg .banner-text {
+        fill: light-dark(#fff8e8, #1a1008);
+        font-size: 28px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+      }
+      #ron-war-cine-svg .banner-sub {
+        fill: light-dark(#ffe8c8, #2a1a10);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+      }
+      #ron-war-cine-svg .radar {
+        fill: none;
+        stroke: var(--alert);
+        stroke-width: 2;
+        opacity: 0;
+      }
+      #ron-war-cine-svg .trail {
+        fill: none;
+        stroke: light-dark(#e8590c, #ff922b);
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        marker-end: url(#ron-arrow);
+        opacity: 0;
+      }
+      #ron-war-cine-svg .missile-body {
+        fill: light-dark(#212529, #f1f3f5);
+        opacity: 0;
+      }
+      #ron-war-cine-svg .missile-fin {
+        fill: var(--foe);
+        opacity: 0;
+      }
+      #ron-war-cine-svg .plume {
+        fill: var(--smoke);
+        opacity: 0;
+      }
+      #ron-war-cine-svg .flash {
+        fill: light-dark(#fff3bf, #ffd43b);
+        opacity: 0;
+      }
+      #ron-war-cine-svg .empire-tint { fill: var(--empire); opacity: 0.28; }
+      #ron-war-cine-svg .foe-tint { fill: var(--foe); opacity: 0.28; }
+      #ron-war-cine-svg .idle-hint {
+        fill: var(--muted-ink);
+        font-size: 13px;
+      }
+      #ron-war-cine.war-on .banner-group { opacity: 1; }
+      #ron-war-cine .banner-group { opacity: 0; }
+      @media (prefers-reduced-motion: reduce) {
+        #ron-war-cine-svg .radar,
+        #ron-war-cine-svg .trail,
+        #ron-war-cine-svg .missile-body,
+        #ron-war-cine-svg .missile-fin,
+        #ron-war-cine-svg .plume,
+        #ron-war-cine-svg .flash {
+          transition: none !important;
+        }
+      }
+    </style>
+
+    <rect class="board" x="0" y="0" width="960" height="640" />
+    <rect class="frame" x="28" y="28" width="904" height="584" rx="4" />
+    <rect class="frame-inner" x="40" y="40" width="880" height="560" />
+
+    <g aria-hidden="true">
+      <line class="grid" x1="120" y1="80" x2="120" y2="560" />
+      <line class="grid" x1="240" y1="80" x2="240" y2="560" />
+      <line class="grid" x1="360" y1="80" x2="360" y2="560" />
+      <line class="grid" x1="480" y1="80" x2="480" y2="560" />
+      <line class="grid" x1="600" y1="80" x2="600" y2="560" />
+      <line class="grid" x1="720" y1="80" x2="720" y2="560" />
+      <line class="grid" x1="840" y1="80" x2="840" y2="560" />
+      <line class="grid" x1="80" y1="140" x2="880" y2="140" />
+      <line class="grid" x1="80" y1="240" x2="880" y2="240" />
+      <line class="grid" x1="80" y1="340" x2="880" y2="340" />
+      <line class="grid" x1="80" y1="440" x2="880" y2="440" />
+      <line class="grid" x1="80" y1="520" x2="880" y2="520" />
+    </g>
+
+    <ellipse class="sea" cx="480" cy="320" rx="400" ry="230" />
+    <ellipse class="sea-deep" cx="500" cy="340" rx="280" ry="150" />
+    <rect x="60" y="60" width="840" height="520" fill="url(#ron-dots)" opacity="0.25" />
+
+    <path
+      class="land-a"
+      d="M140 200 C180 120, 280 110, 340 150 C390 180, 410 230, 380 280 C350 330, 280 350, 220 330 C160 310, 120 260, 140 200 Z"
+    />
+    <path class="empire-tint" d="M140 200 C180 120, 280 110, 340 150 C390 180, 410 230, 380 280 C350 330, 280 350, 220 330 C160 310, 120 260, 140 200 Z" />
+    <path class="border-ink" d="M140 200 C180 120, 280 110, 340 150 C390 180, 410 230, 380 280 C350 330, 280 350, 220 330 C160 310, 120 260, 140 200 Z" />
+    <path fill="url(#ron-hatch)" d="M140 200 C180 120, 280 110, 340 150 C390 180, 410 230, 380 280 C350 330, 280 350, 220 330 C160 310, 120 260, 140 200 Z" opacity="0.5" />
+
+    <path
+      class="land-b"
+      d="M520 160 C600 120, 720 130, 780 190 C830 240, 820 320, 760 360 C700 400, 600 390, 560 340 C520 290, 500 210, 520 160 Z"
+    />
+    <path class="foe-tint" d="M520 160 C600 120, 720 130, 780 190 C830 240, 820 320, 760 360 C700 400, 600 390, 560 340 C520 290, 500 210, 520 160 Z" />
+    <path class="border-ink" d="M520 160 C600 120, 720 130, 780 190 C830 240, 820 320, 760 360 C700 400, 600 390, 560 340 C520 290, 500 210, 520 160 Z" />
+
+    <path
+      class="land-c"
+      d="M300 400 C360 370, 460 380, 520 430 C560 460, 540 520, 470 540 C400 560, 320 540, 290 490 C270 450, 270 420, 300 400 Z"
+    />
+    <path class="border-ink" d="M300 400 C360 370, 460 380, 520 430 C560 460, 540 520, 470 540 C400 560, 320 540, 290 490 C270 450, 270 420, 300 400 Z" />
+
+    <g transform="translate(250 240)">
+      <circle class="city-ring" r="14" />
+      <circle class="city" r="6" />
+      <text class="label" x="20" y="5">NORTHVALE</text>
+      <text class="label-sm" x="20" y="20">your capital</text>
+    </g>
+    <g transform="translate(680 250)">
+      <circle class="city-ring" r="14" />
+      <circle class="city" r="6" />
+      <text class="label" x="20" y="5">IRONSPIRE</text>
+      <text class="label-sm" x="20" y="20">hostile capital</text>
+    </g>
+    <g transform="translate(400 470)">
+      <circle class="city-ring" r="11" />
+      <circle class="city" r="5" />
+      <text class="label" x="16" y="4">SOUTHMARCH</text>
+    </g>
+
+    <text id="ron-idle-hint" class="idle-hint" x="480" y="100" text-anchor="middle">
+      Strategy board · press Declare war
+    </text>
+
+    <g class="banner-group" id="ron-banner" transform="translate(480 88)">
+      <path class="banner" d="M-220,-28 L220,-28 L235,0 L220,28 L-220,28 L-235,0 Z" />
+      <text class="banner-text" text-anchor="middle" y="6">WAR</text>
+      <text class="banner-sub" text-anchor="middle" y="28">HOSTILITIES DECLARED</text>
+    </g>
+
+    <circle class="radar" id="ron-radar-1" cx="250" cy="240" r="20" />
+    <circle class="radar" id="ron-radar-2" cx="250" cy="240" r="40" />
+    <circle class="radar" id="ron-radar-3" cx="680" cy="250" r="20" />
+    <circle class="radar" id="ron-radar-4" cx="680" cy="250" r="40" />
+
+    <path
+      id="ron-path-1"
+      class="trail"
+      d="M250 240 C300 80, 520 60, 680 250"
+      pathLength="100"
+    />
+    <path
+      id="ron-path-2"
+      class="trail"
+      d="M250 240 C340 140, 480 120, 620 220"
+      pathLength="100"
+    />
+    <path
+      id="ron-path-3"
+      class="trail"
+      d="M680 250 C600 100, 420 90, 300 200"
+      pathLength="100"
+    />
+    <path
+      id="ron-path-4"
+      class="trail"
+      d="M400 470 C480 300, 600 220, 680 250"
+      pathLength="100"
+    />
+
+    <g id="ron-missiles">
+      <g class="ron-missile" data-path="ron-path-1">
+        <ellipse class="plume" cx="-10" cy="0" rx="10" ry="4" />
+        <polygon class="missile-fin" points="-4,-6 -4,6 -10,8 -10,-8" />
+        <polygon class="missile-body" points="0,-4 18,0 0,4 -6,0" />
+      </g>
+      <g class="ron-missile" data-path="ron-path-2">
+        <ellipse class="plume" cx="-10" cy="0" rx="10" ry="4" />
+        <polygon class="missile-fin" points="-4,-6 -4,6 -10,8 -10,-8" />
+        <polygon class="missile-body" points="0,-4 18,0 0,4 -6,0" />
+      </g>
+      <g class="ron-missile" data-path="ron-path-3">
+        <ellipse class="plume" cx="-10" cy="0" rx="10" ry="4" />
+        <polygon class="missile-fin" points="-4,-6 -4,6 -10,8 -10,-8" />
+        <polygon class="missile-body" points="0,-4 18,0 0,4 -6,0" />
+      </g>
+      <g class="ron-missile" data-path="ron-path-4">
+        <ellipse class="plume" cx="-10" cy="0" rx="10" ry="4" />
+        <polygon class="missile-fin" points="-4,-6 -4,6 -10,8 -10,-8" />
+        <polygon class="missile-body" points="0,-4 18,0 0,4 -6,0" />
+      </g>
+    </g>
+
+    <circle class="flash" id="ron-flash-a" cx="680" cy="250" r="8" />
+    <circle class="flash" id="ron-flash-b" cx="250" cy="240" r="8" />
+    <circle class="flash" id="ron-flash-c" cx="400" cy="470" r="6" />
+
+    <text class="label-sm" x="60" y="600">Illustrative strategy board · not real geography · Rise-of-Nations-style war beat</text>
+  </svg>
+  <p id="ron-war-cine-status" class="vis-text-small vis-text-muted" aria-live="polite">
+    Idle · parchment board ready.
+  </p>
+</div>
+<script>
+(function () {
+  var root = document.getElementById("ron-war-cine");
+  if (!root) return;
+  var svg = document.getElementById("ron-war-cine-svg");
+  var go = document.getElementById("ron-war-cine-go");
+  var reset = document.getElementById("ron-war-cine-reset");
+  var status = document.getElementById("ron-war-cine-status");
+  var hint = document.getElementById("ron-idle-hint");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var busy = false;
+
+  function pointAt(path, t) {
+    var len = path.getTotalLength();
+    var u = Math.max(0, Math.min(1, t));
+    var a = path.getPointAtLength(u * len);
+    var b = path.getPointAtLength(Math.min(1, u + 0.012) * len);
+    return {
+      x: a.x,
+      y: a.y,
+      angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
+    };
+  }
+
+  function setOpacity(sel, v) {
+    svg.querySelectorAll(sel).forEach(function (el) {
+      el.style.opacity = String(v);
+    });
+  }
+
+  function hardReset() {
+    root.classList.remove("war-on");
+    if (hint) hint.style.opacity = "1";
+    setOpacity(".radar", 0);
+    setOpacity(".trail", 0);
+    setOpacity(".missile-body", 0);
+    setOpacity(".missile-fin", 0);
+    setOpacity(".plume", 0);
+    setOpacity(".flash", 0);
+    svg.querySelectorAll(".trail").forEach(function (p) {
+      p.style.strokeDasharray = "100";
+      p.style.strokeDashoffset = "100";
+    });
+    svg.querySelectorAll(".ron-missile").forEach(function (m) {
+      m.setAttribute("transform", "translate(-100 -100)");
+    });
+    svg.querySelectorAll(".radar").forEach(function (r) {
+      r.setAttribute("r", r.id.indexOf("2") >= 0 || r.id.indexOf("4") >= 0 ? "40" : "20");
+    });
+    status.textContent = "Board reset · ready to declare war.";
+    busy = false;
+    go.disabled = false;
+  }
+
+  function declareWar() {
+    if (busy) return;
+    busy = true;
+    go.disabled = true;
+    root.classList.add("war-on");
+    if (hint) hint.style.opacity = "0";
+    status.textContent = reduce
+      ? "War declared · static arcs (reduced motion)."
+      : "War declared · missiles rising…";
+
+    var trails = svg.querySelectorAll(".trail");
+    var missiles = svg.querySelectorAll(".ron-missile");
+    var radars = svg.querySelectorAll(".radar");
+    var flashes = svg.querySelectorAll(".flash");
+
+    if (reduce) {
+      setOpacity(".trail", 0.95);
+      setOpacity(".radar", 0.7);
+      trails.forEach(function (p) {
+        p.style.strokeDasharray = "none";
+        p.style.strokeDashoffset = "0";
+      });
+      status.textContent = "War declared · arcs shown.";
+      busy = false;
+      go.disabled = false;
+      return;
+    }
+
+    var t0 = null;
+    var phase1 = 700;
+    var phase2 = 2200;
+
+    radars.forEach(function (r) {
+      r.style.opacity = "0.85";
+    });
+
+    function frame(ts) {
+      if (!t0) t0 = ts;
+      var elapsed = ts - t0;
+
+      if (elapsed < phase1) {
+        var p = elapsed / phase1;
+        radars.forEach(function (r, i) {
+          var base = i % 2 === 1 ? 40 : 20;
+          r.setAttribute("r", String(base + p * 28));
+          r.style.opacity = String(0.85 * (1 - p * 0.5));
+        });
+        requestAnimationFrame(frame);
+        return;
+      }
+
+      var flight = Math.min(1, (elapsed - phase1) / phase2);
+      var ease = 1 - Math.pow(1 - flight, 2.4);
+
+      if (flight < 0.08) {
+        setOpacity(".missile-body", 1);
+        setOpacity(".missile-fin", 1);
+        setOpacity(".plume", 0.7);
+      }
+
+      trails.forEach(function (path) {
+        path.style.opacity = "0.95";
+        path.style.strokeDasharray = "100";
+        path.style.strokeDashoffset = String(100 - ease * 100);
+      });
+
+      missiles.forEach(function (m) {
+        var path = document.getElementById(m.getAttribute("data-path"));
+        if (!path) return;
+        var lift = Math.min(1, flight / 0.18);
+        var climb = (1 - lift) * 40;
+        var pt = pointAt(path, ease);
+        m.setAttribute(
+          "transform",
+          "translate(" + pt.x + " " + (pt.y - climb) + ") rotate(" + pt.angle + ")"
+        );
+        m.querySelectorAll(".missile-body, .missile-fin, .plume").forEach(function (part) {
+          part.style.opacity = flight > 0.92 ? String(1 - (flight - 0.92) / 0.08) : part.classList.contains("plume") ? "0.65" : "1";
+        });
+      });
+
+      if (flight < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        flashes.forEach(function (f, idx) {
+          f.style.opacity = "1";
+          var start = performance.now();
+          function boom(now) {
+            var bt = Math.min(1, (now - start) / 500);
+            f.setAttribute("r", String(8 + bt * 26 + idx * 2));
+            f.style.opacity = String(1 - bt);
+            if (bt < 1) requestAnimationFrame(boom);
+          }
+          requestAnimationFrame(boom);
+        });
+        setOpacity(".missile-body", 0);
+        setOpacity(".missile-fin", 0);
+        setOpacity(".plume", 0);
+        status.textContent = "Strike complete · Reset board to replay.";
+        busy = false;
+        go.disabled = false;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  go.addEventListener("click", declareWar);
+  reset.addEventListener("click", hardReset);
+  hardReset();
+})();
+</script>
