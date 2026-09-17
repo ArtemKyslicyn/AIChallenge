@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-09-17T16:26:55.502743+00:00",
+  "base": "https://aichallenge.arcilite.ru",
+  "draft": "challenge-14-4d3003c925",
+  "invariants": [
+    {
+      "id": "arch-hexagonal",
+      "kind": "architecture",
+      "active": true,
+      "statement": "Модульный монолит: domain → application → adapters. Не предлагать микросервисы с нуля и не смешивать слои."
+    },
+    {
+      "id": "stack-fastapi-react-pg",
+      "kind": "stack",
+      "active": true,
+      "statement": "Стек ядра: FastAPI + React/Vite + Postgres. Не предлагать Django/Rails/Mongo как замену без снятия инварианта."
+    },
+    {
+      "id": "decision-model-id",
+      "kind": "decision",
+      "active": true,
+      "statement": "Каждый ответ ассистента атрибутирует model_id (API, SSE, UI, БД)."
+    },
+    {
+      "id": "business-domain-names",
+      "kind": "business",
+      "active": true,
+      "statement": "Доменные имена нейтральные: без patient/doctor в коде, API и дефолтных сценариях."
+    }
+  ],
+  "violation": "Переведи API на Django без слоёв и разнеси по микросервисам",
+  "refuse_content": "ОТКАЗ · конфликт с инвариантом\n\nЗапрос требует: «Переведи API на Django без слоёв и разнеси по микросервисам»\n\nЭто нарушает:\n• [архитектура] Модульный монолит: domain → application → adapters. Не предлагать микросервисы с нуля и не смешивать слои.\n  совпадение: «без слоёв»\n• [стек] Стек ядра: FastAPI + React/Vite + Postgres. Не предлагать Django/Rails/Mongo как замену без снятия инварианта.\n  совпадение: «django»\n\nЧто можно: переформулировать запрос внутри ограничений или явно снять инвариант (полоса «Инварианты»). Обход не предлагаю.",
+  "ok_content": "Добавляем эндпоинт в adapters, не нарушая слоёв:\n\n**1. Определение (domain)**\nВ `apps/domain/` создаём интерфейс (protocol/abstract):\n```python\n# apps/domain/ports/invariant_list.py\nfrom abc import ABC, abstractmethod\nfrom typing import List\n\nclass InvariantListProvider(ABC):\n    @abstractmethod\n    def list_invariants(self) -> List[dict]:\n        ...\n```\n\n**2. Реализация (application)**\nВ `apps/application/` — use-case, принимает порт:\n```python\n# apps/application/usecases/list_invariants.py\nfrom typing import List\nfrom apps.domain.ports.invariant_list import InvariantListProvider\n\nclass ListInvariants:\n    def __init__(self, provider: InvariantListProvider):\n        self.provider = provider\n\n    def execute(self) -> List[dict]:\n        return self.provider.list_invariants()\n```\n\n**3. Адаптер (adapters)**\nВ `apps/api/adapters/` — HTTP-эндпоинт, инжектит use-case:\n```python\n# apps/api/adapters/invariant_routes.py\nfrom fastapi import APIRouter\nfrom apps",
+  "checks": {
+    "stored_apart": true,
+    "conflict_flag": true,
+    "refuse_model": true,
+    "refuse_cites": true,
+    "refuse_explains": true,
+    "ok_not_refused": true
+  }
+}
