@@ -36,6 +36,27 @@
     });
   }
 
+  var lastFxKey = "";
+
+  function fireFx(patch) {
+    if (!patch) return;
+    var cue = patch.fx || (patch.animate ? "strike" : "none");
+    if (cue !== "strike") return;
+    var key = String(patch.turn || 0) + ":" + cue;
+    if (key === lastFxKey) return;
+    var fx = window.__aichallengeConflictFx || {};
+    var ready = (fx.planet && fx.planet.declareWar) || (fx.parchment && fx.parchment.declareWar) || (fx.arcs && fx.arcs.launch);
+    if (!ready) return;
+    lastFxKey = key;
+    try {
+      if (fx.planet && typeof fx.planet.declareWar === "function") fx.planet.declareWar();
+      if (fx.parchment && typeof fx.parchment.declareWar === "function") fx.parchment.declareWar();
+      if (fx.arcs && typeof fx.arcs.launch === "function") fx.arcs.launch();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   function flushLive() {
     if (!pendingLive) return;
     var board = window.__aichallengeConflictBoard;
@@ -46,6 +67,7 @@
         console.error(err);
       }
     }
+    fireFx(pendingLive);
   }
 
   function notifyParentReady() {
@@ -68,9 +90,13 @@
     panel.innerHTML = await res.text();
     activateScripts(panel);
     loaded[view] = true;
-    // Scripts register __aichallengeConflictBoard synchronously after replace
     flushLive();
     if (view === "llm") notifyParentReady();
+    if (embed && view === "llm") {
+      ["planet", "parchment", "arcs"].forEach(function (v) {
+        ensure(v).catch(function () {});
+      });
+    }
   }
 
   async function show(view) {

@@ -28,6 +28,8 @@ export type ConflictLivePatch = {
   briefingsShown?: Record<string, string>;
   narrator?: string;
   animate?: boolean;
+  /** Cinematic cue for sibling views (planet / parchment / arcs). */
+  fx?: "strike" | "diplomacy" | "sanctions" | "none";
 };
 
 const FACTION_TO_ACTOR: Record<string, ConflictActorId> = {
@@ -149,5 +151,13 @@ export function battleToConflictPatch(args: {
       (lastDelta ? ` · Δ ${lastDelta}` : "") +
       (means && actor ? ` · ${actor}:${means}` : ""),
     animate: means === "strike" || means === "cyber" || means === "deterrence",
+    fx:
+      means === "strike" || means === "cyber"
+        ? "strike"
+        : means === "diplomacy"
+          ? "diplomacy"
+          : means === "sanctions"
+            ? "sanctions"
+            : "none",
   };
 }

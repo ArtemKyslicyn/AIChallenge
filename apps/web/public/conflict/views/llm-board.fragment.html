@@ -13,16 +13,10 @@
     <button type="button" id="llm-sim-reset" class="vis-button">Reset state</button>
     <label class="vis-form-label" for="llm-sim-focus">Focus
       <select id="llm-sim-focus">
-        <option value="all">All actors</option>
+        <option value="blocs" selected>Three blocs</option>
         <option value="ATL">Atlantic Union</option>
         <option value="PAC">Pacific Consortium</option>
         <option value="NEU">Neutral League</option>
-        <option value="UA">Ukraine</option>
-        <option value="RU">Russia</option>
-        <option value="IR">Iran</option>
-        <option value="IL">Israel</option>
-        <option value="US">USA</option>
-        <option value="CN">China</option>
       </select>
     </label>
   </div>
@@ -68,7 +62,15 @@
         #llm-sim-svg .shade { fill: #000; opacity: 0.35; }
         #llm-sim-svg .city { fill: light-dark(#ffe066, #ffec99); }
         #llm-sim-svg .city-core { fill: #fff; }
+        #llm-sim-svg .city-pulse { fill: none; stroke: #e03131; stroke-width: 2; opacity: 0.85; }
+        #llm-sim-svg .city-pulse.dip { stroke: #2f9e44; }
+        @keyframes llm-pulse { from { r: 10; opacity: 0.9; } to { r: 22; opacity: 0; } }
+        #llm-sim-svg .city-pulse { animation: llm-pulse 1.2s ease-out infinite; }
         #llm-sim-svg .label { fill: var(--ink); font-size: 11px; font-weight: 500; }
+        #llm-sim-svg.esc-elevated .ocean { fill: #2a4a58; }
+        #llm-sim-svg.esc-dispersal .ocean { fill: #3a3040; }
+        #llm-sim-svg.esc-launch_ready .ocean { fill: #4a2030; }
+        #llm-sim-svg.esc-launch_ready .rim { stroke: #ff6b6b; }
         #llm-sim-svg .arc { fill: none; stroke-width: 2.2; stroke-linecap: round; marker-end: url(#llm-head); opacity: 0.9; }
         #llm-sim-svg .arc-war { stroke: var(--war); }
         #llm-sim-svg .arc-sanction { stroke: var(--sanction); stroke-dasharray: 5 4; }
@@ -92,7 +94,8 @@
       <g id="llm-sim-arcs"></g>
       <g id="llm-sim-missiles"></g>
       <text id="llm-sim-turn-label" class="meta" x="24" y="28">turn 0 · peacetime</text>
-      <text class="meta" x="24" y="500">viz = f(worldState) · not freehand art</text>
+      <g id="llm-sim-meters"></g>
+      <text class="meta" x="24" y="500">viz = f(worldState) · three blocs</text>
     </svg>
     <div class="vis-column" style="gap: 12px;">
       <div>
@@ -335,10 +338,32 @@
     return "M" + a.x + " " + a.y + " Q " + mx + " " + my + " " + b.x + " " + b.y;
   }
 
+  var BLOC_IDS = ["ATL", "PAC", "NEU"];
+
+  function visibleActors(focus) {
+    if (focus === "blocs" || !focus) return BLOC_IDS;
+    if (BLOC_IDS.indexOf(focus) >= 0) return [focus];
+    return BLOC_IDS;
+  }
+
+  function lastActorId() {
+    var o = world.lastOrders && world.lastOrders[0];
+    return o && o.actor ? o.actor : null;
+  }
+
+  function lastAction() {
+    var o = world.lastOrders && world.lastOrders[0];
+    return o && o.action ? o.action : "";
+  }
+
   function render() {
-    var focus = focusSel.value;
+    var focus = focusSel.value || "blocs";
+    var shown = visibleActors(focus);
     turnLabel.textContent =
       "turn " + world.turn + " · " + world.escalation + " · oil $" + world.oil;
+
+    svg.classList.remove("esc-elevated", "esc-dispersal", "esc-launch_ready", "esc-tense");
+    if (world.escalation) svg.classList.add("esc-" + world.escalation);
 
     stateEl.textContent = JSON.stringify(
       {
@@ -347,8 +372,14 @@
         oil: world.oil,
         shippingRisk: world.shippingRisk,
         sanctionsPressure: world.sanctionsPressure,
-        relations: world.relations,
-        arcs: world.arcs,
+        warSupport: {
+          ATL: world.warSupport.ATL,
+          PAC: world.warSupport.PAC,
+          NEU: world.warSupport.NEU,
+        },
+        arcs: world.arcs.filter(function (a) {
+          return BLOC_IDS.indexOf(a.from) >= 0 && BLOC_IDS.indexOf(a.to) >= 0;
+        }),
       },
       null,
       2
@@ -358,7 +389,7 @@
     if (!world.lastOrders.length) {
       var empty = document.createElement("p");
       empty.className = "vis-text-muted";
-      empty.textContent = "No orders yet.";
+      empty.textContent = "Нет ходов — запустите битву.";
       ordersEl.appendChild(empty);
     } else {
       world.lastOrders.forEach(function (o) {
@@ -377,7 +408,7 @@
     cascadesEl.innerHTML = "";
     [
       ["Oil", "$" + world.oil],
-      ["Shipping risk", Math.round(world.shippingRisk * 100) + "%"],
+      ["Shipping", Math.round(world.shippingRisk * 100) + "%"],
       ["Sanctions", Math.round(world.sanctionsPressure * 100) + "%"],
       ["Escalation", world.escalation],
     ].forEach(function (pair) {
@@ -395,32 +426,77 @@
 
     if (briefingsEl) {
       briefingsEl.innerHTML = "";
-      var briefs = (world.briefingsShown || DEMO_TURN.briefings);
-      Object.keys(briefs).forEach(function (id) {
+      var briefs = world.briefingsShown || {};
+      BLOC_IDS.forEach(function (id) {
+        if (!briefs[id]) return;
         var row = document.createElement("div");
         row.textContent = id + ": " + briefs[id];
         briefingsEl.appendChild(row);
       });
     }
 
+    var metersG = document.getElementById("llm-sim-meters");
+    if (metersG) {
+      metersG.innerHTML = "";
+      var bars = [
+        { label: "oil", v: Math.max(0, Math.min(1, (world.oil - 50) / 80)), hue: "#f08c00" },
+        { label: "ship", v: world.shippingRisk, hue: "#1971c2" },
+        { label: "sanc", v: world.sanctionsPressure, hue: "#e03131" },
+      ];
+      bars.forEach(function (b, i) {
+        var y = 448 + i * 12;
+        var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        bg.setAttribute("x", "24");
+        bg.setAttribute("y", String(y));
+        bg.setAttribute("width", "180");
+        bg.setAttribute("height", "8");
+        bg.setAttribute("rx", "3");
+        bg.setAttribute("fill", "rgba(255,255,255,0.12)");
+        var fg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        fg.setAttribute("x", "24");
+        fg.setAttribute("y", String(y));
+        fg.setAttribute("width", String(8 + b.v * 172));
+        fg.setAttribute("height", "8");
+        fg.setAttribute("rx", "3");
+        fg.setAttribute("fill", b.hue);
+        var lb = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        lb.setAttribute("class", "meta");
+        lb.setAttribute("x", "210");
+        lb.setAttribute("y", String(y + 7));
+        lb.textContent = b.label;
+        metersG.appendChild(bg);
+        metersG.appendChild(fg);
+        metersG.appendChild(lb);
+      });
+    }
+
     citiesG.innerHTML = "";
-    Object.keys(ACTORS).forEach(function (id) {
+    var actor = lastActorId();
+    var action = lastAction();
+    shown.forEach(function (id) {
       var a = ACTORS[id];
-      if (focus !== "all" && focus !== id) return;
+      if (!a) return;
+      var support = Number(world.warSupport[id] || 0.4);
       var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.setAttribute("transform", "translate(" + a.x + " " + a.y + ")");
+      if (actor === id) {
+        var pulse = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        pulse.setAttribute("class", action === "DIPLOMATIZE" || action === "ALLY" ? "city-pulse dip" : "city-pulse");
+        pulse.setAttribute("r", String(14 + support * 8));
+        g.appendChild(pulse);
+      }
       var h = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       h.setAttribute("class", "city");
-      h.setAttribute("r", "7");
-      h.setAttribute("opacity", "0.35");
+      h.setAttribute("r", String(6 + support * 10));
+      h.setAttribute("opacity", String(0.35 + support * 0.5));
       var c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       c.setAttribute("class", "city-core");
-      c.setAttribute("r", "2.4");
+      c.setAttribute("r", "2.6");
       var t = document.createElementNS("http://www.w3.org/2000/svg", "text");
       t.setAttribute("class", "label");
-      t.setAttribute("x", "10");
+      t.setAttribute("x", "12");
       t.setAttribute("y", "4");
-      t.textContent = a.name;
+      t.textContent = a.name + " " + Math.round(support * 100);
       g.appendChild(h);
       g.appendChild(c);
       g.appendChild(t);
@@ -429,16 +505,18 @@
 
     arcsG.innerHTML = "";
     missilesG.innerHTML = "";
+    var dip = action === "DIPLOMATIZE" || action === "ALLY";
     world.arcs.forEach(function (arc, idx) {
       var from = ACTORS[arc.from];
       var to = ACTORS[arc.to];
       if (!from || !to) return;
-      if (focus !== "all" && focus !== arc.from && focus !== arc.to) return;
+      if (shown.indexOf(arc.from) < 0 && shown.indexOf(arc.to) < 0) return;
       var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("class", "arc arc-" + arc.kind);
       path.setAttribute("d", curve(from, to));
       path.setAttribute("pathLength", "100");
       path.id = "llm-arc-" + idx;
+      if (dip && arc.kind === "war") path.setAttribute("opacity", "0.25");
       arcsG.appendChild(path);
       var m = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
       m.setAttribute("class", "missile");
@@ -532,9 +610,14 @@
       });
     }
     if (Array.isArray(patch.arcs)) {
-      patch.arcs.forEach(function (a) {
-        if (a && a.from && a.to && a.kind) ensureArc(world, a.from, a.to, a.kind);
+      var kept = world.arcs.filter(function (a) {
+        return BLOC_IDS.indexOf(a.from) < 0 || BLOC_IDS.indexOf(a.to) < 0;
       });
+      world.arcs = kept.concat(
+        patch.arcs.filter(function (a) {
+          return a && a.from && a.to && a.kind;
+        })
+      );
     }
     if (Array.isArray(patch.lastOrders)) world.lastOrders = patch.lastOrders;
     if (patch.briefingsShown && typeof patch.briefingsShown === "object") {
@@ -542,10 +625,10 @@
     }
     if (patch.narrator) world.narrator = String(patch.narrator);
     render();
-    if (patch.animate) animateMissiles();
+    if (patch.animate || patch.fx === "strike") animateMissiles();
     if (statusEl) {
       statusEl.textContent =
-        "Live bridge from AIChallenge Agent Battle · turn " + world.turn + " · " + world.escalation;
+        "Live · turn " + world.turn + " · " + world.escalation + " · viz = f(worldState)";
     }
   }
 

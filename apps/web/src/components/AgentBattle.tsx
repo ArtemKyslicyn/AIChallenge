@@ -507,8 +507,7 @@ export function AgentBattle() {
         ))}
       </nav>
       <p className="battle-world-hint civ-viz-hint">
-        Общий world bus (WarAgent / multi-agent-simulation-engine): битва пишет checkpoint → все вью
-        читают <code>viz = f(worldState)</code>. Мост держится тёплым даже на вкладке Civ.
+        Живая проекция: города и каскады двигаются от хода битвы. Strike запускает planet / strategy / arcs.
       </p>
 
       {vizMode === "civ" ? (
