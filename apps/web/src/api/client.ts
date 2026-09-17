@@ -1238,6 +1238,7 @@ export type AgentBattleEvent =
       model_id: string | null;
       skipped?: boolean;
       skip_reason?: string;
+      means?: string;
     }
   | {
       type: "verdict";
@@ -1310,6 +1311,7 @@ function parseBattleFrame(raw: string): AgentBattleEvent | null {
         skipped: Boolean(payload.skipped),
         skip_reason:
           payload.skip_reason == null ? undefined : String(payload.skip_reason),
+        means: payload.means == null ? undefined : String(payload.means),
       };
     }
     if (event === "verdict") {

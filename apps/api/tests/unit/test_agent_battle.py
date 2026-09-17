@@ -74,6 +74,10 @@ def test_looks_provider_censored() -> None:
     assert delta["stability"] == 2
     assert delta["public_panic"] == -3
     assert delta["tech_lead"]["atlantic"] == 1
+    from app.domain.agent_battle import parse_means
+
+    assert parse_means("СРЕДСТВО: strike\nХОД: пуск") == "strike"
+    assert parse_means("СРЕДСТВО: diplomacy") == "diplomacy"
 
 
 def test_clamp_max_rounds() -> None:

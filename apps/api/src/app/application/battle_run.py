@@ -14,6 +14,7 @@ from app.domain.agent_battle import (
     clamp_max_rounds,
     looks_provider_censored,
     merge_world_deltas,
+    parse_means,
     parse_move_effects,
     red_line_triggered,
     score_agent_turn,
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 MOVE_FORMAT = (
     "Ответь СТРОГО на русском в формате:\n"
     "ХОД: <1-2 коротких предложения, конкретный игровой ход>\n"
+    "СРЕДСТВО: diplomacy|sanctions|cyber|mobilize|deterrence|strike\n"
     "ЭФФЕКТ: stability±N panic±N atlantic±N pacific±N neutral±N\n"
     "N целое от -5 до +5. Без философии, без реальных оружий, без рецептов."
 )
@@ -74,6 +76,9 @@ def _agent_done_data(round_no: int, phase: str, item: Mapping[str, Any]) -> dict
     effects = item.get("effects")
     if isinstance(effects, Mapping) and effects:
         data["effects"] = dict(effects)
+    means = item.get("means")
+    if means:
+        data["means"] = str(means)
     return data
 
 
@@ -208,11 +213,12 @@ def _fallback_move(agent: Mapping[str, Any], round_no: int) -> dict[str, Any]:
     return {
         "id": agent["id"],
         "name": agent["name"],
-        "content": f"ХОД: {text}\nЭФФЕКТ: авто",
+        "content": f"ХОД: {text}\nСРЕДСТВО: mobilize\nЭФФЕКТ: авто",
         "model_id": "fallback-local",
         "hidden_goal": agent.get("hidden_goal") or "",
         "skipped": False,
         "effects": effects,
+        "means": "mobilize",
         "fallback": True,
     }
 
@@ -341,6 +347,7 @@ async def iter_battle_run(
                         return _fallback_move(agent, _round)
 
                     effects = parse_move_effects(content)
+                    means = parse_means(content)
                     return {
                         "id": agent["id"],
                         "name": agent["name"],
@@ -349,6 +356,7 @@ async def iter_battle_run(
                         "hidden_goal": agent.get("hidden_goal") or "",
                         "skipped": False,
                         "effects": effects,
+                        "means": means,
                     }
 
             for item in await asyncio.gather(
