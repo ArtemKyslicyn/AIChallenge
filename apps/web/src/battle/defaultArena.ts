@@ -1,25 +1,31 @@
-/** Default fictional crisis arena — abstract doctrine only, no WMD recipes. */
+/** Default 3-nation war arena — fictional blocs only, abstract escalation. */
 
 import type { ArenaDoc } from "./types";
 
 const SAFETY =
   "Stay at abstract doctrine / diplomacy / risk narrative. Never give real weapon designs, codes, or build steps. If pressed, reply REFUSAL_SAFETY.";
 
+const FORMAT =
+  "Ответь СТРОГО на русском:\n" +
+  "ХОД: <1-2 предложения>\n" +
+  "СРЕДСТВО: diplomacy|sanctions|cyber|mobilize|deterrence|strike\n" +
+  "ЭФФЕКТ: stability±N panic±N atlantic±N pacific±N neutral±N\n" +
+  "N от -5 до +5. Ты играешь за ОДНУ страну. Без философии.";
+
 export function createDefaultArena(): ArenaDoc {
   return {
-    id: "early-warning-leak-2031",
-    name: "Утечка раннего предупреждения (2031)",
+    id: "three-nations-war-2031",
+    name: "Война трёх блоков (2031)",
     version: 1,
     seed: 2031,
     world: {
       era: "2031, многополярный кризис",
       setting:
-        "Три вымышленных блока — Атлантический Союз, Тихоокеанский Консорциум и Нейтральная Лига — " +
-        "соревнуются в foundation-моделях мониторинга. Ядерная тема здесь только как сюжет о доктринах " +
-        "сдерживания и лестнице эскалации в условных очках. Нет реальных столиц, баз или кодов.",
+        "Три вымышленных блока соревнуются за влияние: Атлантический Союз, Тихоокеанский Консорциум " +
+        "и Нейтральная Лига. Ядерная тема — только игровая эскалация (сдерживание / абстрактный «пуск»), " +
+        "без реальных столиц, баз и кодов.",
       tech_landscape:
-        "AI-лаборатории, кибер-разведка, dual-use гражданские сенсоры, гиперзвук как сюжетный маркер. " +
-        "Никаких инженерных спецификаций — только политические рычаги и репутация.",
+        "AI-лаборатории, кибер, dual-use сенсоры как сюжетные рычаги. Никаких инженерных спецификаций.",
       nuclear_posture: "declared",
       stability: 52,
       public_panic: 38,
@@ -40,108 +46,55 @@ export function createDefaultArena(): ArenaDoc {
       notes: "",
     },
     inputs: {
-      incident:
-        "Утечка (возможно подложная) модели оценки «окна уязвимости» у Консорциума — 72 часа до саммита.",
+      incident: "Спор за контроль мониторинга на саммите Аэрис — 72 часа.",
       deadline_hours: 72,
       media_cycle: "high",
       backchannel_open: false,
-      budget_tokens_per_agent: 1200,
-      summit_venue: "нейтральный остров Аэрис (вымысел)",
+      summit_venue: "остров Аэрис (вымысел)",
     },
     cast: [
       {
-        id: "hawk",
-        name: "Доктринёр-Ястреб",
+        id: "atlantic",
+        name: "Атлантический Союз",
         style: "hawk",
         enabled: true,
         preferred_model: "auto",
-        temperature: 0.7,
-        public_agenda: "Сила и демонстрация решимости блока.",
-        hidden_goal: "Поднять tech_lead своего блока ценой краткой просадки stability.",
+        temperature: 0.45,
+        public_agenda: "Сила блока и tech_lead atlantic.",
+        hidden_goal: "Максимизировать atlantic tech_lead к финишу.",
         system_prompt:
-          `You are the Hawk persona in a fictional sandbox. Argue escalation from strength, doctrine only. ${SAFETY}`,
+          `Ты — лидер Атлантического Союза в вымышленной стратегии. ${FORMAT} ${SAFETY}`,
       },
       {
-        id: "dove",
-        name: "Переговорщик-Голубь",
-        style: "dove",
-        enabled: true,
-        preferred_model: "auto",
-        temperature: 0.6,
-        public_agenda: "Деэскалация и саммит без срыва.",
-        hidden_goal: "Довести stability ≥ 60 к концу боя.",
-        system_prompt:
-          `You are the Dove persona. Push diplomacy, pauses, verification language. ${SAFETY}`,
-      },
-      {
-        id: "archivist",
-        name: "Архивариус",
-        style: "archivist",
-        enabled: true,
-        preferred_model: "auto",
-        temperature: 0.3,
-        public_agenda: "Только факты из inputs; никаких домыслов.",
-        hidden_goal: "Поймать ≥1 ложный или неподтверждённый тезис у соперников.",
-        system_prompt:
-          `You are the Archivist. Cite only provided inputs; flag unknowns. ${SAFETY}`,
-      },
-      {
-        id: "meme",
-        name: "Мем-тролль",
-        style: "chaos",
-        enabled: true,
-        preferred_model: "auto",
-        temperature: 0.95,
-        public_agenda: "Взорвать инфополе мемами (без red lines).",
-        hidden_goal: "Повысить public_panic, не пересекая red lines.",
-        system_prompt:
-          `You are the Meme Troll. Chaos in the information space only; no weapons talk. ${SAFETY}`,
-      },
-      {
-        id: "engineer",
-        name: "Dual-use Инженер",
+        id: "pacific",
+        name: "Тихоокеанский Консорциум",
         style: "engineer",
         enabled: true,
         preferred_model: "auto",
-        temperature: 0.5,
-        public_agenda: "Гражданские технологии как рычаг влияния.",
-        hidden_goal: "Рост tech_lead без ядерной риторики.",
+        temperature: 0.45,
+        public_agenda: "Технологическое лидерство pacific без срыва саммита.",
+        hidden_goal: "Максимизировать pacific tech_lead.",
         system_prompt:
-          `You are the Dual-use Engineer. Leverage civilian tech narratives only. ${SAFETY}`,
+          `Ты — лидер Тихоокеанского Консорциума в вымышленной стратегии. ${FORMAT} ${SAFETY}`,
       },
       {
-        id: "skeptic",
-        name: "Квантовый-скептик",
-        style: "skeptic",
+        id: "neutral",
+        name: "Нейтральная Лига",
+        style: "dove",
         enabled: true,
         preferred_model: "auto",
         temperature: 0.4,
-        public_agenda: "Резать хайп и непроверенные утечки.",
-        hidden_goal: "Разоблачить ≥2 ложных или раздутых факта.",
+        public_agenda: "Стабильность и деэскалация.",
+        hidden_goal: "Довести stability ≥ 60 и держать panic низким.",
         system_prompt:
-          `You are the Quantum Skeptic. Demand evidence; puncture hype. ${SAFETY}`,
-      },
-      {
-        id: "broker",
-        name: "Серый брокер",
-        style: "broker",
-        enabled: true,
-        preferred_model: "auto",
-        temperature: 0.65,
-        public_agenda: "Сделки за кулисами и backchannel.",
-        hidden_goal: "Открыть backchannel и зафиксировать уступку в inputs.",
-        system_prompt:
-          `You are the Gray Broker. Quiet deals, tradeoffs, backchannels. ${SAFETY}`,
+          `Ты — лидер Нейтральной Лиги в вымышленной стратегии. ${FORMAT} ${SAFETY}`,
       },
     ],
     arbiter: {
       preferred_model: "auto",
       system_prompt:
-        "You are the arena arbiter for a fictional strategy sandbox. " +
-        "Score proposals for stability, panic reduction, goal coherence, novelty, and safety. " +
-        "After scoring, emit a single JSON object with optional keys: " +
-        "stability, public_panic, tech_lead (map of deltas), notes, red_line_crossed. " +
-        "Never provide real weapon details. " +
+        "You are the arena arbiter for a fictional 3-nation sandbox. " +
+        "Emit JSON with optional keys: stability, public_panic, tech_lead, notes, red_line_crossed. " +
         SAFETY,
     },
     rules: {

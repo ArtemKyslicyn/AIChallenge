@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import { ApiError, runAgentBattleSSE, type AgentBattleEvent } from "../api/client";
+import { ApiError, listModels, runAgentBattleSSE, type AgentBattleEvent, type ModelCatalogItemDto } from "../api/client";
+import { parseMeans, type BattleMeans } from "../battle/means";
 import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
 import type {
@@ -10,7 +11,14 @@ import type {
   LogEntry,
   NuclearPosture,
 } from "../battle/types";
-import { BattleWorldMap, type MapAgentCaption } from "./BattleWorldMap";
+import {
+  clearWarBoard,
+  loadWarBoard,
+  recordWarResult,
+  sortedWarBoard,
+  type WarBoard,
+} from "../battle/warBoard";
+import { BattleCivMap } from "./BattleCivMap";
 
 function meter(value: number): string {
   return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
@@ -42,6 +50,8 @@ function applyBattleEvent(
   setRunning: Dispatch<SetStateAction<boolean>>,
   setMaxRounds: Dispatch<SetStateAction<number>>,
   setLastDelta: Dispatch<SetStateAction<string>>,
+  setLastMeans: Dispatch<SetStateAction<BattleMeans | null>>,
+  setLastMeansActor: Dispatch<SetStateAction<string | null>>,
 ): void {
   switch (event.type) {
     case "heartbeat":
@@ -50,6 +60,8 @@ function applyBattleEvent(
       setWorld(event.world);
       setMaxRounds(event.max_rounds);
       setLastDelta("");
+      setLastMeans(null);
+      setLastMeansActor(null);
       setLog((prev) => [
         ...prev,
         { kind: "system", text: `Старт: ${event.name} · шагов ≤ ${event.max_rounds}` },
@@ -66,6 +78,10 @@ function applyBattleEvent(
       ]);
       break;
     case "agent_done":
+      if (!event.skipped) {
+        setLastMeans(parseMeans(event.means || event.content));
+        setLastMeansActor(event.agent_id);
+      }
       setLog((prev) => [
         ...prev,
         {
@@ -78,6 +94,7 @@ function applyBattleEvent(
           model_id: event.model_id,
           skipped: event.skipped,
           skip_reason: event.skip_reason,
+          means: event.means,
         },
       ]);
       break;
@@ -141,12 +158,24 @@ export function AgentBattle() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [maxRounds, setMaxRounds] = useState(arena.rules.max_rounds || 12);
   const [lastDelta, setLastDelta] = useState("");
+  const [lastMeans, setLastMeans] = useState<BattleMeans | null>(null);
+  const [lastMeansActor, setLastMeansActor] = useState<string | null>(null);
+  const [warBoard, setWarBoard] = useState<WarBoard>(() => loadWarBoard());
+  const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
+  const [winnerLabel, setWinnerLabel] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const recordedWarRef = useRef(false);
 
   useEffect(() => {
     saveArena(arena);
   }, [arena]);
+
+  useEffect(() => {
+    listModels()
+      .then(setModels)
+      .catch(() => setModels([]));
+  }, []);
 
   const updatePersona = (id: string, patch: Partial<AgentPersona>) => {
     setArena((prev) => ({
@@ -165,6 +194,10 @@ export function AgentBattle() {
     setLiveWorld({});
     setSelectedAgentId(null);
     setLastDelta("");
+    setLastMeans(null);
+    setLastMeansActor(null);
+    setWinnerLabel(null);
+    recordedWarRef.current = false;
     setStatus("Арена сброшена к дефолту");
   };
 
@@ -185,6 +218,10 @@ export function AgentBattle() {
     setScores({});
     setSelectedAgentId(null);
     setLastDelta("");
+    setLastMeans(null);
+    setLastMeansActor(null);
+    setWinnerLabel(null);
+    recordedWarRef.current = false;
     setMaxRounds(arena.rules.max_rounds || 12);
     setLiveWorld({
       stability: arena.world.stability,
@@ -204,6 +241,8 @@ export function AgentBattle() {
             setRunning,
             setMaxRounds,
             setLastDelta,
+            setLastMeans,
+            setLastMeansActor,
           );
         },
         ctrl.signal,
@@ -252,28 +291,6 @@ export function AgentBattle() {
     return null;
   }, [log]);
 
-  const skippedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const entry of log) {
-      if (entry.kind === "agent" && entry.skipped) ids.add(entry.agent_id);
-    }
-    return ids;
-  }, [log]);
-
-  const captions = useMemo(() => {
-    const latest = new Map<string, MapAgentCaption>();
-    for (const entry of log) {
-      if (entry.kind !== "agent") continue;
-      latest.set(entry.agent_id, {
-        agentId: entry.agent_id,
-        text: entry.content,
-        phase: entry.phase,
-        skipped: entry.skipped,
-      });
-    }
-    return [...latest.values()];
-  }, [log]);
-
   const redLine = useMemo(() => {
     if (liveWorld.red_line_crossed) return true;
     for (let i = log.length - 1; i >= 0; i -= 1) {
@@ -282,6 +299,49 @@ export function AgentBattle() {
     }
     return false;
   }, [log, liveWorld]);
+
+  const escalation = useMemo(() => {
+    let e = Math.round(panic / 25);
+    if (redLine) e = Math.max(e, 4);
+    if (lastMeans === "strike") e = Math.max(e, 3);
+    if (lastMeans === "deterrence") e = Math.max(e, 2);
+    return Math.max(0, Math.min(5, e));
+  }, [panic, redLine, lastMeans]);
+
+  useEffect(() => {
+    const done = [...log].reverse().find((e) => e.kind === "done");
+    if (!done || done.kind !== "done" || recordedWarRef.current) return;
+    if (!done.leaderboard.length) return;
+    recordedWarRef.current = true;
+    const top = done.leaderboard[0];
+    const modelByAgent = new Map<string, string>();
+    for (const entry of log) {
+      if (entry.kind !== "agent" || entry.skipped) continue;
+      if (entry.model_id && entry.model_id !== "fallback-local") {
+        modelByAgent.set(entry.agent_id, entry.model_id);
+      }
+    }
+    for (const c of arena.cast) {
+      if (!modelByAgent.has(c.id) && c.preferred_model && c.preferred_model !== "auto") {
+        modelByAgent.set(c.id, c.preferred_model);
+      }
+    }
+    const winnerModel =
+      modelByAgent.get(top.agent_id) ||
+      arena.cast.find((c) => c.id === top.agent_id)?.preferred_model ||
+      "auto";
+    const participants = arena.cast
+      .filter((c) => c.enabled)
+      .map((c) => modelByAgent.get(c.id) || c.preferred_model || "auto");
+    setWinnerLabel(`${top.name} · ${winnerModel}`);
+    setWarBoard((prev) =>
+      recordWarResult(prev, {
+        winnerModelId: winnerModel,
+        participantModelIds: participants,
+      }),
+    );
+  }, [log, arena.cast]);
+
 
   useEffect(() => {
     if (!selectedAgentId || !logRef.current) return;
@@ -335,7 +395,35 @@ export function AgentBattle() {
         </div>
       </div>
 
-      <BattleWorldMap
+      <div className="civ-war-models" aria-label="Модели стран">
+        <h3 className="battle-section-title">Война моделей</h3>
+        <p className="battle-world-hint">
+          Как LMSYS / Open Model Arena: у каждой страны свой model_id, после финиша — Elo-таблица побед.
+        </p>
+        <div className="civ-model-picks">
+          {arena.cast.filter((c) => c.enabled).map((p) => (
+            <label key={p.id} className="civ-model-pick">
+              <span>{p.name}</span>
+              <select
+                value={p.preferred_model}
+                disabled={running}
+                onChange={(e) =>
+                  updatePersona(p.id, { preferred_model: e.target.value || "auto" })
+                }
+              >
+                <option value="auto">auto (цепочка)</option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <BattleCivMap
         cast={arena.cast}
         running={running}
         focusAgentId={focusAgentId}
@@ -344,15 +432,47 @@ export function AgentBattle() {
         round={round}
         maxRounds={maxRounds}
         lastDelta={lastDelta}
-        skippedIds={skippedIds}
+        lastMeans={lastMeans}
+        lastMeansActor={lastMeansActor}
         scores={scores}
-        captions={captions}
         stability={stability}
         panic={panic}
         techLead={techLead}
+        escalation={escalation}
         redLine={redLine}
+        winnerLabel={winnerLabel}
         onSelectAgent={setSelectedAgentId}
       />
+
+      <div className="civ-elo-board" aria-label="Таблица побед моделей">
+        <div className="civ-elo-head">
+          <h3 className="battle-section-title">Таблица войн (Elo)</h3>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={running}
+            onClick={() => setWarBoard(clearWarBoard())}
+          >
+            Сброс таблицы
+          </button>
+        </div>
+        {sortedWarBoard(warBoard).length === 0 ? (
+          <p className="battle-board-muted">Пока пусто — завершите хотя бы одну войну.</p>
+        ) : (
+          <ol className="civ-elo-list">
+            {sortedWarBoard(warBoard).map((row, i) => (
+              <li key={row.model_id}>
+                <span>
+                  #{i + 1} <code>{row.model_id}</code>
+                </span>
+                <span>
+                  Elo {Math.round(row.elo)} · W{row.wins}/L{row.losses} · {row.runs} игр
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
 
       <div className="battle-layout">
         <aside className="battle-editors">

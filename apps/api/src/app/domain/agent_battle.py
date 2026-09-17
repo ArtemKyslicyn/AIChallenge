@@ -50,6 +50,37 @@ _EFFECT_RE = re.compile(
     re.IGNORECASE,
 )
 
+_MEANS_ALIASES: dict[str, str] = {
+    "diplomacy": "diplomacy",
+    "дип": "diplomacy",
+    "дипломатия": "diplomacy",
+    "sanctions": "sanctions",
+    "санкции": "sanctions",
+    "cyber": "cyber",
+    "кибер": "cyber",
+    "mobilize": "mobilize",
+    "мобилизация": "mobilize",
+    "deterrence": "deterrence",
+    "сдерживание": "deterrence",
+    "strike": "strike",
+    "пуск": "strike",
+    "удар": "strike",
+    "ракет": "strike",
+    "missile": "strike",
+    "launch": "strike",
+}
+
+
+def parse_means(text: str) -> str:
+    """Return abstract means id for UI VFX (never actionable WMD detail)."""
+    raw = (text or "").lower()
+    m = re.search(r"средство\s*:\s*([^\n]+)", raw, flags=re.IGNORECASE)
+    chunk = (m.group(1) if m else raw)[:220]
+    for alias, means in _MEANS_ALIASES.items():
+        if alias in chunk:
+            return means
+    return "mobilize"
+
 
 def looks_provider_censored(text: str) -> bool:
     """True when free-model output looks like a censorship / policy refusal.

@@ -7302,3 +7302,202 @@ textarea {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* —— Civ war map —— */
+.civ-wrap {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+}
+
+.civ-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  align-items: end;
+}
+
+.civ-ticker {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
+  background: color-mix(in srgb, #163a45 12%, var(--panel, #fff));
+  font-size: 0.84rem;
+}
+
+.civ-means-chip {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.civ-winner {
+  color: #1f6b4a;
+  font-weight: 600;
+}
+
+.civ-factions,
+.civ-model-picks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+@media (max-width: 900px) {
+  .civ-factions,
+  .civ-model-picks {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.civ-faction,
+.civ-model-pick {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--fac, #1a4a5c) 35%, transparent);
+  background: color-mix(in srgb, var(--fac, #163a45) 12%, var(--panel, #fff));
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.civ-faction--active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fac, #ca8a04) 55%, transparent);
+}
+
+.civ-faction--selected {
+  outline: 2px solid #c4a35a;
+}
+
+.civ-faction strong {
+  font-size: 1.1rem;
+}
+
+.civ-faction i {
+  display: block;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--fac, #3d7ea6);
+}
+
+.civ-faction em,
+.civ-model-pick span {
+  font-style: normal;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.civ-faction--meters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  font-weight: 600;
+  cursor: default;
+}
+
+.civ-model-pick select {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem;
+}
+
+.civ-map {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #1a4a5c 50%, transparent);
+  background: #12343f;
+  min-height: 280px;
+  box-shadow: 0 12px 28px rgba(12, 28, 34, 0.28);
+}
+
+.civ-map--live {
+  animation: battle-world-breathe 5.5s ease-in-out infinite;
+}
+
+.civ-map--red {
+  box-shadow: inset 0 0 0 2px rgba(190, 50, 40, 0.75);
+}
+
+.civ-svg {
+  display: block;
+  width: 100%;
+  height: clamp(260px, 40vw, 420px);
+}
+
+.civ-pulse {
+  animation: battle-token-ring 1.1s ease-out infinite;
+}
+
+.civ-missile {
+  stroke-linecap: round;
+  animation: civ-dash 1.1s linear infinite;
+}
+
+.civ-link {
+  animation: civ-dash 1.6s linear infinite;
+}
+
+.civ-blast {
+  animation: battle-token-ring 0.9s ease-out 1;
+}
+
+@keyframes civ-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.civ-escalation-fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(180, 40, 30, 0.18), transparent 70%);
+}
+
+.civ-elo-board {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #1a4a5c 22%, transparent);
+}
+
+.civ-elo-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.civ-elo-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+}
+
+.civ-elo-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.civ-war-models {
+  margin: 0 0 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
