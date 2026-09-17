@@ -7422,7 +7422,8 @@ textarea {
   cursor: default;
 }
 
-.civ-model-pick select {
+.civ-model-pick select,
+.civ-model-menu-btn {
   width: 100%;
   font: inherit;
   padding: 0.45rem 0.5rem;
@@ -7434,6 +7435,47 @@ textarea {
   color: inherit;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.civ-model-menu-btn code {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.civ-model-menu {
+  position: fixed;
+  z-index: 4000;
+  max-height: 280px;
+  overflow: auto;
+  padding: 0.25rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #1a4a5c 28%, transparent);
+  background: #fffaf2;
+  box-shadow: 0 16px 40px rgba(12, 28, 34, 0.28);
+}
+
+.civ-model-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.civ-model-menu-item:hover,
+.civ-model-menu-item.is-on {
+  background: color-mix(in srgb, #2a6a8a 14%, transparent);
+}
+
+.civ-model-menu-item code {
+  font-size: 0.8rem;
+  word-break: break-all;
 }
 
 .civ-map {
