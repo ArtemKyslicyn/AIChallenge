@@ -106,6 +106,13 @@ export interface AgentSession {
   } | null;
   /** Day 12 — expert lens overlay id */
   activeLensId?: string | null;
+  /** Day 14 — constraints stored apart from chat turns */
+  invariants?: Array<{
+    id: string;
+    kind: string;
+    statement: string;
+    active?: boolean;
+  }> | null;
   branches?: BranchRef[];
   /** When set, persist runs use this draft id instead of agent id (branch). */
   branchDraftId?: string | null;
@@ -141,6 +148,7 @@ export function emptySession(): AgentSession {
     workingMemory: null,
     longTermMemory: null,
     activeLensId: "neutral",
+    invariants: [],
     branches: [],
     branchDraftId: null,
   };
@@ -189,6 +197,7 @@ export function loadSessions(): SessionMap {
             ? s.longTermMemory
             : null,
         activeLensId: typeof s.activeLensId === "string" ? s.activeLensId : "neutral",
+        invariants: Array.isArray(s.invariants) ? s.invariants : [],
         branches: Array.isArray(s.branches) ? s.branches : [],
         branchDraftId: typeof s.branchDraftId === "string" ? s.branchDraftId : null,
       };
@@ -217,6 +226,7 @@ export function saveSessions(map: SessionMap): void {
         workingMemory: s.workingMemory ?? null,
         longTermMemory: s.longTermMemory ?? null,
         activeLensId: s.activeLensId ?? "neutral",
+        invariants: s.invariants ?? [],
         branches: s.branches ?? [],
         branchDraftId: s.branchDraftId ?? null,
       };

@@ -39,6 +39,8 @@ class AgentDialog:
     working_memory: dict[str, object] = field(default_factory=dict)
     #: Day 12 — last selected expert lens id (session overlay).
     active_lens_id: str | None = None
+    #: Day 14 — constraints stored apart from chat turns / working memory.
+    invariants: list[dict[str, object]] = field(default_factory=list)
     parent_dialog_id: UUID | None = None
     branch_label: str | None = None
     forked_from_message_id: str | None = None

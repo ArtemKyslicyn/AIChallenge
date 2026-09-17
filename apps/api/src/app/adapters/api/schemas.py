@@ -211,6 +211,8 @@ class AgentWorkshopRunResponse(BaseModel):
     tokens: AgentTokenUsageResponse | None = None
     compression: AgentCompressionResponse | None = None
     context_strategy: AgentContextStrategyResponse | None = None
+    invariant_conflict: bool = False
+    invariants: list[dict[str, object]] = Field(default_factory=list)
 
 
 class AgentDialogResponse(BaseModel):
@@ -223,6 +225,7 @@ class AgentDialogResponse(BaseModel):
     summary_until_count: int = 0
     facts: dict[str, str] = Field(default_factory=dict)
     working_memory: dict[str, object] = Field(default_factory=dict)
+    invariants: list[dict[str, object]] = Field(default_factory=list)
     parent_dialog_id: UUID | None = None
     branch_label: str | None = None
     forked_from_message_id: str | None = None
@@ -293,6 +296,28 @@ class AgentTaskEventRequest(BaseModel):
 class AgentTaskEventResponse(BaseModel):
     working: dict[str, object] = Field(default_factory=dict)
     task: dict[str, object] = Field(default_factory=dict)
+    label: str = ""
+    dialog_id: UUID | None = None
+
+
+class AgentInvariantEventRequest(BaseModel):
+    """Mutate dialog invariants (Day 14) — stored apart from chat turns."""
+
+    event: str = Field(
+        min_length=1,
+        max_length=32,
+        description="add|remove|seed|reset",
+    )
+    client_draft_id: str = Field(min_length=1, max_length=64)
+    kind: str = Field(default="", max_length=32)
+    statement: str = Field(default="", max_length=500)
+    invariant_id: str = Field(default="", max_length=64)
+    dialog_name: str | None = Field(default=None, max_length=120)
+    dialog_system_prompt: str | None = Field(default=None, max_length=8000)
+
+
+class AgentInvariantEventResponse(BaseModel):
+    invariants: list[dict[str, object]] = Field(default_factory=list)
     label: str = ""
     dialog_id: UUID | None = None
 

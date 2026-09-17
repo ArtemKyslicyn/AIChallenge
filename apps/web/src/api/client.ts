@@ -854,6 +854,15 @@ export interface AgentWorkshopRunResultDto {
     summary_text?: string;
     covered_by_summary?: number;
   } | null;
+  invariant_conflict?: boolean;
+  invariants?: AgentInvariantDto[];
+}
+
+export interface AgentInvariantDto {
+  id: string;
+  kind: string;
+  statement: string;
+  active?: boolean;
 }
 
 export interface AgentDialogDto {
@@ -866,6 +875,7 @@ export interface AgentDialogDto {
   summary_until_count?: number;
   facts?: Record<string, string>;
   working_memory?: Record<string, unknown>;
+  invariants?: AgentInvariantDto[];
   parent_dialog_id?: string | null;
   branch_label?: string | null;
   forked_from_message_id?: string | null;
@@ -1043,6 +1053,39 @@ export function postAgentTaskEvent(
       step: payload.step || "",
       expected_action: payload.expectedAction || "",
       resume_brief: payload.resumeBrief || "",
+      dialog_name: payload.dialogName || null,
+      dialog_system_prompt: payload.dialogSystemPrompt || null,
+    }),
+    signal,
+  });
+}
+
+export interface AgentInvariantEventResultDto {
+  invariants: AgentInvariantDto[];
+  label: string;
+  dialog_id?: string | null;
+}
+
+export function postAgentInvariants(
+  payload: {
+    event: string;
+    clientDraftId: string;
+    kind?: string;
+    statement?: string;
+    invariantId?: string;
+    dialogName?: string;
+    dialogSystemPrompt?: string;
+  },
+  signal?: AbortSignal,
+): Promise<AgentInvariantEventResultDto> {
+  return request<AgentInvariantEventResultDto>("/agent-workshop/invariants", {
+    method: "POST",
+    body: JSON.stringify({
+      event: payload.event,
+      client_draft_id: payload.clientDraftId,
+      kind: payload.kind || "",
+      statement: payload.statement || "",
+      invariant_id: payload.invariantId || "",
       dialog_name: payload.dialogName || null,
       dialog_system_prompt: payload.dialogSystemPrompt || null,
     }),

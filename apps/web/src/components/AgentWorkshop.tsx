@@ -13,6 +13,7 @@ import {
   createPreferenceProfile,
   updatePreferenceProfile,
   postAgentTaskEvent,
+  postAgentInvariants,
   runAgentWorkshop,
   writeAgentMemory,
   type AgentDialogMessageDto,
@@ -74,6 +75,15 @@ const CONTEXT_MODE_LABELS: Record<ContextMode, string> = {
   sliding: "Окно",
   facts: "Facts",
 };
+
+const INVARIANT_KIND_LABELS: Record<string, string> = {
+  architecture: "архитектура",
+  stack: "стек",
+  decision: "решение",
+  business: "правило",
+};
+
+const INVARIANT_KINDS = ["architecture", "stack", "decision", "business"] as const;
 
 type WorkspaceMode = "solo" | "team";
 
@@ -530,6 +540,7 @@ export function AgentWorkshop() {
               }
             : undefined,
         },
+        invariants: Array.isArray(dialog.invariants) ? dialog.invariants : [],
       });
       await refreshMemory(agentId);
     } catch {
@@ -610,6 +621,36 @@ export function AgentWorkshop() {
       const msg =
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
       patchSession(agentId, { status: `Задача: ${msg}` });
+      return null;
+    }
+  }
+
+  async function runInvariantEvent(
+    agentId: string,
+    event: string,
+    extra?: { kind?: string; statement?: string; invariantId?: string },
+  ) {
+    const draft = store.drafts.find((d) => d.id === agentId);
+    try {
+      const res = await postAgentInvariants({
+        event,
+        clientDraftId: agentId,
+        kind: extra?.kind,
+        statement: extra?.statement,
+        invariantId: extra?.invariantId,
+        dialogName: draft?.name,
+        dialogSystemPrompt: draft?.system_prompt,
+      });
+      patchSession(agentId, {
+        invariants: res.invariants || [],
+        dialogId: res.dialog_id || ensureSession(sessionsRef.current, agentId).dialogId,
+        status: `Инварианты · ${res.label}`,
+      });
+      return res;
+    } catch (e) {
+      const msg =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+      patchSession(agentId, { status: `Инварианты: ${msg}` });
       return null;
     }
   }
@@ -834,7 +875,9 @@ export function AgentWorkshop() {
             }
           }
           patchSession(agentId, {
-            status: "",
+            status: result.invariant_conflict
+              ? "Отказ · конфликт с инвариантом (LLM не вызывался)"
+              : "",
             dialogId: result.dialog_id ?? dialogId,
             log,
             summaryText:
@@ -846,6 +889,7 @@ export function AgentWorkshop() {
               strategyMeter?.facts && Object.keys(strategyMeter.facts).length
                 ? strategyMeter.facts
                 : sess.facts || null,
+            invariants: result.invariants ?? sess.invariants ?? [],
           });
           void refreshMemory(agentId);
         } else {
@@ -1386,7 +1430,14 @@ export function AgentWorkshop() {
             </div>
           ) : (
             session.log.map((line) => (
-              <article key={line.id} className={`agent-log-line agent-log-line--${line.role}`}>
+              <article
+                key={line.id}
+                className={`agent-log-line agent-log-line--${line.role}${
+                  line.role === "assistant" && line.modelId === "invariants"
+                    ? " agent-log-line--refusal"
+                    : ""
+                }`}
+              >
                 <div className="agent-log-meta">
                   {line.tag ? <span className="agent-tag">{line.tag}</span> : null}
                   {line.role === "assistant" && line.modelId ? (
@@ -1867,6 +1918,127 @@ export function AgentWorkshop() {
                       id: `s-task-${Date.now()}`,
                       role: "status",
                       text: `✓ Задача · ${res.label}`,
+                    });
+                  })();
+                }}
+              >
+                Сброс
+              </button>
+            </div>
+          </div>
+          <div className="agent-invariant-strip" aria-label="Инварианты">
+            <div className="agent-persona-row" role="group" aria-label="Список инвариантов">
+              <span className="agent-persona-label">Инварианты</span>
+              {(session.invariants || []).length === 0 ? (
+                <span className="agent-task-meta">отдельно от диалога · пусто</span>
+              ) : (
+                (session.invariants || []).map((inv) => (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    className="agent-memory-chip is-active agent-invariant-chip"
+                    title={inv.statement}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void (async () => {
+                        const res = await runInvariantEvent(draft.id, "remove", {
+                          invariantId: inv.id,
+                        });
+                        if (!res) return;
+                        appendLog(draft.id, {
+                          id: `s-inv-${Date.now()}`,
+                          role: "status",
+                          text: `✓ Инварианты · ${res.label}`,
+                        });
+                      })();
+                    }}
+                  >
+                    {INVARIANT_KIND_LABELS[inv.kind] || inv.kind}
+                    <span className="agent-invariant-x" aria-hidden>
+                      ×
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+            {(session.invariants || []).length > 0 ? (
+              <ul className="agent-invariant-list">
+                {(session.invariants || []).map((inv) => (
+                  <li key={`${inv.id}-stmt`}>
+                    <strong>{INVARIANT_KIND_LABELS[inv.kind] || inv.kind}</strong>
+                    {inv.statement}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="agent-task-meta">
+                Хранятся в JSON колонки, не в чате. Конфликт запроса → отказ без LLM.
+              </p>
+            )}
+            <div className="agent-persona-row" role="group" aria-label="Управление инвариантами">
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runInvariantEvent(draft.id, "seed");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-inv-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Инварианты · ${res.label}`,
+                    });
+                  })();
+                }}
+              >
+                Посеять
+              </button>
+              {INVARIANT_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="agent-memory-chip"
+                  title={`Добавить ${INVARIANT_KIND_LABELS[kind]} из поля ввода`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const statement = session.input.trim();
+                    if (!statement) {
+                      patchSession(draft.id, {
+                        status: `Укажите формулировку, затем «${INVARIANT_KIND_LABELS[kind]}»`,
+                      });
+                      return;
+                    }
+                    void (async () => {
+                      const res = await runInvariantEvent(draft.id, "add", {
+                        kind,
+                        statement,
+                      });
+                      if (!res) return;
+                      patchSession(draft.id, { input: "" });
+                      appendLog(draft.id, {
+                        id: `s-inv-${Date.now()}`,
+                        role: "status",
+                        text: `✓ Инварианты · ${res.label}`,
+                      });
+                    })();
+                  }}
+                >
+                  + {INVARIANT_KIND_LABELS[kind]}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="agent-memory-chip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    const res = await runInvariantEvent(draft.id, "reset");
+                    if (!res) return;
+                    appendLog(draft.id, {
+                      id: `s-inv-${Date.now()}`,
+                      role: "status",
+                      text: `✓ Инварианты · ${res.label}`,
                     });
                   })();
                 }}

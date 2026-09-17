@@ -5314,6 +5314,13 @@ textarea {
   align-items: center;
 }
 
+.agent-compose > .agent-memory-chips,
+.agent-compose > .agent-task-strip,
+.agent-compose > .agent-invariant-strip,
+.agent-compose > .agent-persona-rows {
+  grid-column: 1 / -1;
+}
+
 .agent-context-mode {
   display: inline-flex;
   align-items: center;
@@ -5595,6 +5602,58 @@ textarea {
   margin: 0;
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.agent-invariant-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  flex: 1 1 100%;
+  min-width: 100%;
+}
+
+.agent-invariant-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.agent-invariant-list li {
+  display: grid;
+  grid-template-columns: 6.2rem 1fr;
+  gap: 0.45rem;
+  line-height: 1.35;
+}
+
+.agent-invariant-list strong {
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.agent-invariant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.agent-invariant-x {
+  opacity: 0.55;
+  font-size: 0.95em;
+}
+
+.agent-log-line--refusal {
+  border-left: 3px solid color-mix(in srgb, #c45c26 75%, var(--border));
+  background: color-mix(in srgb, #c45c26 10%, var(--surface));
 }
 
 .agent-pref-editor {

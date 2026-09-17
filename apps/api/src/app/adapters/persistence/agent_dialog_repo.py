@@ -89,6 +89,7 @@ def _to_domain(row: AgentDialogRow) -> AgentDialog:
         summary_until_count=int(getattr(row, "summary_until_count", 0) or 0),
         facts=_normalize_facts(getattr(row, "facts", None) or {}),
         working_memory=dict(getattr(row, "working_memory", None) or {}),
+        invariants=list(getattr(row, "invariants", None) or []),
         active_lens_id=getattr(row, "active_lens_id", None),
         parent_dialog_id=getattr(row, "parent_dialog_id", None),
         branch_label=getattr(row, "branch_label", None),
@@ -134,6 +135,7 @@ class SqlAlchemyAgentDialogRepository:
                 summary_until_count=int(dialog.summary_until_count or 0),
                 facts=dict(dialog.facts or {}),
                 working_memory=dict(dialog.working_memory or {}),
+                invariants=list(dialog.invariants or []),
                 active_lens_id=dialog.active_lens_id,
                 parent_dialog_id=dialog.parent_dialog_id,
                 branch_label=dialog.branch_label,
@@ -154,6 +156,7 @@ class SqlAlchemyAgentDialogRepository:
             row.summary_until_count = int(dialog.summary_until_count or 0)
             row.facts = dict(dialog.facts or {})
             row.working_memory = dict(dialog.working_memory or {})
+            row.invariants = list(dialog.invariants or [])
             row.active_lens_id = dialog.active_lens_id
             row.parent_dialog_id = dialog.parent_dialog_id
             row.branch_label = dialog.branch_label
