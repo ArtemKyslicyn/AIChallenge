@@ -7583,7 +7583,9 @@ textarea {
 }
 
 .civ-war-models {
-  margin: 0 0 0.85rem;
+  margin: 0 0 0.75rem;
+  display: grid;
+  gap: 0.45rem;
 }
 
 .civ-viz-tabs {
@@ -7632,8 +7634,4 @@ textarea {
   max-height: 960px;
   border: 0;
   background: #0b0f14;
-}
-  margin: 0 0 0.75rem;
-  display: grid;
-  gap: 0.45rem;
 }
