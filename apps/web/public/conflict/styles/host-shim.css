@@ -1,12 +1,12 @@
 /* Minimal host shim so Cursor visualization fragments run standalone */
 :root {
-  color-scheme: light dark;
-  --background: light-dark(#f8f9fb, #0b0f14);
-  --foreground: light-dark(#101828, #eef2f7);
-  --muted-foreground: light-dark(#667085, #98a2b3);
-  --border: light-dark(#d0d5dd, #344054);
-  --card: light-dark(#ffffff, #121820);
-  --accent: light-dark(#175cd3, #84adff);
+  color-scheme: light;
+  --background: #f4f1ea;
+  --foreground: #1c2428;
+  --muted-foreground: #5b6770;
+  --border: #d5cfc4;
+  --card: #fffaf2;
+  --accent: #2a6a8a;
 }
 
 * { box-sizing: border-box; }
@@ -118,7 +118,7 @@ select, input, button { font: inherit; }
 
 html.conflict-embed .app-shell {
   max-width: none;
-  padding: 8px 4px 12px;
+  padding: 4px 2px 8px;
 }
 html.conflict-embed .app-panel {
   border: none;
@@ -126,3 +126,6 @@ html.conflict-embed .app-panel {
   background: transparent;
   padding: 0;
 }
+html.conflict-embed h2 { font-size: 1.05rem; }
+html.conflict-embed #llm-sim-state { max-height: 88px; }
+html.conflict-embed .vis-section-stack { gap: 10px; }

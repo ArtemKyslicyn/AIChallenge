@@ -451,5 +451,10 @@
   go.addEventListener("click", declareWar);
   reset.addEventListener("click", hardReset);
   hardReset();
+  window.__aichallengeConflictFx = window.__aichallengeConflictFx || {};
+  window.__aichallengeConflictFx.parchment = {
+    declareWar: declareWar,
+    reset: hardReset,
+  };
 })();
 </script>

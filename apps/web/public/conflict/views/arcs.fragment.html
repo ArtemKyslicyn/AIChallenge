@@ -413,5 +413,9 @@
   });
   btn.addEventListener("click", launch);
   applyFilter();
+  window.__aichallengeConflictFx = window.__aichallengeConflictFx || {};
+  window.__aichallengeConflictFx.arcs = {
+    launch: launch,
+  };
 })();
 </script>

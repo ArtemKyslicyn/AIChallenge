@@ -7619,30 +7619,30 @@ textarea {
 
 .conflict-host {
   margin: 0 0 1rem;
-  min-height: 640px;
+  min-height: 0;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, #1a4a5c 22%, transparent);
   overflow: hidden;
-  background: #0b0f14;
+  background: #f4f1ea;
 }
 
 .conflict-host-frame {
   display: block;
   width: 100%;
-  min-height: 720px;
-  height: 78vh;
-  max-height: 960px;
+  min-height: 420px;
+  height: 420px;
+  max-height: 520px;
   border: 0;
-  background: #0b0f14;
+  background: #f4f1ea;
 }
 
 .conflict-host-bridge {
   margin: 0;
-  padding: 0.45rem 0.75rem;
+  padding: 0.4rem 0.7rem;
   font-size: 0.78rem;
-  color: color-mix(in srgb, #e9eef7 75%, transparent);
-  background: #0d121c;
-  border-top: 1px solid color-mix(in srgb, #4dabf7 25%, transparent);
+  color: #3a4a52;
+  background: #efe8dc;
+  border-top: 1px solid color-mix(in srgb, #1a4a5c 18%, transparent);
 }
 
 .conflict-host--dormant {

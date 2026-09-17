@@ -525,5 +525,10 @@
   go.addEventListener("click", declareWar);
   resetBtn.addEventListener("click", hardReset);
   hardReset();
+  window.__aichallengeConflictFx = window.__aichallengeConflictFx || {};
+  window.__aichallengeConflictFx.planet = {
+    declareWar: declareWar,
+    reset: hardReset,
+  };
 })();
 </script>
