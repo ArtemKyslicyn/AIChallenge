@@ -560,6 +560,19 @@
   });
   window.__aichallengeConflictBoard = { applyLivePatch: applyLivePatch, render: render };
 
+  try {
+    window.dispatchEvent(new Event("aichallenge-board-ready"));
+  } catch (_) {
+    /* ignore */
+  }
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "aichallenge.conflict.ready" }, "*");
+    }
+  } catch (_) {
+    /* ignore */
+  }
+
   render();
 })();
 </script>

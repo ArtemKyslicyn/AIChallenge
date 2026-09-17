@@ -3,43 +3,36 @@
 Source: https://github.com/ArtemKyslicyn/conflict-emulation  
 Integrated into AIChallenge Agent Battle (option **C**: vendor + live bridge).
 
-## Where in AIChallenge
+## Root cause (2026-09-17 fix)
+
+Live `postMessage` fired on iframe `onLoad` **before** the LLM-board fragment
+script registered `applyLivePatch` → patches dropped. Host also unmounted on
+Civ tab, so the bridge went cold mid-battle.
+
+## Fix (WarAgent / multi-agent-simulation-engine practice)
+
+1. Shared **world bus** (`worldBus.ts`): localStorage + BroadcastChannel checkpoint
+2. Host always mounted (dormant on Civ); stable iframe URL (no hash reload)
+3. Host queues patches; iframe buffers `pendingLive` until board ready
+4. Board signals `aichallenge.conflict.ready` after init; parent flushes
+
+## Where
 
 | What | Path |
 |------|------|
 | Static board | `apps/web/public/conflict/` |
-| Live mapper | `apps/web/src/battle/conflictBridge.ts` |
+| Mapper | `apps/web/src/battle/conflictBridge.ts` |
+| World bus | `apps/web/src/battle/worldBus.ts` |
 | iframe host | `apps/web/src/components/ConflictEmulationHost.tsx` |
-| UI tabs | `AgentBattle` · Civ hex / LLM board / planet / strategy / arcs |
 
-## Bridge
+## Bridge protocol
 
-Parent posts `aichallenge.conflict.live` with a patch from battle meters
-(`stability`, `panic`, `tech_lead`, `means`, cabinet voices). LLM board applies
-`applyLivePatch` → `viz = f(worldState)`. Planet / parchment / arcs stay cinematic
-siblings (hash/`show` only).
+- Parent → iframe: `aichallenge.conflict.live` `{ patch }`
+- Parent → iframe: `aichallenge.conflict.show` `{ view }`
+- Parent → iframe: `aichallenge.conflict.ping`
+- Iframe → parent: `aichallenge.conflict.ready`
 
-Embed: `/conflict/index.html?embed=1#llm`
+## References
 
-## Standalone
-
-```bash
-# from apps/web/public/conflict or original repo
-python3 -m http.server 8877 --bind 127.0.0.1
-```
-
-Pages: https://artemkyslicyn.github.io/conflict-emulation/
-
-## Practices
-
-1. Briefing / fog of war  
-2. Structured action space  
-3. Secretary / schema validate  
-4. Deterministic GM resolve  
-5. Cascades  
-6. Narrator separate  
-7. Live battle → LLM board  
-
-## Not this chat
-
-tenant-service work stays in `/Users/arcilite/tenant-service`.
+- WarAgent (Country / Secretary / Board) — arXiv:2311.17227
+- RomanTsisyk/multi-agent-simulation-engine — GM + cascading world state + static viz

@@ -7635,3 +7635,16 @@ textarea {
   border: 0;
   background: #0b0f14;
 }
+
+.conflict-host-bridge {
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, #e9eef7 75%, transparent);
+  background: #0d121c;
+  border-top: 1px solid color-mix(in srgb, #4dabf7 25%, transparent);
+}
+
+.conflict-host--dormant {
+  pointer-events: none;
+}
