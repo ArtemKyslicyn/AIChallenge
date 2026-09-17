@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { ApiError, listModels, runAgentBattleSSE, type AgentBattleEvent, type ModelCatalogItemDto } from "../api/client";
 import { parseCabinetVoices, type CabinetVoice } from "../battle/cabinet";
 import { battleToConflictPatch, type ConflictView } from "../battle/conflictBridge";
+import { publishWorldBus } from "../battle/worldBus";
 import { parseMeans, type BattleMeans } from "../battle/means";
 import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
@@ -366,6 +367,10 @@ export function AgentBattle() {
   );
 
   useEffect(() => {
+    publishWorldBus(conflictPatch);
+  }, [conflictPatch]);
+
+  useEffect(() => {
     const done = [...log].reverse().find((e) => e.kind === "done");
     if (!done || done.kind !== "done" || recordedWarRef.current) return;
     if (!done.leaderboard.length) return;
@@ -502,11 +507,8 @@ export function AgentBattle() {
         ))}
       </nav>
       <p className="battle-world-hint civ-viz-hint">
-        Civ — живая арена. LLM board / planet / strategy / arcs — из{" "}
-        <a href="https://github.com/ArtemKyslicyn/conflict-emulation" target="_blank" rel="noreferrer">
-          conflict-emulation
-        </a>
-        ; LLM board слушает live-мост (stability / panic / means).
+        Общий world bus (WarAgent / multi-agent-simulation-engine): битва пишет checkpoint → все вью
+        читают <code>viz = f(worldState)</code>. Мост держится тёплым даже на вкладке Civ.
       </p>
 
       {vizMode === "civ" ? (
@@ -532,9 +534,13 @@ export function AgentBattle() {
           winnerLabel={winnerLabel}
           onSelectAgent={setSelectedAgentId}
         />
-      ) : (
-        <ConflictEmulationHost view={vizMode} livePatch={conflictPatch} />
-      )}
+      ) : null}
+
+      <ConflictEmulationHost
+        view={vizMode === "civ" ? "llm" : vizMode}
+        livePatch={conflictPatch}
+        active={vizMode !== "civ"}
+      />
 
       <div className="civ-elo-board" aria-label="Таблица побед моделей">
         <div className="civ-elo-head">

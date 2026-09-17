@@ -1,5 +1,6 @@
 (function () {
   var loaded = {};
+  var pendingLive = null;
   var buttons = document.querySelectorAll(".app-nav [data-view]");
   var viewStatus = document.getElementById("view-status");
   var labels = {
@@ -35,6 +36,28 @@
     });
   }
 
+  function flushLive() {
+    if (!pendingLive) return;
+    var board = window.__aichallengeConflictBoard;
+    if (board && typeof board.applyLivePatch === "function") {
+      try {
+        board.applyLivePatch(pendingLive);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  function notifyParentReady() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "aichallenge.conflict.ready" }, "*");
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   async function ensure(view) {
     var panel = panels[view];
     if (!panel || view === "about" || loaded[view]) return;
@@ -45,6 +68,9 @@
     panel.innerHTML = await res.text();
     activateScripts(panel);
     loaded[view] = true;
+    // Scripts register __aichallengeConflictBoard synchronously after replace
+    flushLive();
+    if (view === "llm") notifyParentReady();
   }
 
   async function show(view) {
@@ -66,6 +92,7 @@
     } catch (_) {
       /* ignore */
     }
+    flushLive();
     var panel = panels[view];
     if (panel && typeof panel.focus === "function") {
       try {
@@ -86,26 +113,49 @@
     var data = ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "aichallenge.conflict.show" && data.view) {
-      show(String(data.view));
+      show(String(data.view)).then(function () {
+        flushLive();
+        notifyParentReady();
+      });
+    }
+    if (data.type === "aichallenge.conflict.live") {
+      pendingLive = data.patch || {};
+      flushLive();
     }
     if (data.type === "aichallenge.conflict.ping") {
-      try {
-        if (ev.source && typeof ev.source.postMessage === "function") {
-          ev.source.postMessage({ type: "aichallenge.conflict.ready" }, ev.origin || "*");
-        }
-      } catch (_) {
-        /* ignore */
-      }
+      ensure("llm")
+        .catch(function () {})
+        .then(function () {
+          flushLive();
+          notifyParentReady();
+        });
     }
   });
 
-  window.__aichallengeConflictHost = { show: show };
+  window.__aichallengeConflictHost = {
+    show: show,
+    flushLive: flushLive,
+    setPendingLive: function (p) {
+      pendingLive = p;
+      flushLive();
+    },
+  };
+
+  window.addEventListener("aichallenge-board-ready", function () {
+    flushLive();
+    notifyParentReady();
+  });
 
   var initial = (location.hash || "#llm").slice(1);
   if (!panels[initial]) initial = "llm";
-  show(initial).catch(function (err) {
-    console.error(err);
-    var panel = panels.llm;
-    if (panel) panel.textContent = "Could not load view. Serve over http:// (not file://).";
-  });
+  show(initial)
+    .then(function () {
+      flushLive();
+      notifyParentReady();
+    })
+    .catch(function (err) {
+      console.error(err);
+      var panel = panels.llm;
+      if (panel) panel.textContent = "Could not load view. Serve over http:// (not file://).";
+    });
 })();
