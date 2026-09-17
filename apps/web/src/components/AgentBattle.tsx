@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { ApiError, listModels, runAgentBattleSSE, type AgentBattleEvent, type ModelCatalogItemDto } from "../api/client";
+import { parseCabinetVoices, type CabinetVoice } from "../battle/cabinet";
 import { parseMeans, type BattleMeans } from "../battle/means";
 import { clearMapPositions } from "../battle/mapPersist";
 import { loadArena, resetDefaultArena, saveArena } from "../battle/persist";
@@ -52,6 +53,8 @@ function applyBattleEvent(
   setLastDelta: Dispatch<SetStateAction<string>>,
   setLastMeans: Dispatch<SetStateAction<BattleMeans | null>>,
   setLastMeansActor: Dispatch<SetStateAction<string | null>>,
+  setLastCabinet: Dispatch<SetStateAction<CabinetVoice[]>>,
+  setCabinetNation: Dispatch<SetStateAction<string | null>>,
 ): void {
   switch (event.type) {
     case "heartbeat":
@@ -62,6 +65,8 @@ function applyBattleEvent(
       setLastDelta("");
       setLastMeans(null);
       setLastMeansActor(null);
+      setLastCabinet([]);
+      setCabinetNation(null);
       setLog((prev) => [
         ...prev,
         { kind: "system", text: `Старт: ${event.name} · шагов ≤ ${event.max_rounds}` },
@@ -81,6 +86,16 @@ function applyBattleEvent(
       if (!event.skipped) {
         setLastMeans(parseMeans(event.means || event.content));
         setLastMeansActor(event.agent_id);
+        const voices =
+          event.cabinet && event.cabinet.length
+            ? event.cabinet.map((v) => ({
+                role: v.role as CabinetVoice["role"],
+                title: v.title,
+                text: v.text,
+              }))
+            : parseCabinetVoices(event.content);
+        setLastCabinet(voices);
+        setCabinetNation(event.agent_id);
       }
       setLog((prev) => [
         ...prev,
@@ -95,6 +110,7 @@ function applyBattleEvent(
           skipped: event.skipped,
           skip_reason: event.skip_reason,
           means: event.means,
+          cabinet: event.cabinet,
         },
       ]);
       break;
@@ -160,6 +176,8 @@ export function AgentBattle() {
   const [lastDelta, setLastDelta] = useState("");
   const [lastMeans, setLastMeans] = useState<BattleMeans | null>(null);
   const [lastMeansActor, setLastMeansActor] = useState<string | null>(null);
+  const [lastCabinet, setLastCabinet] = useState<CabinetVoice[]>([]);
+  const [cabinetNation, setCabinetNation] = useState<string | null>(null);
   const [warBoard, setWarBoard] = useState<WarBoard>(() => loadWarBoard());
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [winnerLabel, setWinnerLabel] = useState<string | null>(null);
@@ -196,6 +214,8 @@ export function AgentBattle() {
     setLastDelta("");
     setLastMeans(null);
     setLastMeansActor(null);
+    setLastCabinet([]);
+    setCabinetNation(null);
     setWinnerLabel(null);
     recordedWarRef.current = false;
     setStatus("Арена сброшена к дефолту");
@@ -220,6 +240,8 @@ export function AgentBattle() {
     setLastDelta("");
     setLastMeans(null);
     setLastMeansActor(null);
+    setLastCabinet([]);
+    setCabinetNation(null);
     setWinnerLabel(null);
     recordedWarRef.current = false;
     setMaxRounds(arena.rules.max_rounds || 12);
@@ -243,6 +265,8 @@ export function AgentBattle() {
             setLastDelta,
             setLastMeans,
             setLastMeansActor,
+            setLastCabinet,
+            setCabinetNation,
           );
         },
         ctrl.signal,
@@ -434,6 +458,8 @@ export function AgentBattle() {
         lastDelta={lastDelta}
         lastMeans={lastMeans}
         lastMeansActor={lastMeansActor}
+        lastCabinet={lastCabinet}
+        cabinetNationId={cabinetNation}
         scores={scores}
         stability={stability}
         panic={panic}
@@ -653,6 +679,18 @@ export function AgentBattle() {
                       onChange={(e) => updatePersona(p.id, { hidden_goal: e.target.value })}
                     />
                   </label>
+                  {p.cabinet && p.cabinet.length ? (
+                    <div className="civ-cabinet-static" aria-label={`Кабинет ${p.name}`}>
+                      <strong>Кабинет</strong>
+                      <ul>
+                        {p.cabinet.map((seat) => (
+                          <li key={seat.role}>
+                            <em>{seat.title}</em> — {seat.brief}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   <label>
                     System prompt
                     <textarea

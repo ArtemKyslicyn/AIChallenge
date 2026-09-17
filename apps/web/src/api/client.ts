@@ -1239,6 +1239,7 @@ export type AgentBattleEvent =
       skipped?: boolean;
       skip_reason?: string;
       means?: string;
+      cabinet?: { role: string; title: string; text: string }[];
     }
   | {
       type: "verdict";
@@ -1312,6 +1313,9 @@ function parseBattleFrame(raw: string): AgentBattleEvent | null {
         skip_reason:
           payload.skip_reason == null ? undefined : String(payload.skip_reason),
         means: payload.means == null ? undefined : String(payload.means),
+        cabinet: Array.isArray(payload.cabinet)
+          ? (payload.cabinet as { role: string; title: string; text: string }[])
+          : undefined,
       };
     }
     if (event === "verdict") {

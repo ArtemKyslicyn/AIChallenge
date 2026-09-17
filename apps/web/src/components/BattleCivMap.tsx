@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Orientation, defineHex, Grid, hexToPoint, rectangle } from "honeycomb-grid";
 
 import { MEANS_META, type BattleMeans } from "../battle/means";
+import type { CabinetVoice } from "../battle/cabinet";
 import type { AgentPersona } from "../battle/types";
 
 type Props = {
@@ -15,6 +16,8 @@ type Props = {
   lastDelta: string;
   lastMeans: BattleMeans | null;
   lastMeansActor: string | null;
+  lastCabinet?: CabinetVoice[];
+  cabinetNationId?: string | null;
   scores: Record<string, number>;
   stability: number;
   panic: number;
@@ -84,6 +87,8 @@ export function BattleCivMap({
   lastDelta,
   lastMeans,
   lastMeansActor,
+  lastCabinet = [],
+  cabinetNationId = null,
   scores,
   stability,
   panic,
@@ -96,6 +101,16 @@ export function BattleCivMap({
   const fxKey = `${lastMeans ?? "none"}:${lastMeansActor ?? "-"}:${round ?? 0}`;
 
   const enabled = useMemo(() => cast.filter((c) => c.enabled), [cast]);
+  const selected = useMemo(
+    () => enabled.find((a) => a.id === (selectedAgentId || cabinetNationId || focusAgentId)),
+    [enabled, selectedAgentId, cabinetNationId, focusAgentId],
+  );
+  const cabinetSeats = selected?.cabinet || [];
+  const liveVoices = useMemo(() => {
+    if (!lastCabinet.length) return [];
+    if (cabinetNationId && selected && cabinetNationId !== selected.id) return [];
+    return lastCabinet;
+  }, [lastCabinet, cabinetNationId, selected]);
 
   const { hexes, points, width, height } = useMemo(() => {
     const grid = new Grid(Tile, rectangle({ width: 11, height: 8 }));
@@ -162,8 +177,8 @@ export function BattleCivMap({
         <div>
           <h3 className="battle-section-title">Карта войны</h3>
           <p className="battle-world-hint">
-            Три страны · гексы · видно средство хода (диплом / кибер / пуск). Практики арен:
-            всегда виден <code>model_id</code>.
+            Три страны · кабинет (президент / парламент / оборона / экономика) · гексы · средство хода.
+            Практики: Wazir, Qurultai, Pentarchy, Deliberation-in-Silico.
           </p>
         </div>
         <div className="battle-world-meta" aria-live="polite">
@@ -362,6 +377,32 @@ export function BattleCivMap({
         </svg>
         {escalation >= 3 ? <div className="civ-escalation-fog" aria-hidden /> : null}
       </div>
+
+      {selected ? (
+        <div className="civ-cabinet" aria-label={`Кабинет ${selected.name}`}>
+          <div className="civ-cabinet-head">
+            <strong>Кабинет · {selected.name}</strong>
+            <span>
+              {selected.preferred_model === "auto" ? "auto" : selected.preferred_model}
+            </span>
+          </div>
+          <div className="civ-cabinet-grid">
+            {cabinetSeats.map((seat) => {
+              const voice = liveVoices.find((v) => v.role === seat.role);
+              return (
+                <article key={seat.role} className={`civ-seat civ-seat--${seat.role}`}>
+                  <header>{seat.title}</header>
+                  <p>{voice?.text || seat.brief}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <p className="battle-board-muted civ-cabinet-hint">
+          Выберите страну на карте — увидите структуру власти.
+        </p>
+      )}
     </section>
   );
 }

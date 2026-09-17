@@ -27,6 +27,14 @@ export type WorldBrief = {
 
 export type InputFacts = Record<string, string | number | boolean>;
 
+export type CabinetRole = "president" | "parliament" | "defense" | "economy";
+
+export type CabinetSeat = {
+  role: CabinetRole;
+  title: string;
+  brief: string;
+};
+
 export type AgentPersona = {
   id: string;
   name: string;
@@ -37,6 +45,8 @@ export type AgentPersona = {
   temperature: number;
   style: PersonaStyle;
   enabled: boolean;
+  /** Institutional seats (president / parliament / MoD / economy). */
+  cabinet?: CabinetSeat[];
 };
 
 export type BattleRules = {
@@ -86,6 +96,7 @@ export type LogEntry =
       skipped?: boolean;
       skip_reason?: string;
       means?: string;
+      cabinet?: { role: string; title: string; text: string }[];
     }
   | {
       kind: "verdict";
