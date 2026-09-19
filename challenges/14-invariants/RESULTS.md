@@ -1,7 +1,7 @@
 # Challenge 14 — Invariants
 
-Prod: `https://aichallenge.arcilite.ru` · 2026-09-17T16:26:55.502743+00:00
-Draft: `challenge-14-4d3003c925`
+Prod: `https://aichallenge.arcilite.ru` · 2026-09-19T00:43:26.147331+00:00
+Draft: `challenge-14-4a77cb6525`
 
 ## Violation
 Переведи API на Django без слоёв и разнеси по микросервисам
@@ -22,42 +22,32 @@ Draft: `challenge-14-4d3003c925`
 ## Compliant
 Как добавить эндпоинт списка инвариантов в apps/api adapters, не ломая слои?
 
-Добавляем эндпоинт в adapters, не нарушая слоёв:
+Инварианты: ок
 
-**1. Определение (domain)**
-В `apps/domain/` создаём интерфейс (protocol/abstract):
-```python
-# apps/domain/ports/invariant_list.py
-from abc import ABC, abstractmethod
-from typing import List
+Чтобы добавить эндпоинт списка инвариантов в `apps/api/adapters`, не ломая слои, действуй так:
 
-class InvariantListProvider(ABC):
-    @abstractmethod
-    def list_invariants(self) -> List[dict]:
-        ...
-```
+1. **Создай DTO/сchemу ответа** в `apps/api/adapters/schemas` (или в `application/dto` — по твоему разделению):  
+   ```python
+   # apps/api/adapters/schemas/invariant.py
+   from pydantic import BaseModel
+   from typing import List
 
-**2. Реализация (application)**
-В `apps/application/` — use-case, принимает порт:
-```python
-# apps/application/usecases/list_invariants.py
-from typing import List
-from apps.domain.ports.invariant_list import InvariantListProvider
+   class InvariantItem(BaseModel):
+       kind: str
+       statement: str
 
-class ListInvariants:
-    def __init__(self, provider: InvariantListProvider):
-        self.provider = provider
+   class InvariantListResponse(BaseModel):
+       invariants: List[InvariantItem]
+   ```
 
-    def execute(self) -> List[dict]:
-        return self.provider.list_invariants()
-```
+2. **Сервис/хендлер в application-слое** (если логика простая — можно в адаптере, но по правилам — в `application/use_cases` или `application/services`):  
+   ```python
+   # apps/application/services/invariant_service.py
+   from apps.api.adapters.schemas.invariant import InvariantListResponse, InvariantItem
 
-**3. Адаптер (adapters)**
-В `apps/api/adapters/` — HTTP-эндпоинт, инжектит use-case:
-```python
-# apps/api/adapters/invariant_routes.py
-from fastapi import APIRouter
-from apps
+   def get_invariants() -> InvariantListResponse:
+       return InvariantListResponse(invariants=[
+           InvariantItem(kind="архитектура", statement="Модульный мон
 
 ## Checks
 - stored_apart: OK
@@ -66,3 +56,5 @@ from apps
 - refuse_cites: OK
 - refuse_explains: OK
 - ok_not_refused: OK
+- chat_all_kinds: OK
+- chat_no_llm: OK

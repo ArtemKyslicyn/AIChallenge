@@ -1,42 +1,48 @@
 {
-  "generated_at": "2026-09-17T16:26:55.502743+00:00",
+  "generated_at": "2026-09-19T00:43:26.147331+00:00",
   "base": "https://aichallenge.arcilite.ru",
-  "draft": "challenge-14-4d3003c925",
+  "draft": "challenge-14-4a77cb6525",
   "invariants": [
     {
       "id": "arch-hexagonal",
       "kind": "architecture",
       "active": true,
+      "triggers": [],
       "statement": "Модульный монолит: domain → application → adapters. Не предлагать микросервисы с нуля и не смешивать слои."
     },
     {
       "id": "stack-fastapi-react-pg",
       "kind": "stack",
       "active": true,
+      "triggers": [],
       "statement": "Стек ядра: FastAPI + React/Vite + Postgres. Не предлагать Django/Rails/Mongo как замену без снятия инварианта."
     },
     {
       "id": "decision-model-id",
       "kind": "decision",
       "active": true,
+      "triggers": [],
       "statement": "Каждый ответ ассистента атрибутирует model_id (API, SSE, UI, БД)."
     },
     {
       "id": "business-domain-names",
       "kind": "business",
       "active": true,
+      "triggers": [],
       "statement": "Доменные имена нейтральные: без patient/doctor в коде, API и дефолтных сценариях."
     }
   ],
   "violation": "Переведи API на Django без слоёв и разнеси по микросервисам",
   "refuse_content": "ОТКАЗ · конфликт с инвариантом\n\nЗапрос требует: «Переведи API на Django без слоёв и разнеси по микросервисам»\n\nЭто нарушает:\n• [архитектура] Модульный монолит: domain → application → adapters. Не предлагать микросервисы с нуля и не смешивать слои.\n  совпадение: «без слоёв»\n• [стек] Стек ядра: FastAPI + React/Vite + Postgres. Не предлагать Django/Rails/Mongo как замену без снятия инварианта.\n  совпадение: «django»\n\nЧто можно: переформулировать запрос внутри ограничений или явно снять инвариант (полоса «Инварианты»). Обход не предлагаю.",
-  "ok_content": "Добавляем эндпоинт в adapters, не нарушая слоёв:\n\n**1. Определение (domain)**\nВ `apps/domain/` создаём интерфейс (protocol/abstract):\n```python\n# apps/domain/ports/invariant_list.py\nfrom abc import ABC, abstractmethod\nfrom typing import List\n\nclass InvariantListProvider(ABC):\n    @abstractmethod\n    def list_invariants(self) -> List[dict]:\n        ...\n```\n\n**2. Реализация (application)**\nВ `apps/application/` — use-case, принимает порт:\n```python\n# apps/application/usecases/list_invariants.py\nfrom typing import List\nfrom apps.domain.ports.invariant_list import InvariantListProvider\n\nclass ListInvariants:\n    def __init__(self, provider: InvariantListProvider):\n        self.provider = provider\n\n    def execute(self) -> List[dict]:\n        return self.provider.list_invariants()\n```\n\n**3. Адаптер (adapters)**\nВ `apps/api/adapters/` — HTTP-эндпоинт, инжектит use-case:\n```python\n# apps/api/adapters/invariant_routes.py\nfrom fastapi import APIRouter\nfrom apps",
+  "ok_content": "Инварианты: ок\n\nЧтобы добавить эндпоинт списка инвариантов в `apps/api/adapters`, не ломая слои, действуй так:\n\n1. **Создай DTO/сchemу ответа** в `apps/api/adapters/schemas` (или в `application/dto` — по твоему разделению):  \n   ```python\n   # apps/api/adapters/schemas/invariant.py\n   from pydantic import BaseModel\n   from typing import List\n\n   class InvariantItem(BaseModel):\n       kind: str\n       statement: str\n\n   class InvariantListResponse(BaseModel):\n       invariants: List[InvariantItem]\n   ```\n\n2. **Сервис/хендлер в application-слое** (если логика простая — можно в адаптере, но по правилам — в `application/use_cases` или `application/services`):  \n   ```python\n   # apps/application/services/invariant_service.py\n   from apps.api.adapters.schemas.invariant import InvariantListResponse, InvariantItem\n\n   def get_invariants() -> InvariantListResponse:\n       return InvariantListResponse(invariants=[\n           InvariantItem(kind=\"архитектура\", statement=\"Модульный мон",
   "checks": {
     "stored_apart": true,
     "conflict_flag": true,
     "refuse_model": true,
     "refuse_cites": true,
     "refuse_explains": true,
-    "ok_not_refused": true
+    "ok_not_refused": true,
+    "chat_all_kinds": true,
+    "chat_no_llm": true
   }
 }
