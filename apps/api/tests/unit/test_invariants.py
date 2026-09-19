@@ -412,9 +412,9 @@ def test_remove_requires_existing_id() -> None:
     ("message", "expected_kinds"),
     [
         ("Переведи API на Django без слоёв", {"architecture", "stack"}),
-            ("разнеси по микросервисам", {"architecture"}),
-            ("разнести по микросервисам", {"architecture"}),
-            ("выкинь hexagonal", {"architecture"}),
+        ("разнеси по микросервисам", {"architecture"}),
+        ("разнести по микросервисам", {"architecture"}),
+        ("выкинь hexagonal", {"architecture"}),
         ("mongodb вместо postgres", {"stack"}),
         ("убери model_id с ответов", {"decision"}),
         ("назови роли patient и doctor в коде", {"business"}),
