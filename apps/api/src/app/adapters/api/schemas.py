@@ -306,12 +306,13 @@ class AgentInvariantEventRequest(BaseModel):
     event: str = Field(
         min_length=1,
         max_length=32,
-        description="add|remove|seed|reset",
+        description="add|update|remove|seed|reset",
     )
     client_draft_id: str = Field(min_length=1, max_length=64)
     kind: str = Field(default="", max_length=32)
     statement: str = Field(default="", max_length=500)
     invariant_id: str = Field(default="", max_length=64)
+    triggers: list[str] = Field(default_factory=list, max_length=12)
     dialog_name: str | None = Field(default=None, max_length=120)
     dialog_system_prompt: str | None = Field(default=None, max_length=8000)
 

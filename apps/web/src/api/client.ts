@@ -863,6 +863,7 @@ export interface AgentInvariantDto {
   kind: string;
   statement: string;
   active?: boolean;
+  triggers?: string[];
 }
 
 export interface AgentDialogDto {
@@ -1073,6 +1074,7 @@ export function postAgentInvariants(
     kind?: string;
     statement?: string;
     invariantId?: string;
+    triggers?: string[];
     dialogName?: string;
     dialogSystemPrompt?: string;
   },
@@ -1086,6 +1088,7 @@ export function postAgentInvariants(
       kind: payload.kind || "",
       statement: payload.statement || "",
       invariant_id: payload.invariantId || "",
+      triggers: payload.triggers || [],
       dialog_name: payload.dialogName || null,
       dialog_system_prompt: payload.dialogSystemPrompt || null,
     }),

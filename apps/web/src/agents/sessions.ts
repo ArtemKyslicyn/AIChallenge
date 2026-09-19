@@ -112,6 +112,7 @@ export interface AgentSession {
     kind: string;
     statement: string;
     active?: boolean;
+    triggers?: string[];
   }> | null;
   branches?: BranchRef[];
   /** When set, persist runs use this draft id instead of agent id (branch). */

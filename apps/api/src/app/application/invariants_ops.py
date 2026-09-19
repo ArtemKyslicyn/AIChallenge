@@ -23,9 +23,21 @@ async def apply_invariant_event_to_dialog(
     *,
     dialogs: AgentDialogRepository,
 ) -> tuple[AgentDialog, str]:
+    return await apply_invariant_events_to_dialog(dialog, [event], dialogs=dialogs)
+
+
+async def apply_invariant_events_to_dialog(
+    dialog: AgentDialog,
+    events: list[InvariantEvent],
+    *,
+    dialogs: AgentDialogRepository,
+) -> tuple[AgentDialog, str]:
     current = parse_invariants(dialog.invariants)
-    nxt, label = apply_invariant_event(current, event)
-    dialog.invariants = dump_invariants(nxt)
+    labels: list[str] = []
+    for event in events:
+        current, label = apply_invariant_event(current, event)
+        labels.append(label)
+    dialog.invariants = dump_invariants(current)
     dialog.updated_at = datetime.now(UTC)
     saved = await dialogs.save(dialog)
-    return saved, label
+    return saved, "; ".join(labels)

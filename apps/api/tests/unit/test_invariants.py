@@ -22,7 +22,9 @@ from app.domain.invariants import (
     default_invariants,
     find_invariant_conflicts,
     format_invariants_block,
+    normalize_triggers,
     parse_invariant_chat_command,
+    parse_invariant_chat_commands,
     parse_invariants,
 )
 
@@ -85,6 +87,52 @@ def test_add_remove() -> None:
         apply_invariant_event([], InvariantEvent(name="remove", invariant_id="missing"))
 
 
+def test_custom_triggers_roundtrip_and_update() -> None:
+    items, _ = apply_invariant_event(
+        [],
+        InvariantEvent(
+            name="add",
+            kind="stack",
+            statement="Очереди только через Kafka",
+            triggers=["rabbitmq", "redis streams"],
+        ),
+    )
+    assert items[0].triggers == ["rabbitmq", "redis streams"]
+    restored = parse_invariants([items[0].to_dict()])
+    assert restored[0].triggers == ["rabbitmq", "redis streams"]
+    items, label = apply_invariant_event(
+        items,
+        InvariantEvent(
+            name="update",
+            kind="stack",
+            statement="Очереди: Kafka, не Rabbit",
+            invariant_id=items[0].id,
+            triggers=["rabbit"],
+        ),
+    )
+    assert "сохранён" in label
+    assert items[0].statement.startswith("Очереди: Kafka")
+    assert items[0].triggers == ["rabbit"]
+
+
+def test_custom_trigger_conflicts_without_kind_heuristic() -> None:
+    inv = Invariant(
+        id="queue-kafka",
+        kind="stack",
+        statement="Очереди только через Kafka",
+        triggers=["rabbitmq"],
+    )
+    conflicts = find_invariant_conflicts([inv], "подключи RabbitMQ для задач")
+    assert len(conflicts) == 1
+    assert conflicts[0].matched.lower() == "rabbitmq"
+    assert find_invariant_conflicts([inv], "как устроен consumer в Kafka?") == []
+
+
+def test_normalize_triggers_dedupes_and_caps() -> None:
+    assert normalize_triggers("Django, django; rails\n, x") == ["Django", "rails"]
+    assert len(normalize_triggers([f"ph{i:02d}" for i in range(20)])) == 12
+
+
 def test_conflict_django_without_layers() -> None:
     items = default_invariants()
     msg = "Переведи API на Django без слоёв"
@@ -123,13 +171,63 @@ def test_format_block_separate_from_dialog() -> None:
 
 
 def test_parse_chat_commands() -> None:
-    ev = parse_invariant_chat_command("инвариант стек: только Postgres")
+    ev = parse_invariant_chat_command("инвариант стек: только Postgres | django, rails")
     assert ev is not None and ev.name == "add" and ev.kind == "stack"
+    assert ev.triggers == ["django", "rails"]
     assert parse_invariant_chat_command("посеять инварианты").name == "seed"  # type: ignore[union-attr]
+    assert parse_invariant_chat_command("примеры инвариантов").name == "seed"  # type: ignore[union-attr]
+    assert parse_invariant_chat_command("очистить инварианты").name == "reset"  # type: ignore[union-attr]
     assert parse_invariant_chat_command("снять инвариант: arch-hexagonal").invariant_id == (
         "arch-hexagonal"
     )
     assert parse_invariant_chat_command("привет") is None
+    assert parse_invariant_chat_command("Инварианты в математике — это свойства") is None
+
+
+def test_parse_chat_block_from_message() -> None:
+    block = "\n".join(
+        [
+            "инварианты:",
+            "стек: очереди только Kafka | rabbitmq",
+            "правило: нейтральные имена, без чужого домена",
+            "инвариант архитектура Модульный монолит, не микросервисы",
+        ]
+    )
+    events = parse_invariant_chat_commands(block)
+    assert [e.kind for e in events] == ["stack", "business", "architecture"]
+    assert events[0].triggers == ["rabbitmq"]
+    naked = parse_invariant_chat_command("добавь инвариант: только свой контур | чужой api")
+    assert naked is not None and naked.kind == "business"
+    assert naked.triggers == ["чужой api"]
+
+
+def test_chat_covers_every_kind_and_alias() -> None:
+    samples = {
+        "architecture": (
+            "инвариант архитектура: слои domain → adapters | микросервисы",
+            "инвариант arch: hexagonal only",
+            "invariant architecture: keep the modular monolith",
+        ),
+        "stack": (
+            "инвариант стек: FastAPI + Postgres | django",
+            "инвариант stack: only FastAPI",
+        ),
+        "decision": (
+            "инвариант решение: каждый ответ с model_id | без model_id",
+            "инвариант decision: expose model_id",
+            "зафиксируй инвариант решение Каждый ответ атрибутирует model_id",
+        ),
+        "business": (
+            "инвариант правило: нейтральные имена | patient",
+            "инвариант бизнес: без чужого домена",
+            "инвариант rule: domain-agnostic names",
+        ),
+    }
+    for kind, lines in samples.items():
+        for line in lines:
+            ev = parse_invariant_chat_command(line)
+            assert ev is not None, line
+            assert ev.name == "add" and ev.kind == kind, (line, ev)
 
 
 def _dialog_with_defaults() -> AgentDialog:
