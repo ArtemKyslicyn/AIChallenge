@@ -67,7 +67,12 @@ from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
 from app.domain.invariants import InvariantEvent, parse_invariant_chat_commands
 from app.domain.owner_key import memory_owner_key
-from app.domain.task_state import TaskEvent, parse_task_chat_command
+from app.domain.task_state import (
+    TaskEvent,
+    TaskSkipConflict,
+    build_skip_refusal,
+    parse_task_chat_command,
+)
 from app.domain.token_meter import TokenBreakdown
 
 logger = logging.getLogger(__name__)
@@ -236,7 +241,56 @@ async def run_workshop_agent(
                 )
                 if vhash and not dialog.visitor_hash:
                     dialog.visitor_hash = vhash
-                dialog, label = await apply_task_event_to_dialog(dialog, task_ev, dialogs=dialogs)
+                try:
+                    dialog, label = await apply_task_event_to_dialog(
+                        dialog, task_ev, dialogs=dialogs
+                    )
+                except MessageValidationError as exc:
+                    from datetime import UTC, datetime
+                    from uuid import uuid4
+
+                    now = datetime.now(UTC)
+                    working = WorkingMemory.from_mapping(dialog.working_memory)
+                    task = working.task
+                    refusal = build_skip_refusal(
+                        [
+                            TaskSkipConflict(
+                                kind="illegal_goto",
+                                current_stage=task.stage.value,
+                                attempted=(task_ev.stage or task_ev.name),
+                                allowed=tuple(s.value for s in task.allowed_next()),
+                                reason=str(exc),
+                            )
+                        ],
+                        payload.message.strip(),
+                    )
+                    dialog.messages = [
+                        *dialog.messages,
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="user",
+                            content=payload.message.strip(),
+                            created_at=now,
+                            model_id=None,
+                        ),
+                        AgentDialogMessage(
+                            id=str(uuid4()),
+                            role="assistant",
+                            content=refusal,
+                            created_at=now,
+                            model_id="task-fsm",
+                        ),
+                    ][-80:]
+                    dialog.updated_at = now
+                    dialog = await dialogs.save(dialog)
+                    await db.commit()
+                    return AgentWorkshopRunResponse(
+                        content=refusal,
+                        model_id="task-fsm",
+                        dialog_id=dialog.id,
+                        messages=[_msg_dto(m) for m in dialog.messages],
+                        task_skip_conflict=True,
+                    )
                 if task_ev.skip_llm:
                     from datetime import UTC, datetime
                     from uuid import uuid4
@@ -366,6 +420,7 @@ async def run_workshop_agent(
                 compression=compression_out,
                 context_strategy=strategy_out,
                 invariant_conflict=bool(outcome.invariant_conflict),
+                task_skip_conflict=bool(outcome.task_skip_conflict),
                 invariants=list(dialog.invariants or []),
             )
 
@@ -647,6 +702,7 @@ async def apply_task_event_endpoint(
         step=payload.step,
         expected_action=payload.expected_action,
         resume_brief=payload.resume_brief,
+        stage=payload.stage,
         skip_llm=True,
     )
     dialog, label = await apply_task_event_to_dialog(dialog, event, dialogs=dialogs)

@@ -46,7 +46,11 @@ from app.domain.personalization import (
     get_expert_lens,
 )
 from app.domain.ports import AgentDialogRepository, ChatRouter
-from app.domain.task_state import format_task_state_block
+from app.domain.task_state import (
+    build_skip_refusal,
+    find_task_skip_conflicts,
+    format_task_state_block,
+)
 from app.domain.token_meter import (
     TokenBreakdown,
     build_token_breakdown,
@@ -75,6 +79,7 @@ class AgentRunOutcome:
     compression: CompressionInfo | None = None
     strategy: StrategyMeta | None = None
     invariant_conflict: bool = False
+    task_skip_conflict: bool = False
 
 
 def merge_system_extra(system_prompt: str, system_extra: str) -> str:
@@ -244,6 +249,54 @@ async def run_agent_with_dialog(
             dialog.visitor_hash = vhash
 
     history = list(dialog.messages)
+    working_preview = WorkingMemory.from_mapping(dialog.working_memory)
+    skip_hits = find_task_skip_conflicts(working_preview.task, message)
+    if skip_hits:
+        refusal = build_skip_refusal(skip_hits, message.strip())
+        _, truncation = fit_history_to_budget(
+            system_prompt=definition.system_prompt.strip(),
+            history=history,
+            user_message=message.strip(),
+            context_limit=context_limit,
+            max_tokens=definition.max_tokens
+            if definition.max_tokens is not None
+            else (generation.max_tokens if generation else None),
+        )
+        tokens = build_token_breakdown(
+            system_prompt=definition.system_prompt.strip(),
+            history_before=history,
+            history_after=history,
+            user_message=message.strip(),
+            completion=refusal,
+            model_id="task-fsm",
+            truncation=truncation,
+        )
+        user_msg = AgentDialogMessage(
+            id=str(uuid4()),
+            role="user",
+            content=message.strip(),
+            created_at=now,
+            model_id=None,
+        )
+        assistant_msg = AgentDialogMessage(
+            id=str(uuid4()),
+            role="assistant",
+            content=refusal,
+            created_at=datetime.now(UTC),
+            model_id="task-fsm",
+        )
+        dialog.messages = [*history, user_msg, assistant_msg][-MAX_STORED_MESSAGES:]
+        dialog.updated_at = datetime.now(UTC)
+        saved = await dialogs.save(dialog)
+        return (
+            AgentRunOutcome(
+                result=CompletionResult(content=refusal, model_id="task-fsm"),
+                tokens=tokens,
+                task_skip_conflict=True,
+            ),
+            saved,
+        )
+
     inv_items = parse_invariants(dialog.invariants)
     conflicts = find_invariant_conflicts(inv_items, message)
     if conflicts:

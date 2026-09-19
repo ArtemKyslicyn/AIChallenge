@@ -627,6 +627,7 @@ export function AgentWorkshop() {
               paused: Boolean(task.paused),
               goal: task.goal || "",
               resume_brief: task.resume_brief || "",
+              allowed_next: task.allowed_next || [],
             }
           : undefined,
       },
@@ -655,6 +656,7 @@ export function AgentWorkshop() {
           paused: Boolean(task.paused),
           goal: task.goal || "",
           resume_brief: task.resume_brief || "",
+          allowed_next: task.allowed_next || [],
         },
       },
     });
@@ -663,7 +665,7 @@ export function AgentWorkshop() {
   async function runTaskEvent(
     agentId: string,
     event: string,
-    extra?: { goal?: string },
+    extra?: { goal?: string; stage?: string },
   ) {
     const draft = store.drafts.find((d) => d.id === agentId);
     try {
@@ -671,6 +673,7 @@ export function AgentWorkshop() {
         event,
         clientDraftId: agentId,
         goal: extra?.goal,
+        stage: extra?.stage,
         dialogName: draft?.name,
         dialogSystemPrompt: draft?.system_prompt,
       });
@@ -1010,9 +1013,11 @@ export function AgentWorkshop() {
             }
           }
           patchSession(agentId, {
-            status: result.invariant_conflict
-              ? "Отказ · конфликт с инвариантом (LLM не вызывался)"
-              : "",
+            status: result.task_skip_conflict
+              ? "Отказ · запрещённый переход (LLM не вызывался)"
+              : result.invariant_conflict
+                ? "Отказ · конфликт с инвариантом (LLM не вызывался)"
+                : "",
             dialogId: result.dialog_id ?? dialogId,
             log,
             summaryText:
@@ -1568,7 +1573,8 @@ export function AgentWorkshop() {
               <article
                 key={line.id}
                 className={`agent-log-line agent-log-line--${line.role}${
-                  line.role === "assistant" && line.modelId === "invariants"
+                  line.role === "assistant" &&
+                  (line.modelId === "invariants" || line.modelId === "task-fsm")
                     ? " agent-log-line--refusal"
                     : ""
                 }`}
@@ -1915,34 +1921,102 @@ export function AgentWorkshop() {
                 ["planning", "execution", "validation", "done"] as const
               ).map((st) => {
                 const cur = session.workingMemory?.task?.stage || "idle";
+                const paused = Boolean(session.workingMemory?.task?.paused);
+                const fromServer = session.workingMemory?.task?.allowed_next;
+                const fallback: Record<string, string[]> = {
+                  planning: ["execution"],
+                  execution: ["validation"],
+                  validation: ["done"],
+                };
+                const allowed = paused
+                  ? []
+                  : fromServer && fromServer.length
+                    ? fromServer
+                    : fallback[cur] || [];
+                const isCurrent = cur === st;
+                const isAllowed = !isCurrent && allowed.includes(st);
+                const cls = [
+                  "agent-memory-chip",
+                  isCurrent ? "is-active" : "",
+                  isAllowed ? "agent-task-stage-allowed" : "",
+                  !isCurrent && !isAllowed ? "agent-task-stage-locked" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                const title = isCurrent
+                  ? "Текущий этап"
+                  : isAllowed
+                    ? `Разрешённый переход → ${st}`
+                    : paused
+                      ? "На паузе — переход закрыт"
+                      : `Запрещённый скачок → ${st}`;
                 return (
-                  <span
+                  <button
                     key={st}
-                    className={
-                      cur === st
-                        ? "agent-memory-chip is-active"
-                        : "agent-memory-chip agent-task-stage"
+                    type="button"
+                    className={cls}
+                    title={title}
+                    aria-label={
+                      isCurrent
+                        ? `Этап ${st}, текущий`
+                        : isAllowed
+                          ? `Перейти в ${st}`
+                          : `Запрещённый переход в ${st}`
                     }
+                    aria-current={isCurrent ? "step" : undefined}
+                    disabled={isCurrent}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isCurrent) return;
+                      void (async () => {
+                        const res = await runTaskEvent(draft.id, "goto", { stage: st });
+                        if (!res) {
+                          appendLog(draft.id, {
+                            id: `s-task-${Date.now()}`,
+                            role: "status",
+                            text: `✕ Переход ${cur} → ${st} запрещён`,
+                          });
+                          return;
+                        }
+                        appendLog(draft.id, {
+                          id: `s-task-${Date.now()}`,
+                          role: "status",
+                          text: `✓ Задача · ${res.label}`,
+                        });
+                        if (isAllowed) {
+                          await runOne(
+                            draft.id,
+                            "Продолжай текущий этап без повтора плана.",
+                            { persist: true, clearInput: false },
+                          );
+                        }
+                      })();
+                    }}
                   >
                     {st}
-                  </span>
+                  </button>
                 );
               })}
               {session.workingMemory?.task?.paused ? (
                 <span className="agent-memory-chip is-active">пауза</span>
               ) : null}
             </div>
-            {(session.workingMemory?.task?.step ||
-              session.workingMemory?.task?.expected_action) && (
-              <p className="agent-task-meta">
-                {session.workingMemory?.task?.step ? (
-                  <span>Шаг: {session.workingMemory.task.step}</span>
-                ) : null}
-                {session.workingMemory?.task?.expected_action ? (
-                  <span>Ожидается: {session.workingMemory.task.expected_action}</span>
-                ) : null}
-              </p>
-            )}
+            <p className="agent-task-meta">
+              <span>граф: planning → execution → validation → done</span>
+              {session.workingMemory?.task?.step ? (
+                <span>Шаг: {session.workingMemory.task.step}</span>
+              ) : null}
+              {session.workingMemory?.task?.expected_action ? (
+                <span>Ожидается: {session.workingMemory.task.expected_action}</span>
+              ) : null}
+              {session.workingMemory?.task?.paused ? (
+                <span>пауза: только «Продолжить»</span>
+              ) : (session.workingMemory?.task?.allowed_next || []).length ? (
+                <span>
+                  дальше: {session.workingMemory?.task?.allowed_next?.join(", ")}
+                </span>
+              ) : null}
+            </p>
             <div className="agent-persona-row" role="group" aria-label="Управление задачей">
               <button
                 type="button"

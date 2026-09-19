@@ -212,6 +212,7 @@ class AgentWorkshopRunResponse(BaseModel):
     compression: AgentCompressionResponse | None = None
     context_strategy: AgentContextStrategyResponse | None = None
     invariant_conflict: bool = False
+    task_skip_conflict: bool = False
     invariants: list[dict[str, object]] = Field(default_factory=list)
 
 
@@ -282,13 +283,14 @@ class AgentTaskEventRequest(BaseModel):
     event: str = Field(
         min_length=1,
         max_length=32,
-        description="start|advance|set_step|set_expected|pause|resume|reset",
+        description="start|advance|goto|set_step|set_expected|pause|resume|reset",
     )
     client_draft_id: str = Field(min_length=1, max_length=64)
     goal: str = Field(default="", max_length=500)
     step: str = Field(default="", max_length=200)
     expected_action: str = Field(default="", max_length=500)
     resume_brief: str = Field(default="", max_length=800)
+    stage: str = Field(default="", max_length=32, description="Target stage for goto")
     dialog_name: str | None = Field(default=None, max_length=120)
     dialog_system_prompt: str | None = Field(default=None, max_length=8000)
 
