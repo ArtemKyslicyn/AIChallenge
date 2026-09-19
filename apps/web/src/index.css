@@ -5616,6 +5616,17 @@ textarea {
   opacity: 0.55;
 }
 
+.agent-task-stage-allowed {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  opacity: 1;
+}
+
+.agent-task-stage-locked {
+  opacity: 0.42;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
 .agent-task-meta {
   display: flex;
   flex-wrap: wrap;

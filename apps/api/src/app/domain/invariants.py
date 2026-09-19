@@ -70,6 +70,7 @@ _STRONG: dict[str, tuple[str, ...]] = {
         "микросервисы с нуля",
         "split into microservices",
         "разнести по микросервисам",
+        "разнеси по микросервисам",
     ),
     "stack": (
         "mongodb вместо postgres",

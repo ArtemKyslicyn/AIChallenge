@@ -51,6 +51,15 @@ async def test_fork_copies_prefix_and_facts() -> None:
         facts={"goal": "demo"},
         summary_text="sum",
         summary_until_count=2,
+        invariants=[
+            {
+                "id": "arch-hexagonal",
+                "kind": "architecture",
+                "statement": "Монолит",
+                "active": True,
+                "triggers": ["микросервисы"],
+            }
+        ],
         created_at=now,
         updated_at=now,
     )
@@ -69,6 +78,7 @@ async def test_fork_copies_prefix_and_facts() -> None:
     assert child.parent_dialog_id == source.id
     assert child.branch_label == "A"
     assert child.forked_from_message_id == "m1"
+    assert child.invariants == source.invariants
 
 
 @pytest.mark.asyncio

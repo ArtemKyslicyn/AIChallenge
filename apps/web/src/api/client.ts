@@ -855,6 +855,7 @@ export interface AgentWorkshopRunResultDto {
     covered_by_summary?: number;
   } | null;
   invariant_conflict?: boolean;
+  task_skip_conflict?: boolean;
   invariants?: AgentInvariantDto[];
 }
 
@@ -889,6 +890,7 @@ export interface AgentTaskStateDto {
   paused?: boolean;
   goal?: string;
   resume_brief?: string;
+  allowed_next?: string[];
 }
 
 export interface AgentMemorySnapshotDto {
@@ -1040,6 +1042,7 @@ export function postAgentTaskEvent(
     step?: string;
     expectedAction?: string;
     resumeBrief?: string;
+    stage?: string;
     dialogName?: string;
     dialogSystemPrompt?: string;
   },
@@ -1054,6 +1057,7 @@ export function postAgentTaskEvent(
       step: payload.step || "",
       expected_action: payload.expectedAction || "",
       resume_brief: payload.resumeBrief || "",
+      stage: payload.stage || "",
       dialog_name: payload.dialogName || null,
       dialog_system_prompt: payload.dialogSystemPrompt || null,
     }),

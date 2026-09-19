@@ -96,6 +96,7 @@ export interface AgentSession {
       paused?: boolean;
       goal?: string;
       resume_brief?: string;
+      allowed_next?: string[];
     };
   } | null;
   /** Day 11 — long-term memory snapshot */

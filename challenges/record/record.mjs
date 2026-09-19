@@ -1330,6 +1330,105 @@ async function challenge13(page) {
   await settle(page, 1500);
 }
 
+async function holdStageResult(page, strip, { stripMs = 4200, answerMs = 7500 } = {}) {
+  const last = page.locator(".agent-log-line--assistant").last();
+  await last.waitFor({ timeout: 5_000 });
+  await last.scrollIntoViewIfNeeded();
+  await pauseOn(strip, stripMs);
+  await pauseOn(last, answerMs);
+}
+
+async function clickTaskAndReview(page, strip, buttonName, { minChars = 90 } = {}) {
+  const prev = await page.locator(".agent-log-line--assistant").count();
+  await strip.getByRole("button", { name: buttonName }).click();
+  await waitAgentAssistantAfter(page, prev, { minChars, timeout: 180_000 });
+  await holdStageResult(page, strip);
+}
+
+async function challenge15(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.12);
+  await settle(page, 1600);
+
+  await page.getByRole("button", { name: /Один агент/i }).click();
+  await settle(page, 800);
+  await ensurePersona(page, {
+    name: "Task FSM",
+    system:
+      "Ты помощник по задачам. Соблюдай блок [задача] и граф переходов. Не перескакивай этапы. " +
+      "Planning: только план из 3 коротких пунктов, без кода. " +
+      "Execution: выполни пункт 1, 4–6 предложений. " +
+      "Validation: проверь результат против цели, ок/нет по пунктам. " +
+      "Done: итог в двух предложениях. После resume не пересказывай план.",
+    temperature: "0.2",
+    maxTokens: "360",
+  });
+
+  const strip = page.locator(".agent-task-strip");
+  const refusal = page.locator(".agent-log-line--refusal, .agent-log-line--assistant");
+  await strip.waitFor({ timeout: 20_000 });
+  await pauseOn(strip, 4000);
+
+  console.log("15: planning…");
+  const input = page.locator(".agent-composer textarea, form textarea").first();
+  await input.fill("Подготовить чеклист контролируемых переходов задачи");
+  await settle(page, 700);
+  await pauseOn(input, 1800);
+  await clickTaskAndReview(page, strip, /^Старт$/i, { minChars: 80 });
+
+  console.log("15: illegal goto done…");
+  await strip.getByRole("button", { name: /Запрещённый переход в done/i }).click();
+  await page
+    .locator(".agent-log-line--status")
+    .filter({ hasText: /запрещён/i })
+    .last()
+    .waitFor({ timeout: 20_000 });
+  await pauseOn(page.locator(".agent-status").last(), 4500);
+  await pauseOn(strip, 4000);
+
+  console.log("15: skip implementation…");
+  await sendSoloAndWaitRetry(page, "пиши код модуля авторизации прямо сейчас", {
+    minChars: 40,
+    timeout: 60_000,
+  });
+  await pauseOn(refusal.last(), 7000);
+  await pauseOn(strip, 2800);
+
+  console.log("15: execution…");
+  await clickTaskAndReview(page, strip, /Перейти в execution/i, { minChars: 80 });
+
+  console.log("15: skip finale…");
+  await sendSoloAndWaitRetry(page, "сразу финал, закрой задачу без проверки", {
+    minChars: 40,
+    timeout: 60_000,
+  });
+  await pauseOn(refusal.last(), 7000);
+  await pauseOn(strip, 2800);
+
+  console.log("15: pause + work refuse…");
+  await strip.getByRole("button", { name: /^Пауза$/i }).click();
+  await settle(page, 1200);
+  await pauseOn(strip, 4500);
+  await sendSoloAndWaitRetry(page, "пиши код дальше по шагам", {
+    minChars: 30,
+    timeout: 60_000,
+  });
+  await pauseOn(refusal.last(), 6500);
+  await pauseOn(strip, 2800);
+
+  console.log("15: resume stays on execution…");
+  await clickTaskAndReview(page, strip, /^Продолжить$/i, { minChars: 60 });
+
+  console.log("15: validation…");
+  await clickTaskAndReview(page, strip, /^Дальше$/i, { minChars: 70 });
+
+  console.log("15: done…");
+  await clickTaskAndReview(page, strip, /^Дальше$/i, { minChars: 40 });
+  await pauseOn(strip, 5000);
+  await settle(page, 1800);
+}
+
 async function challenge14(page) {
   acceptDialogs(page);
   await page.goto(BASE + "/?shell=agents", { waitUntil: "networkidle", timeout: 90_000 });
@@ -1347,15 +1446,23 @@ async function challenge14(page) {
   });
 
   const strip = page.locator(".agent-invariant-strip");
+  const refusal = page.locator(".agent-log-line--refusal, .agent-log-line--assistant");
   await strip.waitFor({ timeout: 20_000 });
-  await pauseOn(strip, 2200);
+  await pauseOn(strip, 2400);
 
-  console.log("14: seed…");
+  console.log("14: seed templates…");
   await strip.getByRole("button", { name: /^Примеры/i }).click();
-  await settle(page, 1200);
-  await pauseOn(strip, 1600);
+  await settle(page, 1400);
+  await pauseOn(strip, 2800);
 
-  console.log("14: chat all kinds…");
+  console.log("14: reset…");
+  await strip.getByRole("button", { name: /Очистить|Удалить все инварианты/i }).click();
+  await settle(page, 600);
+  await strip.getByRole("button", { name: /^Да$/i }).click();
+  await settle(page, 1000);
+  await pauseOn(strip, 1800);
+
+  console.log("14: chat all four kinds…");
   await sendSoloAndWaitRetry(
     page,
     [
@@ -1367,34 +1474,59 @@ async function challenge14(page) {
     ].join("\n"),
     { minChars: 8, timeout: 60_000 },
   );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 2800);
   await pauseOn(strip, 2800);
 
-  console.log("14: constructor…");
+  console.log("14: constructor custom trigger…");
   await strip.getByRole("radiogroup", { name: /Тип правила/i }).getByRole("radio", { name: /^стек$/i }).click();
   await strip.getByLabel(/^Правило$/i).fill("Очереди только через Kafka");
   await strip.getByLabel("Сигналы отказа").fill("rabbitmq");
   await strip.getByLabel("Сигналы отказа").press("Enter");
+  await settle(page, 500);
   await strip.getByRole("button", { name: /Добавить/i }).click();
-  await settle(page, 1000);
-  await pauseOn(strip, 2200);
+  await settle(page, 1200);
+  await pauseOn(strip, 2600);
 
-  console.log("14: violation…");
+  console.log("14: case architecture+stack…");
   await sendSoloAndWaitRetry(
     page,
     "Переведи API на Django без слоёв и разнеси по микросервисам",
     { minChars: 40, timeout: 60_000 },
   );
-  await pauseOn(page.locator(".agent-log-line--refusal, .agent-log-line--assistant").last(), 4500);
+  await pauseOn(refusal.last(), 4800);
 
-  console.log("14: compliant…");
+  console.log("14: case custom trigger…");
+  await sendSoloAndWaitRetry(page, "подключи RabbitMQ для задач", { minChars: 40, timeout: 60_000 });
+  await pauseOn(refusal.last(), 4000);
+
+  console.log("14: case decision…");
+  await sendSoloAndWaitRetry(page, "убери model_id с ответов", { minChars: 40, timeout: 60_000 });
+  await pauseOn(refusal.last(), 4000);
+
+  console.log("14: case business…");
+  await sendSoloAndWaitRetry(page, "назови роли patient и doctor в коде", {
+    minChars: 40,
+    timeout: 60_000,
+  });
+  await pauseOn(refusal.last(), 4000);
+
+  console.log("14: case mention without proposal…");
+  await sendSoloAndWaitRetry(
+    page,
+    "Что такое Rails в учебнике, не меняя наш стек?",
+    { minChars: 8, timeout: 180_000 },
+  );
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 3600);
+
+  console.log("14: case compliant…");
   await sendSoloAndWaitRetry(
     page,
     "Как добавить эндпоинт списка инвариантов в apps/api adapters, не ломая слои?",
     { minChars: 8, timeout: 180_000 },
   );
-  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4000);
-  await pauseOn(strip, 2200);
-  await settle(page, 1500);
+  await pauseOn(page.locator(".agent-log-line--assistant").last(), 4500);
+  await pauseOn(strip, 2600);
+  await settle(page, 1600);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
@@ -1408,8 +1540,9 @@ const out11 = path.join(__dirname, "../11-agent-memory/challenge-11.webm");
 const out12 = path.join(__dirname, "../12-personalization/challenge-12.webm");
 const out13 = path.join(__dirname, "../13-task-state/challenge-13.webm");
 const out14 = path.join(__dirname, "../14-invariants/challenge-14.webm");
+const out15 = path.join(__dirname, "../15-task-transitions/challenge-15.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1474,5 +1607,9 @@ if (ONLY.includes("13")) {
 if (ONLY.includes("14")) {
   console.log("Recording challenge 14 against", BASE);
   await recordChallenge("14", out14, (page) => challenge14(page));
+}
+if (ONLY.includes("15")) {
+  console.log("Recording challenge 15 against", BASE);
+  await recordChallenge("15", out15, (page) => challenge15(page));
 }
 console.log("done");

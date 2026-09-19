@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-09-19T01:37:01.827551+00:00",
+  "base": "http://127.0.0.1:8000",
+  "draft": "challenge-15-318f4bd9e3",
+  "illegal_goto": "HTTP 422 /api/v1/agent-workshop/task: {\"error\":{\"code\":\"message_validation\",\"message\":\"Переход planning → done отсутствует в графе (недопустимый скачок). Разрешено дальше: execution.\"}}",
+  "skip_implementation": "Отказ · переход состояния запрещён (LLM не вызывался).\nЗапрос: пиши код модуля авторизации прямо сейчас\nСейчас: planning\nПопытка: реализация\nРазрешено дальше: execution\nНельзя делать реализацию до утверждённого плана.\nНе перескакиваю этапы.",
+  "skip_finale": "Отказ · переход состояния запрещён (LLM не вызывался).\nЗапрос: сразу финал, закрой задачу без проверки\nСейчас: execution\nПопытка: финал\nРазрешено дальше: validation\nНельзя делать финал без валидации.\nНе перескакиваю этапы.",
+  "skip_paused": "Отказ · переход состояния запрещён (LLM не вызывался).\nЗапрос: пиши код дальше по шагам\nСейчас: execution\nПопытка: работа во время паузы\nРазрешено дальше: нет\nЗадача на паузе — сначала «продолжи». Этап не меняется.\nНе перескакиваю этапы.",
+  "resume_content": "### Пример ответа\n\nМодель отвечает **Markdown**, и он рендерится по ходу стрима.\n\n- списки и `инлайн-код`\n- таблицы\n- блоки кода с копированием\n\n```python\ndef greet(name: str) -> str:\n    return f\"Привет, {name}!\"\n```\n\n| Поле | Значение |\n| --- | --- |\n| Провайдер | fake |\n| Стриминг | да |\n",
+  "checks": {
+    "graph_planning_to_execution_only": true,
+    "illegal_goto_done_rejected": true,
+    "refuse_impl_before_plan": true,
+    "refuse_finale_without_validation": true,
+    "pause_clears_allowed_next": true,
+    "resume_keeps_execution": true,
+    "reached_done": true
+  }
+}
