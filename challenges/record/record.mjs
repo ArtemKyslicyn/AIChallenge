@@ -1374,7 +1374,7 @@ async function challenge14(page) {
   await strip.getByLabel(/^Правило$/i).fill("Очереди только через Kafka");
   await strip.getByLabel("Сигналы отказа").fill("rabbitmq");
   await strip.getByLabel("Сигналы отказа").press("Enter");
-  await strip.getByRole("button", { name: /^Добавить$/i }).click();
+  await strip.getByRole("button", { name: /Добавить/i }).click();
   await settle(page, 1000);
   await pauseOn(strip, 2200);
 
