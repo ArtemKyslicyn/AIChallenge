@@ -1351,9 +1351,32 @@ async function challenge14(page) {
   await pauseOn(strip, 2200);
 
   console.log("14: seed…");
-  await strip.getByRole("button", { name: /^Посеять$/i }).click();
+  await strip.getByRole("button", { name: /^Примеры/i }).click();
   await settle(page, 1200);
+  await pauseOn(strip, 1600);
+
+  console.log("14: chat all kinds…");
+  await sendSoloAndWaitRetry(
+    page,
+    [
+      "инварианты:",
+      "архитектура: модульный монолит, слои не смешивать | микросервисы",
+      "стек: FastAPI + React + Postgres | django",
+      "решение: каждый ответ атрибутирует model_id | без model_id",
+      "правило: нейтральные имена | patient",
+    ].join("\n"),
+    { minChars: 8, timeout: 60_000 },
+  );
   await pauseOn(strip, 2800);
+
+  console.log("14: constructor…");
+  await strip.getByRole("radiogroup", { name: /Тип правила/i }).getByRole("radio", { name: /^стек$/i }).click();
+  await strip.getByLabel(/^Правило$/i).fill("Очереди только через Kafka");
+  await strip.getByLabel("Сигналы отказа").fill("rabbitmq");
+  await strip.getByLabel("Сигналы отказа").press("Enter");
+  await strip.getByRole("button", { name: /^Добавить$/i }).click();
+  await settle(page, 1000);
+  await pauseOn(strip, 2200);
 
   console.log("14: violation…");
   await sendSoloAndWaitRetry(

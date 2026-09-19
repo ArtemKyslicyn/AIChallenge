@@ -85,6 +85,52 @@ const INVARIANT_KIND_LABELS: Record<string, string> = {
 
 const INVARIANT_KINDS = ["architecture", "stack", "decision", "business"] as const;
 
+type InvKind = (typeof INVARIANT_KINDS)[number];
+
+const INVARIANT_KIND_HINTS: Record<InvKind, string> = {
+  architecture: "Как устроено, слои не смешивать",
+  stack: "Чем собираем",
+  decision: "Уже решили, не пересматривать",
+  business: "Свои жёсткие ограничения",
+};
+
+type InvCtorState = {
+  kind: InvKind;
+  statement: string;
+  triggerInput: string;
+  triggers: string[];
+  editingId: string | null;
+};
+
+const EMPTY_INV_CTOR: InvCtorState = {
+  kind: "architecture",
+  statement: "",
+  triggerInput: "",
+  triggers: [],
+  editingId: null,
+};
+
+function splitTriggerTokens(raw: string): string[] {
+  return raw
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2)
+    .map((s) => s.slice(0, 80));
+}
+
+function mergeTriggers(current: string[], extra: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const token of [...current, ...extra]) {
+    const key = token.toLowerCase();
+    if (seen.has(key) || token.length < 2) continue;
+    seen.add(key);
+    out.push(token.slice(0, 80));
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 type WorkspaceMode = "solo" | "team";
 
 const WORKSPACE_KEY = "aichallenge.agent_workspace_mode";
@@ -161,6 +207,16 @@ export function AgentWorkshop() {
     constraints: "",
   });
   const [prefEditId, setPrefEditId] = useState<string | null>(null);
+  const [invCtor, setInvCtor] = useState<InvCtorState>(EMPTY_INV_CTOR);
+  const [invBusy, setInvBusy] = useState(false);
+  const [invFieldError, setInvFieldError] = useState("");
+  const [invStripError, setInvStripError] = useState("");
+  const [invNote, setInvNote] = useState("");
+  const [invConfirm, setInvConfirm] = useState<null | "seed" | "reset">(null);
+  const invStatementRef = useRef<HTMLInputElement>(null);
+  const invStatementId = useId();
+  const invTriggerId = useId();
+  const invErrorId = useId();
   const abortMap = useRef<Map<string, AbortController>>(new Map());
   const teamAbort = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -257,6 +313,14 @@ export function AgentWorkshop() {
       })
       .catch(() => setModels([]));
   }, []);
+
+  useEffect(() => {
+    setInvCtor(EMPTY_INV_CTOR);
+    setInvFieldError("");
+    setInvStripError("");
+    setInvNote("");
+    setInvConfirm(null);
+  }, [store.activeId]);
 
   useEffect(() => {
     void listPreferenceProfiles()
@@ -628,9 +692,11 @@ export function AgentWorkshop() {
   async function runInvariantEvent(
     agentId: string,
     event: string,
-    extra?: { kind?: string; statement?: string; invariantId?: string },
+    extra?: { kind?: string; statement?: string; invariantId?: string; triggers?: string[] },
   ) {
     const draft = store.drafts.find((d) => d.id === agentId);
+    setInvBusy(true);
+    setInvStripError("");
     try {
       const res = await postAgentInvariants({
         event,
@@ -638,20 +704,89 @@ export function AgentWorkshop() {
         kind: extra?.kind,
         statement: extra?.statement,
         invariantId: extra?.invariantId,
+        triggers: extra?.triggers,
         dialogName: draft?.name,
         dialogSystemPrompt: draft?.system_prompt,
       });
       patchSession(agentId, {
         invariants: res.invariants || [],
         dialogId: res.dialog_id || ensureSession(sessionsRef.current, agentId).dialogId,
-        status: `Инварианты · ${res.label}`,
       });
+      setInvNote(res.label);
       return res;
     } catch (e) {
       const msg =
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
-      patchSession(agentId, { status: `Инварианты: ${msg}` });
+      setInvStripError(msg);
       return null;
+    } finally {
+      setInvBusy(false);
+    }
+  }
+
+  function commitCtorTriggers(raw = invCtor.triggerInput) {
+    const extra = splitTriggerTokens(raw);
+    if (!extra.length) {
+      setInvCtor((prev) => ({ ...prev, triggerInput: "" }));
+      return;
+    }
+    setInvCtor((prev) => ({
+      ...prev,
+      triggerInput: "",
+      triggers: mergeTriggers(prev.triggers, extra),
+    }));
+  }
+
+  async function submitInvariantCtor(agentId: string) {
+    const statement = invCtor.statement.trim();
+    const triggers = mergeTriggers(invCtor.triggers, splitTriggerTokens(invCtor.triggerInput));
+    if (!statement) {
+      setInvFieldError("Укажите формулировку");
+      invStatementRef.current?.focus();
+      return;
+    }
+    setInvFieldError("");
+    const res = await runInvariantEvent(agentId, invCtor.editingId ? "update" : "add", {
+      kind: invCtor.kind,
+      statement,
+      invariantId: invCtor.editingId || undefined,
+      triggers,
+    });
+    if (!res) return;
+    setInvCtor({ ...EMPTY_INV_CTOR, kind: invCtor.kind });
+  }
+
+  function startEditInvariant(inv: {
+    id: string;
+    kind: string;
+    statement: string;
+    triggers?: string[];
+  }) {
+    const kind = (INVARIANT_KINDS as readonly string[]).includes(inv.kind)
+      ? (inv.kind as InvKind)
+      : "architecture";
+    setInvCtor({
+      kind,
+      statement: inv.statement,
+      triggerInput: "",
+      triggers: Array.isArray(inv.triggers) ? [...inv.triggers] : [],
+      editingId: inv.id,
+    });
+    window.requestAnimationFrame(() => invStatementRef.current?.focus());
+  }
+
+  async function applyInvariantBulk(agentId: string, event: "seed" | "reset") {
+    const count = (ensureSession(sessionsRef.current, agentId).invariants || []).length;
+    if (count > 0 && invConfirm !== event) {
+      setInvConfirm(event);
+      return;
+    }
+    setInvConfirm(null);
+    const res = await runInvariantEvent(agentId, event);
+    if (!res) return;
+    if (event === "reset") {
+      setInvCtor((prev) => ({ ...EMPTY_INV_CTOR, kind: prev.kind }));
+      setInvFieldError("");
     }
   }
 
@@ -1554,8 +1689,8 @@ export function AgentWorkshop() {
             </span>
           </summary>
           <p className="agent-memory-lede">
-            Пишите в чат: «запомни цель: …», «меня зовут …», «запомни решение: …» — или чипы
-            ниже. Слои хранятся отдельно, запись всегда явная.
+            Пишите в чат: «инвариант стек: только Kafka | rabbitmq», «запомни цель: …»,
+              «меня зовут …» — или конструктор ниже. Слои хранятся отдельно.
           </p>
           <div className="agent-memory-grid" role="list">
             <section className="agent-memory-layer" role="listitem">
@@ -1925,115 +2060,281 @@ export function AgentWorkshop() {
               </button>
             </div>
           </div>
-          <div className="agent-invariant-strip" aria-label="Инварианты">
-            <div className="agent-persona-row" role="group" aria-label="Инварианты диалога">
-              <span className="agent-persona-label">Инварианты</span>
-              {(session.invariants || []).length === 0 ? (
-                <span className="agent-task-meta">отдельно от диалога</span>
-              ) : (
-                (session.invariants || []).map((inv) => (
+          <section className="agent-invariant-strip" aria-labelledby="inv-strip-label">
+            <div className="agent-invariant-head">
+              <h3 id="inv-strip-label" className="agent-persona-label">
+                Инварианты
+              </h3>
+              <span className="agent-task-meta" id="inv-empty">
+                {(session.invariants || []).length === 0
+                  ? "Правила, которые агент не нарушает. Конструктор или чат: «инвариант стек: …»"
+                  : `${(session.invariants || []).length} активн.`}
+              </span>
+              {invConfirm ? (
+                <span className="agent-invariant-confirm" role="status">
+                  {invConfirm === "seed"
+                    ? "Заменить текущие шаблонами?"
+                    : "Снять все правила?"}
                   <button
-                    key={inv.id}
                     type="button"
-                    className="agent-memory-chip is-active agent-invariant-chip"
-                    title={inv.statement}
+                    className="agent-memory-chip is-active"
+                    disabled={invBusy}
                     onClick={(e) => {
                       e.stopPropagation();
-                      void (async () => {
-                        const res = await runInvariantEvent(draft.id, "remove", {
-                          invariantId: inv.id,
-                        });
-                        if (!res) return;
-                        appendLog(draft.id, {
-                          id: `s-inv-${Date.now()}`,
-                          role: "status",
-                          text: `✓ Инварианты · ${res.label}`,
-                        });
-                      })();
+                      void applyInvariantBulk(draft.id, invConfirm);
                     }}
                   >
-                    <span className="agent-invariant-chip-text">
-                      {INVARIANT_KIND_LABELS[inv.kind] || inv.kind}
-                      {" · "}
-                      {inv.statement}
-                    </span>
-                    <span className="agent-invariant-x" aria-hidden>
-                      ×
-                    </span>
+                    Да
                   </button>
-                ))
+                  <button
+                    type="button"
+                    className="agent-memory-chip"
+                    disabled={invBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInvConfirm(null);
+                    }}
+                  >
+                    Отмена
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="agent-memory-chip"
+                    disabled={invBusy}
+                    aria-label="Примеры: 4 шаблона платформы"
+                    title="4 шаблона платформы"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void applyInvariantBulk(draft.id, "seed");
+                    }}
+                  >
+                    Примеры
+                  </button>
+                  <button
+                    type="button"
+                    className="agent-memory-chip"
+                    disabled={invBusy}
+                    aria-label="Удалить все инварианты диалога"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void applyInvariantBulk(draft.id, "reset");
+                    }}
+                  >
+                    Очистить
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                className="agent-memory-chip"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void (async () => {
-                    const res = await runInvariantEvent(draft.id, "seed");
-                    if (!res) return;
-                    appendLog(draft.id, {
-                      id: `s-inv-${Date.now()}`,
-                      role: "status",
-                      text: `✓ Инварианты · ${res.label}`,
-                    });
-                  })();
-                }}
+            </div>
+            <div
+              className="agent-invariant-ctor"
+              role="group"
+              aria-label="Конструктор инварианта"
+            >
+              <div
+                className="agent-invariant-kinds"
+                role="radiogroup"
+                aria-label="Тип правила"
               >
-                Посеять
-              </button>
-              {INVARIANT_KINDS.map((kind) => (
+                {INVARIANT_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="radio"
+                    aria-checked={invCtor.kind === kind}
+                    className={
+                      invCtor.kind === kind
+                        ? "agent-memory-chip is-active"
+                        : "agent-memory-chip"
+                    }
+                    title={INVARIANT_KIND_HINTS[kind]}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInvCtor((prev) => ({ ...prev, kind }));
+                    }}
+                  >
+                    {INVARIANT_KIND_LABELS[kind]}
+                  </button>
+                ))}
+              </div>
+              <label className="agent-invariant-field agent-invariant-field--statement" htmlFor={invStatementId}>
+                <span className="sr-only">Правило</span>
+                <input
+                  id={invStatementId}
+                  ref={invStatementRef}
+                  type="text"
+                  maxLength={500}
+                  value={invCtor.statement}
+                  placeholder="Ограничение, которое нельзя нарушать"
+                  aria-invalid={invFieldError ? true : undefined}
+                  aria-describedby={invFieldError ? invErrorId : undefined}
+                  disabled={invBusy}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    setInvFieldError("");
+                    setInvCtor((prev) => ({ ...prev, statement: e.target.value }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void submitInvariantCtor(draft.id);
+                    }
+                  }}
+                />
+              </label>
+              <div className="agent-invariant-field agent-invariant-field--triggers">
+                <label className="sr-only" htmlFor={invTriggerId}>
+                  Сигналы отказа
+                </label>
+                <div className="agent-invariant-trigger-box">
+                  {invCtor.triggers.map((phrase) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      className="agent-invariant-trigger"
+                      aria-label={`Убрать триггер «${phrase}»`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInvCtor((prev) => ({
+                          ...prev,
+                          triggers: prev.triggers.filter((t) => t !== phrase),
+                        }));
+                      }}
+                    >
+                      {phrase}
+                      <span aria-hidden>×</span>
+                    </button>
+                  ))}
+                  <input
+                    id={invTriggerId}
+                    type="text"
+                    maxLength={80}
+                    value={invCtor.triggerInput}
+                    placeholder={
+                      invCtor.triggers.length ? "ещё сигнал" : "сигнал: django"
+                    }
+                    aria-label="Сигналы отказа"
+                    disabled={invBusy}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) =>
+                      setInvCtor((prev) => ({ ...prev, triggerInput: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        commitCtorTriggers();
+                      }
+                    }}
+                    onBlur={() => commitCtorTriggers()}
+                  />
+                </div>
+              </div>
+              <div className="agent-invariant-ctor-actions">
                 <button
-                  key={kind}
                   type="button"
-                  className="agent-memory-chip"
-                  title={`Добавить ${INVARIANT_KIND_LABELS[kind]} из поля ввода`}
+                  className="agent-memory-chip is-active"
+                  disabled={invBusy}
+                  aria-label={
+                    invCtor.editingId
+                      ? "Сохранить инвариант"
+                      : `Добавить инвариант: ${INVARIANT_KIND_LABELS[invCtor.kind]}`
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
-                    const statement = session.input.trim();
-                    if (!statement) {
-                      patchSession(draft.id, {
-                        status: `Укажите формулировку, затем «${INVARIANT_KIND_LABELS[kind]}»`,
-                      });
-                      return;
-                    }
-                    void (async () => {
-                      const res = await runInvariantEvent(draft.id, "add", {
-                        kind,
-                        statement,
-                      });
-                      if (!res) return;
-                      patchSession(draft.id, { input: "" });
-                      appendLog(draft.id, {
-                        id: `s-inv-${Date.now()}`,
-                        role: "status",
-                        text: `✓ Инварианты · ${res.label}`,
-                      });
-                    })();
+                    void submitInvariantCtor(draft.id);
                   }}
                 >
-                  + {INVARIANT_KIND_LABELS[kind]}
+                  {invBusy ? "Сохраняем…" : invCtor.editingId ? "Сохранить" : "Добавить"}
                 </button>
-              ))}
-              <button
-                type="button"
-                className="agent-memory-chip"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void (async () => {
-                    const res = await runInvariantEvent(draft.id, "reset");
-                    if (!res) return;
-                    appendLog(draft.id, {
-                      id: `s-inv-${Date.now()}`,
-                      role: "status",
-                      text: `✓ Инварианты · ${res.label}`,
-                    });
-                  })();
-                }}
-              >
-                Сброс
-              </button>
+                {invCtor.editingId ? (
+                  <button
+                    type="button"
+                    className="agent-memory-chip"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInvFieldError("");
+                      setInvCtor({ ...EMPTY_INV_CTOR, kind: invCtor.kind });
+                    }}
+                  >
+                    Отмена
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
+            {invFieldError ? (
+              <p id={invErrorId} className="agent-invariant-error" role="alert">
+                {invFieldError}
+              </p>
+            ) : null}
+            {invStripError ? (
+              <p className="agent-invariant-error" role="alert">
+                Ошибка инвариантов: {invStripError}
+              </p>
+            ) : invNote ? (
+              <p className="agent-invariant-note" role="status">
+                {invNote}
+              </p>
+            ) : null}
+            {(session.invariants || []).length > 0 ? (
+              <ul className="agent-invariant-list">
+                {(session.invariants || []).map((inv) => (
+                  <li
+                    key={inv.id}
+                    className={
+                      invCtor.editingId === inv.id
+                        ? "agent-invariant-item is-editing"
+                        : "agent-invariant-item"
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="agent-invariant-item-main"
+                      title="Изменить правило"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditInvariant(inv);
+                      }}
+                    >
+                      <span className="agent-invariant-kind">
+                        {INVARIANT_KIND_LABELS[inv.kind] || inv.kind}
+                      </span>
+                      <span className="agent-invariant-chip-text">{inv.statement}</span>
+                      {(inv.triggers || []).length > 0 ? (
+                        <span className="agent-invariant-item-triggers">
+                          {(inv.triggers || []).join(" · ")}
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="agent-invariant-remove"
+                      aria-label={`Снять правило: ${inv.statement}`}
+                      disabled={invBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void (async () => {
+                          const res = await runInvariantEvent(draft.id, "remove", {
+                            invariantId: inv.id,
+                          });
+                          if (!res) return;
+                          if (invCtor.editingId === inv.id) {
+                            setInvCtor({ ...EMPTY_INV_CTOR, kind: invCtor.kind });
+                            setInvFieldError("");
+                          }
+                        })();
+                      }}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
           <div className="agent-persona-rows" aria-label="Персонализация">
             <div className="agent-persona-row" role="group" aria-label="Профиль предпочтений">
               <span className="agent-persona-label">Профиль</span>
@@ -2236,7 +2537,7 @@ export function AgentWorkshop() {
             value={session.input}
             onChange={(e) => patchSession(draft.id, { input: e.target.value })}
             rows={2}
-            placeholder={`Сообщение или «запомни цель: …» → ${draft.name}`}
+            placeholder={`Сообщение, «инвариант стек: только Kafka | rabbitmq» или «запомни цель: …» → ${draft.name}`}
             onClick={(e) => e.stopPropagation()}
           />
           {busy ? (

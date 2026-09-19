@@ -28,6 +28,15 @@ SYSTEM = (
 NAME = "Invariants · День 14"
 VIOLATION = "Переведи API на Django без слоёв и разнеси по микросервисам"
 OK_MSG = "Как добавить эндпоинт списка инвариантов в apps/api adapters, не ломая слои?"
+CHAT_BLOCK = "\n".join(
+    [
+        "инварианты:",
+        "архитектура: модульный монолит, слои не смешивать | микросервисы",
+        "стек: FastAPI + React + Postgres | django",
+        "решение: каждый ответ атрибутирует model_id | без model_id",
+        "правило: нейтральные имена | patient",
+    ]
+)
 
 
 def _inv(base: str, draft: str, event: str, **extra: object) -> dict:
@@ -83,6 +92,14 @@ def main() -> int:
     assert {"architecture", "stack", "decision", "business"} <= kinds, kinds
     print(f"  seed → {len(items)} invariants {sorted(kinds)}")
 
+    chat = _run(base, f"{draft}-chat", CHAT_BLOCK)
+    chat_items = chat.get("invariants") or []
+    chat_kinds = {str(i.get("kind")) for i in chat_items if isinstance(i, dict)}
+    print(
+        f"  chat → model={chat.get('model_id')} kinds={sorted(chat_kinds)} "
+        f"n={len(chat_items)}"
+    )
+
     refuse = _run(base, draft, VIOLATION)
     refuse_text = str(refuse.get("content") or "")
     print(f"  refuse model={refuse.get('model_id')} conflict={refuse.get('invariant_conflict')}")
@@ -105,6 +122,8 @@ def main() -> int:
         or "нарушает" in refuse_text.lower(),
         "ok_not_refused": not bool(ok.get("invariant_conflict"))
         and ok.get("model_id") != "invariants",
+        "chat_all_kinds": {"architecture", "stack", "decision", "business"} <= chat_kinds,
+        "chat_no_llm": chat.get("model_id") == "invariants",
     }
 
     results: dict[str, object] = {

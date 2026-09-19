@@ -8,7 +8,7 @@ CI and the Day-14 challenge do not depend on a live LLM.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from app.domain.errors import MessageValidationError
@@ -159,12 +159,17 @@ DEFAULT_INVARIANTS: tuple[dict[str, str], ...] = (
 )
 
 
+MAX_TRIGGERS = 12
+MAX_TRIGGER_LEN = 80
+
+
 @dataclass(slots=True)
 class Invariant:
     id: str
     kind: str
     statement: str
     active: bool = True
+    triggers: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -172,6 +177,7 @@ class Invariant:
             "kind": self.kind,
             "statement": self.statement,
             "active": self.active,
+            "triggers": list(self.triggers),
         }
 
 
@@ -183,11 +189,12 @@ class InvariantConflict:
 
 @dataclass(frozen=True, slots=True)
 class InvariantEvent:
-    name: str  # add | remove | seed | reset
+    name: str  # add | update | remove | seed | reset
     kind: str = ""
     statement: str = ""
     invariant_id: str = ""
     skip_llm: bool = True
+    triggers: list[str] = field(default_factory=list)
 
 
 def normalize_kind(raw: str) -> str:
@@ -196,6 +203,30 @@ def normalize_kind(raw: str) -> str:
     if kind is None:
         raise MessageValidationError("kind инварианта: architecture | stack | decision | business.")
     return kind
+
+
+def normalize_triggers(raw: object) -> list[str]:
+    parts: list[str] = []
+    if isinstance(raw, str):
+        parts = re.split(r"[,;\n]+", raw)
+    elif isinstance(raw, list | tuple):
+        for item in raw:
+            if isinstance(item, str):
+                parts.extend(re.split(r"[,;\n]+", item))
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        token = part.strip()[:MAX_TRIGGER_LEN]
+        if len(token) < 2:
+            continue
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(token)
+        if len(out) >= MAX_TRIGGERS:
+            break
+    return out
 
 
 def parse_invariants(raw: object) -> list[Invariant]:
@@ -225,6 +256,7 @@ def parse_invariants(raw: object) -> list[Invariant]:
                 kind=kind,
                 statement=statement,
                 active=bool(active) if isinstance(active, bool) else True,
+                triggers=normalize_triggers(item.get("triggers")),
             )
         )
     return out
@@ -260,7 +292,10 @@ def format_invariants_block(items: list[Invariant]) -> str:
     ]
     for inv in active:
         label = KIND_LABELS_RU.get(inv.kind, inv.kind)
-        lines.append(f"- [{label}] {inv.statement}")
+        line = f"- [{label}] {inv.statement}"
+        if inv.triggers:
+            line += f"  триггеры: {', '.join(inv.triggers)}"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -280,10 +315,22 @@ def find_invariant_conflicts(items: list[Invariant], user_message: str) -> list[
     for inv in items:
         if not inv.active:
             continue
-        matched = _match_kind(inv.kind, lowered, proposal=proposal)
+        matched = _match_triggers(inv.triggers, lowered)
+        if not matched:
+            matched = _match_kind(inv.kind, lowered, proposal=proposal)
         if matched:
             out.append(InvariantConflict(invariant=inv, matched=matched))
     return out
+
+
+def _match_triggers(triggers: list[str], lowered: str) -> str | None:
+    for phrase in triggers:
+        needle = phrase.strip().lower()
+        if len(needle) < 2:
+            continue
+        if needle in lowered:
+            return phrase.strip()
+    return None
 
 
 def _match_kind(kind: str, lowered: str, *, proposal: bool) -> str | None:
@@ -335,16 +382,32 @@ def apply_invariant_event(
         return default_invariants(), "посеяны 4 инварианта платформы"
     if name == "reset":
         return [], "инварианты сброшены"
-    if name == "add":
+    if name in ("add", "update"):
         kind = normalize_kind(event.kind)
         statement = (event.statement or "").strip()
         if not statement:
             raise MessageValidationError("statement инварианта не должен быть пустым.")
-        iid = (event.invariant_id or "").strip()[:64] or f"{kind[:8]}-{uuid4().hex[:8]}"
-        if any(i.id == iid for i in current):
-            current = [i for i in current if i.id != iid]
-        current.append(Invariant(id=iid, kind=kind, statement=statement[:500], active=True))
-        return current, f"добавлен [{KIND_LABELS_RU[kind]}]"
+        triggers = normalize_triggers(event.triggers)
+        iid = (event.invariant_id or "").strip()[:64]
+        if name == "update":
+            if not iid:
+                raise MessageValidationError("invariant_id обязателен для update.")
+            if not any(i.id == iid for i in current):
+                raise MessageValidationError("инвариант не найден.")
+        elif not iid:
+            iid = f"{kind[:8]}-{uuid4().hex[:8]}"
+        current = [i for i in current if i.id != iid]
+        current.append(
+            Invariant(
+                id=iid,
+                kind=kind,
+                statement=statement[:500],
+                active=True,
+                triggers=triggers,
+            )
+        )
+        verb = "сохранён" if name == "update" else "добавлен"
+        return current, f"{verb} [{KIND_LABELS_RU[kind]}]"
     if name == "remove":
         iid = (event.invariant_id or "").strip()
         if not iid:
@@ -353,40 +416,137 @@ def apply_invariant_event(
             raise MessageValidationError("инвариант не найден.")
         current = [i for i in current if i.id != iid]
         return current, f"снят {iid}"
-    raise MessageValidationError("event инварианта: add | remove | seed | reset.")
+    raise MessageValidationError("event инварианта: add | update | remove | seed | reset.")
 
 
-_ADD_RE = re.compile(
-    r"^(?:инвариант|/инвариант)\s+"
-    r"(архитектура|стек|решение|правило|бизнес|architecture|stack|decision|business)"
-    r"\s*[:—\-]\s*(.+)$",
-    re.IGNORECASE | re.DOTALL,
+_KIND_ALT = (
+    r"architecture|архитектура|arch|"
+    r"decision|решение|"
+    r"business|бизнес|"
+    r"stack|стек|"
+    r"правило|rule"
+)
+_CMD_PREFIX = (
+    r"(?:инвариант|/инвариант|добавь(?:те)? инвариант|добавить инвариант|"
+    r"зафиксируй(?:те)? инвариант|invariant|/invariant)\s+"
+)
+_CHAT_HEAD_RE = re.compile(
+    r"^(?:"
+    r"/инвариант(?:ы)?"
+    r"|/invariant(?:s)?"
+    r"|инварианты\s*$"
+    r"|инварианты\s*:"
+    r"|invariants\s*:"
+    r"|инвариант\b"
+    r"|invariant\b"
+    r"|добавь(?:те)? инвариант"
+    r"|добавить инвариант"
+    r"|зафиксируй(?:те)? инвариант"
+    r"|посеять инварианты"
+    r"|примеры инвариантов"
+    r"|очистить инварианты"
+    r"|сбросить инварианты"
+    r"|снять инвариант"
+    r"|удалить инвариант"
+    r")",
+    re.IGNORECASE,
 )
 _SEED_RE = re.compile(
-    r"^(?:посеять инварианты|инварианты:\s*seed|/инварианты\s+seed)$",
+    r"^(?:посеять инварианты|примеры инвариантов|инварианты:\s*(?:seed|примеры)"
+    r"|/инварианты\s+seed)$",
+    re.IGNORECASE,
+)
+_RESET_RE = re.compile(
+    r"^(?:очистить инварианты|сбросить инварианты|инварианты:\s*(?:reset|очистить|сброс)"
+    r"|/инварианты\s+reset)$",
     re.IGNORECASE,
 )
 _REMOVE_RE = re.compile(
     r"^(?:снять инвариант|удалить инвариант|/инвариант\s+remove)\s*[:—\-]?\s*(\S+)$",
     re.IGNORECASE,
 )
+_ADD_KIND_RE = re.compile(
+    rf"^(?:[+•\-]\s*)?(?:{_CMD_PREFIX})?({_KIND_ALT})\s*[:—\-]\s*(.+)$",
+    re.IGNORECASE,
+)
+_ADD_KIND_SPACE_RE = re.compile(
+    rf"^(?:{_CMD_PREFIX})({_KIND_ALT})\s+(.+)$",
+    re.IGNORECASE,
+)
+_ADD_NAKED_RE = re.compile(
+    r"^(?:[+•\-]\s*)?(?:инвариант|/инвариант|добавь инвариант|добавить инвариант|"
+    r"invariant|/invariant|правило)\s*[:—\-]\s*(.+)$",
+    re.IGNORECASE,
+)
+_HEADER_ONLY_RE = re.compile(
+    r"^(?:инварианты|/инварианты|добавь инварианты|добавить инварианты)\s*:?\s*$",
+    re.IGNORECASE,
+)
 
 
-def parse_invariant_chat_command(text: str) -> InvariantEvent | None:
-    raw = (text or "").strip()
-    if not raw:
+def _split_statement_triggers(raw: str) -> tuple[str, list[str]]:
+    statement = (raw or "").strip()
+    if "|" not in statement:
+        return statement, []
+    statement, rest = statement.split("|", 1)
+    return statement.strip(), normalize_triggers(rest)
+
+
+def _parse_invariant_chat_line(line: str) -> InvariantEvent | None:
+    raw = (line or "").strip()
+    if not raw or _HEADER_ONLY_RE.match(raw):
         return None
     if _SEED_RE.match(raw):
         return InvariantEvent(name="seed", skip_llm=True)
+    if _RESET_RE.match(raw):
+        return InvariantEvent(name="reset", skip_llm=True)
     m = _REMOVE_RE.match(raw)
     if m:
         return InvariantEvent(name="remove", invariant_id=m.group(1).strip(), skip_llm=True)
-    m = _ADD_RE.match(raw)
+    m = _ADD_KIND_RE.match(raw) or _ADD_KIND_SPACE_RE.match(raw)
     if m:
+        statement, triggers = _split_statement_triggers(m.group(2))
+        if not statement:
+            return None
         return InvariantEvent(
             name="add",
             kind=normalize_kind(m.group(1)),
-            statement=m.group(2).strip(),
+            statement=statement,
             skip_llm=True,
+            triggers=triggers,
+        )
+    m = _ADD_NAKED_RE.match(raw)
+    if m:
+        statement, triggers = _split_statement_triggers(m.group(1))
+        if not statement:
+            return None
+        return InvariantEvent(
+            name="add",
+            kind="business",
+            statement=statement,
+            skip_llm=True,
+            triggers=triggers,
         )
     return None
+
+
+def parse_invariant_chat_commands(text: str) -> list[InvariantEvent]:
+    """Parse one or more invariant commands typed in chat.
+
+    The first line must look like a command (инвариант / инварианты: / …).
+    Following lines can be `стек: …` or `инвариант правило: …`.
+    """
+    raw = (text or "").strip()
+    if not raw or not _CHAT_HEAD_RE.match(raw.split("\n", 1)[0].strip()):
+        return []
+    events: list[InvariantEvent] = []
+    for line in raw.splitlines():
+        ev = _parse_invariant_chat_line(line)
+        if ev is not None:
+            events.append(ev)
+    return events
+
+
+def parse_invariant_chat_command(text: str) -> InvariantEvent | None:
+    events = parse_invariant_chat_commands(text)
+    return events[0] if events else None

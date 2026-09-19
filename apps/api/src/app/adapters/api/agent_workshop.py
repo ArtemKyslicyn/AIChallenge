@@ -35,6 +35,7 @@ from app.application.agent_run import DEFAULT_CONTEXT_LIMIT, run_agent, run_agen
 from app.application.dialog_fork import fork_agent_dialog
 from app.application.invariants_ops import (
     apply_invariant_event_to_dialog,
+    apply_invariant_events_to_dialog,
     ensure_dialog_for_invariants,
 )
 from app.application.llm_catalog import generation_from_api
@@ -64,7 +65,7 @@ from app.domain.context_compress import CompressionInfo
 from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
-from app.domain.invariants import InvariantEvent, parse_invariant_chat_command
+from app.domain.invariants import InvariantEvent, parse_invariant_chat_commands
 from app.domain.owner_key import memory_owner_key
 from app.domain.task_state import TaskEvent, parse_task_chat_command
 from app.domain.token_meter import TokenBreakdown
@@ -272,8 +273,8 @@ async def run_workshop_agent(
                 task_just_resumed = task_ev.name == "resume"
                 # Continue into LLM with updated state (start/advance/resume).
 
-            inv_ev = parse_invariant_chat_command(payload.message)
-            if inv_ev is not None:
+            inv_events = parse_invariant_chat_commands(payload.message)
+            if inv_events:
                 dialog = await ensure_dialog_for_invariants(
                     dialogs,
                     owner_key=owner,
@@ -283,10 +284,10 @@ async def run_workshop_agent(
                 )
                 if vhash and not dialog.visitor_hash:
                     dialog.visitor_hash = vhash
-                dialog, label = await apply_invariant_event_to_dialog(
-                    dialog, inv_ev, dialogs=dialogs
+                dialog, label = await apply_invariant_events_to_dialog(
+                    dialog, inv_events, dialogs=dialogs
                 )
-                if inv_ev.skip_llm:
+                if all(ev.skip_llm for ev in inv_events):
                     from datetime import UTC, datetime
                     from uuid import uuid4
 
@@ -667,7 +668,7 @@ async def apply_invariant_event_endpoint(
     client_visitor_id: ClientVisitorId,
     auth_user: OptionalAuthUser,
 ) -> AgentInvariantEventResponse:
-    """Add / seed / remove invariants (UI chips). Stored apart from chat turns."""
+    """Add / update / seed / remove invariants. Stored apart from chat turns."""
     owner = _owner_key(client_visitor_id, auth_user)
     draft = (payload.client_draft_id or "").strip()
     if not draft:
@@ -686,6 +687,7 @@ async def apply_invariant_event_endpoint(
         statement=payload.statement,
         invariant_id=payload.invariant_id,
         skip_llm=True,
+        triggers=list(payload.triggers or []),
     )
     dialog, label = await apply_invariant_event_to_dialog(dialog, event, dialogs=dialogs)
     await db.commit()
