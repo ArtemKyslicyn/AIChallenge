@@ -29,6 +29,18 @@ v1 **в `main` и на live**: API (hexagonal, ModelRouter, Postgres/Alembic), S
 
 Дополнительно в UI: выбор модели в композере, режим **«Два рядом»** (compare через probe), шаблоны/свои правила ответа, сайдбар истории чатов (локальный кэш + `X-Visitor-Id`).
 
+## Дни челленджа (4–15)
+
+Пакеты, видео и прогоны: **[challenges/](challenges/)**.
+
+| День | Папка | На платформе |
+|------|--------|----------------|
+| 13 | [task-state](challenges/13-task-state/) | Агенты → полоса **Задача** |
+| 14 | [invariants](challenges/14-invariants/) | Агенты → полоса **Инварианты** |
+| **15** | **[task-transitions](challenges/15-task-transitions/)** | Агенты → полоса **Задача** (граф, запрет скачков) · [видео](challenges/15-task-transitions/challenge-15.mp4) |
+
+Полная таблица дней 4–15: [challenges/README.md](challenges/README.md).
+
 ## Документация (с чего читать)
 
 | Документ | Зачем |

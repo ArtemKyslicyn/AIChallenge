@@ -1916,7 +1916,7 @@ export function AgentWorkshop() {
           </div>
           <div className="agent-task-strip" aria-label="Состояние задачи">
             <div className="agent-persona-row" role="group" aria-label="Этап задачи">
-              <span className="agent-persona-label">Задача</span>
+              <span className="agent-persona-label">Задача · день 15</span>
               {(
                 ["planning", "execution", "validation", "done"] as const
               ).map((st) => {
