@@ -9,7 +9,7 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from aichallenge_mcp.server import EXPECTED_TOOL_NAMES
+from aichallenge_mcp.server import EXPECTED_TOOL_NAMES, PULSE_TOOL_NAMES
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 
@@ -27,5 +27,6 @@ async def test_stdio_initialize_and_list_tools() -> None:
             assert init.serverInfo.name == "aichallenge-mcp"
             listed = await session.list_tools()
     names = {tool.name for tool in listed.tools}
-    assert names == EXPECTED_TOOL_NAMES
+    assert EXPECTED_TOOL_NAMES <= names
+    assert PULSE_TOOL_NAMES <= names
     assert all((tool.description or "").strip() for tool in listed.tools)

@@ -8227,3 +8227,117 @@ textarea {
   font-size: 0.92em;
 }
 
+
+.mcp-board--pulse {
+  max-width: 1080px;
+}
+
+.pulse-live,
+.pulse-ops {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, #0f172a);
+}
+
+.pulse-live h3,
+.pulse-ops h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.pulse-digest {
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.pulse-digest[data-ok="1"] {
+  background: color-mix(in srgb, #22c55e 10%, var(--surface));
+}
+
+.pulse-digest[data-ok="0"] {
+  background: color-mix(in srgb, #f59e0b 10%, var(--surface));
+}
+
+.pulse-digest-line {
+  margin: 0 0 0.35rem;
+  font-weight: 650;
+}
+
+.pulse-digest-meta,
+.pulse-jobs p,
+.pulse-reply-model {
+  margin: 0;
+  color: var(--muted, #6b7280);
+  font-size: 0.92rem;
+}
+
+.pulse-rank,
+.pulse-jobs ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.pulse-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.pulse-ask,
+.pulse-form button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pulse-ask:disabled,
+.pulse-form button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.pulse-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pulse-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+
+.pulse-reply-body {
+  margin: 0.45rem 0 0.7rem;
+  white-space: pre-wrap;
+}
+
+.mcp-call {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, #0ea5e9 6%, var(--surface));
+}
+
+.mcp-call header {
+  font-weight: 650;
+  margin-bottom: 0.35rem;
+}
+
+.mcp-call pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.82rem;
+}

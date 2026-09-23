@@ -242,7 +242,7 @@ export default function App() {
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "mcp"}
-                title="MCP: соединение и список инструментов"
+                title="Stand Pulse: MCP-инструменты стенда и периодическая сводка"
                 onClick={() => setMode("mcp")}
               >
                 MCP

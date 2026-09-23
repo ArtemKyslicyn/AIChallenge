@@ -70,6 +70,10 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
+      STAND_API_URL: ${STAND_API_URL:-http://api:8000}
+      MCP_DATA_DIR: /app/data
+    volumes:
+      - mcp_data:/app/data
     ports:
       - "127.0.0.1:18765:18765"
     restart: unless-stopped
@@ -86,3 +90,4 @@ services:
 volumes:
   pgdata:
   media_data:
+  mcp_data:

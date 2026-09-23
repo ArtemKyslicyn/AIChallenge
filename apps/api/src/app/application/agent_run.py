@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.domain.agent_definition import AgentDefinition, validate_agent_run
@@ -40,6 +42,8 @@ from app.domain.invariants import (
     format_invariants_block,
     parse_invariants,
 )
+from app.domain.mcp_catalog import McpToolCall, McpToolRunner
+from app.domain.media import ToolCallRequest
 from app.domain.personalization import (
     PreferenceProfile,
     build_personalization_extra,
@@ -80,6 +84,7 @@ class AgentRunOutcome:
     strategy: StrategyMeta | None = None
     invariant_conflict: bool = False
     task_skip_conflict: bool = False
+    mcp_calls: tuple[McpToolCall, ...] = ()
 
 
 def merge_system_extra(system_prompt: str, system_extra: str) -> str:
@@ -88,6 +93,106 @@ def merge_system_extra(system_prompt: str, system_extra: str) -> str:
     if not extra:
         return sys
     return f"{sys}\n\n---\n{extra}"
+
+
+_PULSE_HINT = re.compile(
+    r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
+    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд"
+)
+
+
+def detect_pulse_intent(
+    text: str, available: set[str]
+) -> tuple[str, dict[str, Any]] | None:
+    clean = text or ""
+    if "Результат MCP" in clean:
+        return None
+    if not _PULSE_HINT.search(clean):
+        return None
+    if re.search(r"(?i)расписан|schedule_digest|каждые", clean) and "schedule_digest" in available:
+        seconds = 60
+        match = re.search(r"(\d+)\s*(?:сек|sec|с\b)", clean) or re.search(
+            r"каждые\s+(\d+)", clean
+        )
+        if match:
+            seconds = int(match.group(1))
+        return "schedule_digest", {
+            "interval_seconds": max(30, seconds),
+            "hours": 24,
+            "note": "from-agent",
+        }
+    if re.search(r"(?i)рейтинг|ranking|pareto|model_pulse|качество модел", clean):
+        if "model_pulse" in available:
+            hours = 24
+            match = re.search(r"(\d+)\s*(?:ч|час|h)", clean)
+            if match:
+                hours = int(match.group(1))
+            return "model_pulse", {"hours": hours}
+    if re.search(r"(?i)сводк|digest|latest_digest", clean) and "latest_digest" in available:
+        return "latest_digest", {}
+    if "probe_stand" in available:
+        return "probe_stand", {}
+    return None
+
+
+def _openai_tool_names(tools: list[dict[str, object]]) -> set[str]:
+    names: set[str] = set()
+    for item in tools:
+        fn = item.get("function") if isinstance(item, dict) else None
+        if isinstance(fn, dict) and fn.get("name"):
+            names.add(str(fn["name"]))
+        elif isinstance(item, dict) and item.get("name"):
+            names.add(str(item["name"]))
+    return names
+
+
+def _followup_user_message(calls: list[McpToolCall]) -> str:
+    blocks = [f"Результат MCP {call.name}:\n{call.result}" for call in calls]
+    return (
+        "\n\n".join(blocks)
+        + "\n\nОтветь оператору по этим данным. Без выдумки, коротко, по фактам."
+    )
+
+
+async def _run_mcp_round(
+    *,
+    router: ChatRouter,
+    turns: list[ChatMessage],
+    preferred: str,
+    generation: GenerationParams | None,
+    result: CompletionResult,
+    mcp_runner: McpToolRunner,
+    tools: list[dict[str, object]],
+    user_message: str,
+) -> tuple[CompletionResult, tuple[McpToolCall, ...]]:
+    names = _openai_tool_names(tools)
+    requested = list(result.tool_calls or [])
+    if not requested:
+        intent = detect_pulse_intent(user_message, names)
+        if intent is None:
+            return result, ()
+        name, arguments = intent
+        requested = [ToolCallRequest(id="pulse-intent", name=name, arguments=arguments)]
+
+    executed: list[McpToolCall] = []
+    for call in requested[:3]:
+        raw = await mcp_runner.call_tool(call.name, dict(call.arguments or {}))
+        executed.append(
+            McpToolCall(name=call.name, arguments=dict(call.arguments or {}), result=raw)
+        )
+    if not executed:
+        return result, ()
+
+    follow = [
+        *turns,
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content=result.content or f"Вызвал {', '.join(item.name for item in executed)}",
+        ),
+        ChatMessage(role=MessageRole.USER, content=_followup_user_message(executed)),
+    ]
+    final = await router.complete_chat(follow, preferred_model=preferred, generation=generation)
+    return final, tuple(executed)
 
 
 async def run_agent(
@@ -101,6 +206,7 @@ async def run_agent(
     history: list[AgentDialogMessage] | None = None,
     context_limit: int = DEFAULT_CONTEXT_LIMIT,
     system_extra: str = "",
+    mcp_runner: McpToolRunner | None = None,
 ) -> AgentRunOutcome:
     if not enabled:
         raise AgentsRunDisabledError("Запуск агентов отключён конфигурацией.")
@@ -125,7 +231,25 @@ async def run_agent(
     ]
 
     preferred = (definition.preferred_model or AUTO_MODEL).strip() or AUTO_MODEL
-    result = await router.complete_chat(turns, preferred_model=preferred, generation=generation)
+    tools: list[dict[str, object]] | None = None
+    if mcp_runner is not None:
+        listed = await mcp_runner.openai_tools()
+        tools = listed or None
+    result = await router.complete_chat(
+        turns, preferred_model=preferred, generation=generation, tools=tools
+    )
+    mcp_calls: tuple[McpToolCall, ...] = ()
+    if mcp_runner is not None and tools:
+        result, mcp_calls = await _run_mcp_round(
+            router=router,
+            turns=turns,
+            preferred=preferred,
+            generation=generation,
+            result=result,
+            mcp_runner=mcp_runner,
+            tools=tools,
+            user_message=message.strip(),
+        )
     tokens = build_token_breakdown(
         system_prompt=system_for_llm,
         history_before=history_before,
@@ -135,7 +259,7 @@ async def run_agent(
         model_id=result.model_id,
         truncation=truncation,
     )
-    return AgentRunOutcome(result=result, tokens=tokens)
+    return AgentRunOutcome(result=result, tokens=tokens, mcp_calls=mcp_calls)
 
 
 async def _refresh_summary(
@@ -196,6 +320,7 @@ async def run_agent_with_dialog(
     preference: PreferenceProfile | None = None,
     expert_lens_id: str | None = None,
     task_just_resumed: bool = False,
+    mcp_runner: McpToolRunner | None = None,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -483,12 +608,14 @@ async def run_agent_with_dialog(
         history=assembly.history,
         context_limit=context_limit,
         system_extra=system_extra,
+        mcp_runner=mcp_runner,
     )
     outcome = AgentRunOutcome(
         result=outcome.result,
         tokens=outcome.tokens,
         compression=compression,
         strategy=meta if mode != ContextMode.NONE else meta,
+        mcp_calls=outcome.mcp_calls,
     )
 
     user_msg = AgentDialogMessage(
