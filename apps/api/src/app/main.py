@@ -17,6 +17,7 @@ from app.adapters.api.feedback import router as feedback_router
 from app.adapters.api.health import router as health_router
 from app.adapters.api.lab import router as lab_router
 from app.adapters.api.llm import router as llm_router
+from app.adapters.api.mcp import router as mcp_router
 from app.adapters.api.media import router as media_router
 from app.adapters.api.personalization import router as personalization_router
 from app.adapters.api.sessions import router as sessions_router
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         agent_studio_router,
         agent_battle_router,
         media_router,
+        mcp_router,
         lab_router,
         feedback_router,
         auth_router,

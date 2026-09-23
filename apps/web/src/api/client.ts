@@ -1621,3 +1621,20 @@ export function getLabFeedbackStats(
     { signal },
   );
 }
+
+export interface McpToolDto {
+  name: string;
+  description: string;
+}
+
+export interface McpCatalogDto {
+  connected: boolean;
+  protocol: string;
+  server: string;
+  tools: McpToolDto[];
+  error?: string | null;
+}
+
+export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {
+  return request<McpCatalogDto>("/mcp/tools", { signal });
+}

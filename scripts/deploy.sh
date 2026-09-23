@@ -28,6 +28,38 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+echo "==> ensure MCP_SHARED_TOKEN exists (value not printed)"
+python3 - <<'PY'
+from pathlib import Path
+import secrets
+p = Path(".env")
+text = p.read_text(encoding="utf-8") if p.exists() else ""
+lines = text.splitlines()
+found = False
+changed = False
+out = []
+for line in lines:
+    if line.startswith("MCP_SHARED_TOKEN="):
+        found = True
+        if line.strip() == "MCP_SHARED_TOKEN=":
+            out.append("MCP_SHARED_TOKEN=" + secrets.token_urlsafe(32))
+            changed = True
+        else:
+            out.append(line)
+    else:
+        out.append(line)
+if not found:
+    if out and out[-1] != "":
+        out.append("")
+    out.append("MCP_SHARED_TOKEN=" + secrets.token_urlsafe(32))
+    changed = True
+if changed:
+    p.write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("MCP_SHARED_TOKEN written")
+else:
+    print("MCP_SHARED_TOKEN already set")
+PY
+
 # Re-run after reset in case compose changed on the branch.
 bash "$ROOT/scripts/assert-edge-safe.sh"
 

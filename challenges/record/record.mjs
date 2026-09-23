@@ -1529,6 +1529,22 @@ async function challenge14(page) {
   await settle(page, 1600);
 }
 
+async function challenge16(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=mcp", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.15);
+  await settle(page, 1200);
+  const board = page.locator(".mcp-board");
+  await board.waitFor({ timeout: 20_000 });
+  await page.getByRole("heading", { name: /^MCP$/i }).waitFor({ timeout: 15_000 });
+  await page.locator(".mcp-status").waitFor({ timeout: 15_000 });
+  await page.getByRole("cell", { name: "echo" }).waitFor({ timeout: 20_000 });
+  await page.getByRole("cell", { name: "time_now" }).waitFor();
+  await page.getByRole("cell", { name: "list_stages" }).waitFor();
+  await pauseOn(board, 5000);
+  await settle(page, 1200);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1541,8 +1557,9 @@ const out12 = path.join(__dirname, "../12-personalization/challenge-12.webm");
 const out13 = path.join(__dirname, "../13-task-state/challenge-13.webm");
 const out14 = path.join(__dirname, "../14-invariants/challenge-14.webm");
 const out15 = path.join(__dirname, "../15-task-transitions/challenge-15.webm");
+const out16 = path.join(__dirname, "../16-mcp-connect/challenge-16.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1611,5 +1628,9 @@ if (ONLY.includes("14")) {
 if (ONLY.includes("15")) {
   console.log("Recording challenge 15 against", BASE);
   await recordChallenge("15", out15, (page) => challenge15(page));
+}
+if (ONLY.includes("16")) {
+  console.log("Recording challenge 16 against", BASE);
+  await recordChallenge("16", out16, (page) => challenge16(page));
 }
 console.log("done");

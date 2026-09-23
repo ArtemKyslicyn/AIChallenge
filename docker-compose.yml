@@ -36,6 +36,8 @@ services:
       BENCHMARKS_DIR: /app/configs/benchmarks
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       MEDIA_DIR: /app/data/media
+      MCP_BASE_URL: ${MCP_BASE_URL:-http://mcp:18765}
+      MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
     volumes:
       # Scenarios are configuration, not code: editable without a rebuild.
       - ./configs/scenarios:/app/configs/scenarios:ro
@@ -58,6 +60,32 @@ services:
       timeout: 3s
       retries: 5
       start_period: 20s
+
+  mcp:
+    build:
+      context: ./apps/mcp
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MCP_TRANSPORT: http
+      MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
+    ports:
+      - "127.0.0.1:18765:18765"
+    restart: unless-stopped
+
+  mcp:
+    build:
+      context: ./apps/mcp
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MCP_TRANSPORT: http
+      MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
+    ports:
+      - "127.0.0.1:18765:18765"
+    restart: unless-stopped
 
   web:
     build:

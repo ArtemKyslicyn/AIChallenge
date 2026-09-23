@@ -1,4 +1,4 @@
-# Challenges (Days 4–15)
+# Challenges (Days 4–16)
 
 Автопрогон заданий челленджа через **prod** API платформы AIChallenge.
 
@@ -16,17 +16,19 @@
 | [`13-task-state/`](13-task-state/) | Task FSM + пауза/resume | **Агенты** → полоса Задача |
 | [`14-invariants/`](14-invariants/) | Инварианты + отказ при конфликте | **Агенты** → полоса Инварианты |
 | [`15-task-transitions/`](15-task-transitions/) | Граф переходов + запрет скачков | **Агенты** → полоса Задача |
+| [`16-mcp-connect/`](16-mcp-connect/) | MCP initialize + list_tools | **MCP** |
 
 ## Прогон (prod)
 
 ```bash
 python3 challenges/15-task-transitions/run.py
+uv run --project apps/mcp python challenges/16-mcp-connect/run.py --stdio
 ```
 
 ## Видео UI
 
 ```bash
-cd challenges/record && RECORD_ONLY=15 npm run record
+cd challenges/record && RECORD_ONLY=16 npm run record
 ```
 
-Текст ролика дня 15: [`15-task-transitions/VIDEO.md`](15-task-transitions/VIDEO.md)
+Текст ролика дня 16: [`16-mcp-connect/VIDEO.md`](16-mcp-connect/VIDEO.md)
