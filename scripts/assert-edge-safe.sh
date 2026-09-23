@@ -77,16 +77,23 @@ else:
 PY
 ok "reality dest=127.0.0.1:8443 and required serverNames present"
 
+HOST="${PUBLIC_HOST:-aichallenge.arcilite.ru}"
+loopback_ok=0
 if curl -sf --max-time 5 "http://127.0.0.1:18080/api/v1/health" >/dev/null; then
   ok "loopback :18080 healthy"
+  loopback_ok=1
 elif [[ "${REQUIRE_LOOPBACK_HEALTH:-0}" == "1" ]]; then
   die "loopback web/api health failed on :18080"
 else
   echo "EDGE_GUARD_WARN: loopback :18080 unhealthy (allowed before rolling web recreate)"
 fi
 
+if [[ "$loopback_ok" != "1" && "${REQUIRE_LOOPBACK_HEALTH:-0}" != "1" ]]; then
+  echo "EDGE_GUARD_WARN: skip fallthrough/:8443 HTTP until web is back"
+  exit 0
+fi
+
 # Local Reality fallthrough (hairpin) — the camouflage path.
-HOST="${PUBLIC_HOST:-aichallenge.arcilite.ru}"
 code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 8 \
   --resolve "${HOST}:443:127.0.0.1" "https://${HOST}/" || true)"
 [[ "$code" == "200" ]] || die "local Reality fallthrough https://${HOST}/ via 127.0.0.1:443 => HTTP ${code}"
