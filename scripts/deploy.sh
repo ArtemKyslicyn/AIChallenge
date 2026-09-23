@@ -102,7 +102,7 @@ for i in $(seq 1 30); do
         else
           bash "$ROOT/scripts/reality-guard.sh" || true
         fi
-        STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || exit 2
+        REQUIRE_LOOPBACK_HEALTH=1 STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || exit 2
       else
         exit 2
       fi
