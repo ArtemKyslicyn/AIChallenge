@@ -18,6 +18,8 @@ MAX_INTERVAL = 86_400
 DEFAULT_INTERVAL = 3_600
 MAX_HOURS = 720
 TICK_SECONDS = 5
+HIGH_LATENCY_MS = 800
+DOWN_RATE_LIMIT = 0.25
 
 
 def data_dir() -> Path:
@@ -65,6 +67,25 @@ def _connect() -> sqlite3.Connection:
             created_at TEXT NOT NULL,
             payload TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS probes (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            ok INTEGER NOT NULL,
+            latency_ms INTEGER,
+            payload TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS incidents (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            key TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            title TEXT NOT NULL,
+            detail TEXT NOT NULL,
+            opened_at TEXT NOT NULL,
+            resolved_at TEXT,
+            acked_at TEXT,
+            ack_note TEXT
+        );
         """
     )
     conn.commit()
@@ -90,11 +111,11 @@ def _get_json(url: str, timeout: float = 5.0) -> tuple[int, dict[str, Any] | Non
         return 0, None, latency, str(exc)
 
 
-def build_probe() -> dict[str, Any]:
+def build_probe(*, persist: bool = True) -> dict[str, Any]:
     url = f"{stand_api_url()}/api/v1/health"
     status, body, latency, error = _get_json(url)
     ok = status == 200 and (body or {}).get("status") == "ok"
-    return {
+    result = {
         "ok": ok,
         "url": url,
         "http_status": status,
@@ -103,6 +124,10 @@ def build_probe() -> dict[str, Any]:
         "error": error or None,
         "checked_at": _now_iso(),
     }
+    if persist:
+        _store_probe(result)
+        evaluate_watch(health=result, pulse=None)
+    return result
 
 
 def build_model_pulse(hours: int = 24) -> dict[str, Any]:
@@ -147,13 +172,16 @@ def _one_liner(health: dict[str, Any], pulse: dict[str, Any]) -> str:
 
 
 def build_digest(hours: int = 24) -> dict[str, Any]:
-    health = build_probe()
+    health = build_probe(persist=True)
     pulse = build_model_pulse(hours)
+    evaluate_watch(health=health, pulse=pulse)
+    brief = watch_brief()
     return {
         "generated_at": _now_iso(),
-        "summary": _one_liner(health, pulse),
+        "summary": brief.get("summary") or _one_liner(health, pulse),
         "health": health,
         "pulse": pulse,
+        "watch": brief,
     }
 
 
@@ -293,12 +321,228 @@ async def run_scheduler() -> None:
         await asyncio.sleep(TICK_SECONDS)
 
 
+def _store_probe(health: dict[str, Any]) -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO probes (id, created_at, ok, latency_ms, payload) VALUES (?, ?, ?, ?, ?)",
+            (
+                str(uuid4()),
+                health.get("checked_at") or _now_iso(),
+                1 if health.get("ok") else 0,
+                health.get("latency_ms"),
+                json.dumps(health, ensure_ascii=False),
+            ),
+        )
+        conn.execute(
+            "DELETE FROM probes WHERE id NOT IN (SELECT id FROM probes ORDER BY created_at DESC LIMIT 200)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _open_incident(kind: str, key: str, severity: str, title: str, detail: str) -> None:
+    conn = _connect()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM incidents WHERE key = ? AND resolved_at IS NULL",
+            (key,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE incidents SET detail = ?, severity = ?, title = ? WHERE id = ?",
+                (detail[:500], severity, title[:200], existing["id"]),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO incidents (
+                    id, kind, key, severity, title, detail, opened_at, resolved_at, acked_at, ack_note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+                """,
+                (str(uuid4()), kind, key, severity, title[:200], detail[:500], _now_iso()),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _resolve_incident(key: str) -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE incidents SET resolved_at = ? WHERE key = ? AND resolved_at IS NULL",
+            (_now_iso(), key),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def evaluate_watch(
+    *,
+    health: dict[str, Any],
+    pulse: dict[str, Any] | None,
+) -> None:
+    if not health.get("ok"):
+        _open_incident(
+            "stand_down",
+            "stand_down",
+            "critical",
+            "Стенд не отвечает",
+            str(health.get("error") or health.get("http_status") or "down"),
+        )
+        _resolve_incident("high_latency")
+    else:
+        _resolve_incident("stand_down")
+        latency = int(health.get("latency_ms") or 0)
+        if latency >= HIGH_LATENCY_MS:
+            _open_incident(
+                "high_latency",
+                "high_latency",
+                "warning",
+                "Высокая задержка /health",
+                f"{latency} мс (порог {HIGH_LATENCY_MS})",
+            )
+        else:
+            _resolve_incident("high_latency")
+    if pulse is None:
+        return
+    live_keys: set[str] = set()
+    for row in pulse.get("attention") or []:
+        model_id = str(row.get("model_id") or "").strip()
+        if not model_id:
+            continue
+        key = f"model:{model_id}"
+        live_keys.add(key)
+        rate = row.get("down_rate")
+        _open_incident(
+            "model_attention",
+            key,
+            "warning",
+            f"Модель на внимании: {model_id}",
+            f"down_rate={rate} penalized={row.get('penalized')}",
+        )
+    conn = _connect()
+    try:
+        open_models = conn.execute(
+            "SELECT key FROM incidents WHERE kind = 'model_attention' AND resolved_at IS NULL"
+        ).fetchall()
+        for row in open_models:
+            if row["key"] not in live_keys:
+                _resolve_incident(row["key"])
+    finally:
+        conn.close()
+
+
+def list_open_incidents() -> list[dict[str, Any]]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, kind, key, severity, title, detail, opened_at, acked_at, ack_note "
+            "FROM incidents WHERE resolved_at IS NULL ORDER BY opened_at DESC"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": row["id"],
+            "kind": row["kind"],
+            "key": row["key"],
+            "severity": row["severity"],
+            "title": row["title"],
+            "detail": row["detail"],
+            "opened_at": row["opened_at"],
+            "acked": bool(row["acked_at"]),
+            "ack_note": row["ack_note"],
+        }
+        for row in rows
+    ]
+
+
+def ack_incident(incident_id: str, note: str = "") -> dict[str, Any]:
+    ident = (incident_id or "").strip()
+    if not ident:
+        return {"ok": False, "error": "incident_id required"}
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM incidents WHERE id = ? AND resolved_at IS NULL",
+            (ident,),
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "error": "open incident not found"}
+        conn.execute(
+            "UPDATE incidents SET acked_at = ?, ack_note = ? WHERE id = ?",
+            (_now_iso(), (note or "").strip()[:200], ident),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "incident_id": ident, "acked": True}
+
+
+def probe_history(limit: int = 12) -> dict[str, Any]:
+    cap = max(1, min(int(limit), 50))
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT created_at, ok, latency_ms FROM probes ORDER BY created_at DESC LIMIT ?",
+            (cap,),
+        ).fetchall()
+    finally:
+        conn.close()
+    items = [
+        {"at": row["created_at"], "ok": bool(row["ok"]), "latency_ms": row["latency_ms"]}
+        for row in rows
+    ]
+    return {"probes": items, "count": len(items)}
+
+
+def watch_brief() -> dict[str, Any]:
+    incidents = list_open_incidents()
+    history = probe_history(8)
+    probes = history["probes"]
+    latest = probes[0] if probes else None
+    previous = probes[1] if len(probes) > 1 else None
+    if any(item["severity"] == "critical" and not item["acked"] for item in incidents):
+        severity = "critical"
+    elif incidents:
+        severity = "warning"
+    else:
+        severity = "ok"
+    if severity == "critical":
+        summary = "вахта: стенд недоступен"
+    elif severity == "warning":
+        summary = f"вахта: {len(incidents)} открытых инцидента"
+    elif latest and latest.get("ok"):
+        summary = f"вахта спокойна, {latest.get('latency_ms')} мс"
+    else:
+        summary = "вахта спокойна, пробы ещё нет"
+    delta = None
+    if latest and previous and latest.get("latency_ms") is not None and previous.get("latency_ms") is not None:
+        delta = int(latest["latency_ms"]) - int(previous["latency_ms"])
+    return {
+        "severity": severity,
+        "summary": summary,
+        "open_incidents": incidents,
+        "open_count": len(incidents),
+        "latest_probe": latest,
+        "latency_delta_ms": delta,
+        "probes": probes,
+    }
+
+
 def pulse_state() -> dict[str, Any]:
     latest = latest_digest_payload()
     jobs = list_jobs_payload()
+    brief = watch_brief()
     return {
         "jobs": jobs["jobs"],
         "latest_digest": latest.get("digest"),
         "latest_id": latest.get("id"),
         "latest_at": latest.get("created_at"),
+        "watch": brief,
+        "incidents": brief["open_incidents"],
     }

@@ -12,20 +12,32 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from aichallenge_mcp.pulse import (
+    ack_incident as ack_incident_record,
     build_digest,
     build_model_pulse,
     build_probe,
     latest_digest_payload,
     list_jobs_payload,
+    probe_history as load_probe_history,
     pulse_state,
     schedule_digest_job,
+    watch_brief as build_watch_brief,
 )
 
 SERVER_NAME = "aichallenge-mcp"
 TASK_STAGES = ("planning", "execution", "validation", "done")
 EXPECTED_TOOL_NAMES = frozenset({"echo", "time_now", "list_stages"})
 PULSE_TOOL_NAMES = frozenset(
-    {"probe_stand", "model_pulse", "schedule_digest", "latest_digest", "list_jobs"}
+    {
+        "probe_stand",
+        "model_pulse",
+        "schedule_digest",
+        "latest_digest",
+        "list_jobs",
+        "watch_brief",
+        "ack_incident",
+        "probe_history",
+    }
 )
 
 mcp = FastMCP(
@@ -88,6 +100,24 @@ def list_jobs() -> str:
     return json.dumps(list_jobs_payload(), ensure_ascii=False)
 
 
+@mcp.tool()
+def watch_brief() -> str:
+    """On-call brief: severity, open incidents, latency trend. Use this first."""
+    return json.dumps(build_watch_brief(), ensure_ascii=False)
+
+
+@mcp.tool()
+def ack_incident(incident_id: str, note: str = "") -> str:
+    """Acknowledge an open watch incident so the next brief knows an operator saw it."""
+    return json.dumps(ack_incident_record(incident_id, note), ensure_ascii=False)
+
+
+@mcp.tool()
+def probe_history(limit: int = 12) -> str:
+    """Recent /health probes from SQLite: ok flag and latency, newest first."""
+    return json.dumps(load_probe_history(limit), ensure_ascii=False)
+
+
 def dispatch_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
     args = dict(arguments or {})
     if name == "echo":
@@ -113,6 +143,15 @@ def dispatch_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
         return json.dumps(latest_digest_payload(), ensure_ascii=False)
     if name == "list_jobs":
         return json.dumps(list_jobs_payload(), ensure_ascii=False)
+    if name == "watch_brief":
+        return json.dumps(build_watch_brief(), ensure_ascii=False)
+    if name == "ack_incident":
+        return json.dumps(
+            ack_incident_record(str(args.get("incident_id") or ""), str(args.get("note") or "")),
+            ensure_ascii=False,
+        )
+    if name == "probe_history":
+        return json.dumps(load_probe_history(int(args.get("limit") or 12)), ensure_ascii=False)
     if name == "run_digest_now":
         return json.dumps(build_digest(int(args.get("hours") or 24)), ensure_ascii=False)
     raise ValueError(f"unknown tool: {name}")

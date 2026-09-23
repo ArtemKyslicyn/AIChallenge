@@ -17,4 +17,5 @@ cd challenges/record && RECORD_ONLY=17 npm run record
 
 Текст: [`VIDEO.md`](VIDEO.md)
 
-Клиент вне стенда: https://github.com/ArtemKyslicyn/stand-pulse
+Локальный клиент (видео): [`stand-pulse-cli.mp4`](stand-pulse-cli.mp4)  
+Репозиторий: https://github.com/ArtemKyslicyn/stand-pulse — `pulse --stdio watch`

@@ -13,13 +13,14 @@ import {
 const PULSE_AGENT = {
   name: "Stand Pulse",
   system_prompt:
-    "Ты дежурный оператор стенда. Если нужен статус, рейтинг или сводка — вызывай MCP-инструменты probe_stand, model_pulse, latest_digest, schedule_digest, list_jobs. Отвечай только по фактам из результата инструмента.",
+    "Ты дежурный оператор стенда. Сначала вызывай watch_brief — это вахта: инциденты, severity, тренд задержки. Для деталей — probe_stand, model_pulse, latest_digest, schedule_digest. Инцидент подтверждай ack_incident. Только факты из инструментов.",
   preferred_model: "auto",
   temperature: 0.2,
   max_tokens: 700,
 };
 
 const PRESETS = [
+  { id: "watch", label: "Вахта", message: "Что на вахте? Открой инциденты" },
   { id: "probe", label: "Проверить стенд", message: "Проверь здоровье стенда" },
   { id: "rank", label: "Рейтинг моделей", message: "Покажи рейтинг моделей за 24 часа" },
   { id: "digest", label: "Последняя сводка", message: "Дай последнюю сводку" },
@@ -152,6 +153,23 @@ export function McpCatalog() {
           ) : null}
         </tbody>
       </table>
+
+      <section className="pulse-watch" data-severity={pulse?.watch?.severity || "ok"}>
+        <h3>Вахта</h3>
+        <p className="pulse-digest-line">{pulse?.watch?.summary || "Сторож ещё не снимал пробу."}</p>
+        {(pulse?.incidents ?? []).length > 0 ? (
+          <ul className="pulse-incidents">
+            {(pulse?.incidents ?? []).map((item) => (
+              <li key={item.id}>
+                <strong>{item.severity}</strong> {item.title}
+                {item.acked ? " · ack" : ""}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pulse-digest-meta">Открытых инцидентов нет.</p>
+        )}
+      </section>
 
       <section className="pulse-live" aria-labelledby="pulse-live-title">
         <h3 id="pulse-live-title">Сводка</h3>

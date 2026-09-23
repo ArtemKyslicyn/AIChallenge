@@ -1676,6 +1676,19 @@ export interface McpPulseDto {
   latest_id?: string | null;
   latest_at?: string | null;
   error?: string | null;
+  watch?: {
+    severity?: string;
+    summary?: string;
+    open_count?: number;
+  } | null;
+  incidents?: Array<{
+    id: string;
+    kind?: string;
+    severity?: string;
+    title?: string;
+    detail?: string;
+    acked?: boolean;
+  }>;
 }
 
 export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {

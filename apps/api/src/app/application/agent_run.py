@@ -97,7 +97,8 @@ def merge_system_extra(system_prompt: str, system_extra: str) -> str:
 
 _PULSE_HINT = re.compile(
     r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
-    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд"
+    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд|"
+    r"вахт|инцидент|watch_brief|дежур"
 )
 
 
@@ -109,6 +110,8 @@ def detect_pulse_intent(
         return None
     if not _PULSE_HINT.search(clean):
         return None
+    if re.search(r"(?i)вахт|инцидент|watch_brief|дежур", clean) and "watch_brief" in available:
+        return "watch_brief", {}
     if re.search(r"(?i)расписан|schedule_digest|каждые", clean) and "schedule_digest" in available:
         seconds = 60
         match = re.search(r"(\d+)\s*(?:сек|sec|с\b)", clean) or re.search(
