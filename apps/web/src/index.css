@@ -8364,3 +8364,51 @@ textarea {
   margin: 0.45rem 0 0;
   padding-left: 1.1rem;
 }
+
+.pulse-next {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.pulse-next[data-cta="probe"] {
+  background: color-mix(in srgb, #ef4444 12%, var(--surface));
+}
+
+.pulse-next[data-cta="ack"],
+.pulse-next[data-cta="schedule"] {
+  background: color-mix(in srgb, #f59e0b 10%, var(--surface));
+}
+
+.pulse-next[data-cta="ok"] {
+  background: color-mix(in srgb, #22c55e 10%, var(--surface));
+}
+
+.pulse-next-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #6b7280);
+}
+
+.pulse-next h3 {
+  margin: 0 0 0.35rem;
+}
+
+.pulse-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.pulse-ack {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}

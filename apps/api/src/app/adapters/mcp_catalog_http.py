@@ -144,11 +144,19 @@ class HttpMcpPulse:
         payload = response.json()
         jobs = tuple(item for item in (payload.get("jobs") or []) if isinstance(item, dict))
         digest = payload.get("latest_digest")
+        watch = payload.get("watch")
+        incidents = tuple(
+            item for item in (payload.get("incidents") or []) if isinstance(item, dict)
+        )
+        action = payload.get("next_action")
         return McpPulseSnapshot(
             jobs=jobs,
             latest_digest=digest if isinstance(digest, dict) else None,
             latest_id=str(payload.get("latest_id") or "") or None,
             latest_at=str(payload.get("latest_at") or "") or None,
+            watch=watch if isinstance(watch, dict) else None,
+            incidents=incidents,
+            next_action=action if isinstance(action, dict) else None,
         )
 
 

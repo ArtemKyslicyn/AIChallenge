@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import {
   getMcpPulse,
+  invokeMcpTool,
   listMcpTools,
   runAgentWorkshop,
   type AgentMcpCallDto,
@@ -11,9 +12,9 @@ import {
 } from "../api/client";
 
 const PULSE_AGENT = {
-  name: "Stand Pulse",
+  name: "Stand Watch",
   system_prompt:
-    "Ты дежурный оператор стенда. Сначала вызывай watch_brief — это вахта: инциденты, severity, тренд задержки. Для деталей — probe_stand, model_pulse, latest_digest, schedule_digest. Инцидент подтверждай ack_incident. Только факты из инструментов.",
+    "Ты дежурный оператор стенда. Сначала watch_brief. Потом детали: probe_stand, model_pulse, latest_digest. Ночную вахту ставь schedule_digest. Инцидент подтверждай ack_incident. Говори человеку, что делать дальше, без каталога инструментов.",
   preferred_model: "auto",
   temperature: 0.2,
   max_tokens: 700,
@@ -48,8 +49,9 @@ export function McpCatalog() {
   const [pulse, setPulse] = useState<McpPulseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ask, setAsk] = useState("Проверь здоровье стенда");
+  const [ask, setAsk] = useState("Что на вахте?");
   const [busy, setBusy] = useState(false);
+  const [actBusy, setActBusy] = useState(false);
   const [reply, setReply] = useState<AgentWorkshopRunResultDto | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
 
@@ -91,6 +93,20 @@ export function McpCatalog() {
     }
   }
 
+  async function runAction(name: string, args: Record<string, unknown> = {}) {
+    if (actBusy) return;
+    setActBusy(true);
+    setAskError(null);
+    try {
+      await invokeMcpTool(name, args);
+      await refreshPulse();
+    } catch (exc) {
+      setAskError(exc instanceof Error ? exc.message : "не удалось выполнить действие");
+    } finally {
+      setActBusy(false);
+    }
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     void runAsk(ask);
@@ -99,6 +115,8 @@ export function McpCatalog() {
   const digest = pulse?.latest_digest;
   const health = digest?.health;
   const ranking = digest?.pulse?.ranking ?? [];
+  const action = pulse?.next_action ?? pulse?.watch?.next_action;
+  const probe = pulse?.watch?.latest_probe;
 
   return (
     <section className="mcp-board mcp-board--pulse" aria-labelledby="mcp-title">
@@ -106,8 +124,8 @@ export function McpCatalog() {
         <div>
           <h2 id="mcp-title">MCP</h2>
           <p className="mcp-board-sub">
-            Stand Pulse — живые инструменты стенда: health, рейтинг моделей, периодическая сводка.
-            Агент вызывает MCP и отвечает по фактам.
+            Дежурство стенда. Пока модели отвечают посетителям, эта страница смотрит health,
+            жалобы на модели и пишет ночную сводку. Агент вызывает те же MCP-инструменты.
           </p>
         </div>
         <p className="mcp-status" data-state={data?.connected ? "ok" : "off"} aria-live="polite">
@@ -125,49 +143,94 @@ export function McpCatalog() {
         </p>
       ) : null}
 
-      <table className="mcp-tools">
-        <caption>Доступные инструменты</caption>
-        <thead>
-          <tr>
-            <th scope="col">name</th>
-            <th scope="col">description</th>
-            <th scope="col">params</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data?.tools ?? []).map((tool) => (
-            <tr key={tool.name}>
-              <td>
-                <code>{tool.name}</code>
-              </td>
-              <td>{tool.description}</td>
-              <td>
-                <code>{paramSummary(tool)}</code>
-              </td>
-            </tr>
-          ))}
-          {!loading && (data?.tools.length ?? 0) === 0 ? (
-            <tr>
-              <td colSpan={3}>Список пуст — сервер не ответил или токен не задан.</td>
-            </tr>
+      <section
+        className="pulse-next"
+        data-cta={action?.cta || "ok"}
+        aria-labelledby="pulse-next-title"
+      >
+        <p className="pulse-next-kicker">Сейчас</p>
+        <h3 id="pulse-next-title">{action?.title || "Снимаем пробу…"}</h3>
+        <p>{action?.detail || "Вахта ещё не вернула рекомендацию."}</p>
+        <div className="pulse-next-actions">
+          {action?.cta === "probe" ? (
+            <button type="button" className="pulse-ask" disabled={actBusy} onClick={() => void runAction("probe_stand")}>
+              Проверить health
+            </button>
           ) : null}
-        </tbody>
-      </table>
+          {action?.cta === "schedule" ? (
+            <button
+              type="button"
+              className="pulse-ask"
+              disabled={actBusy}
+              onClick={() =>
+                void runAction("schedule_digest", {
+                  interval_seconds: 3600,
+                  hours: 24,
+                  note: "night-watch",
+                })
+              }
+            >
+              Включить ночную вахту
+            </button>
+          ) : null}
+          {action?.cta === "ack" && action.incident_id ? (
+            <button
+              type="button"
+              className="pulse-ask"
+              disabled={actBusy}
+              onClick={() =>
+                void runAction("ack_incident", {
+                  incident_id: action.incident_id,
+                  note: "acked from console",
+                })
+              }
+            >
+              Подтвердить инцидент
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       <section className="pulse-watch" data-severity={pulse?.watch?.severity || "ok"}>
         <h3>Вахта</h3>
         <p className="pulse-digest-line">{pulse?.watch?.summary || "Сторож ещё не снимал пробу."}</p>
+        <p className="pulse-digest-meta">
+          {probe
+            ? `${probe.ok ? "последняя проба ок" : "последняя проба down"}${probe.latency_ms != null ? ` · ${probe.latency_ms} мс` : ""}`
+            : "проб ещё нет"}
+          {pulse?.watch?.latency_delta_ms != null ? ` · Δ ${pulse.watch.latency_delta_ms} мс` : ""}
+        </p>
         {(pulse?.incidents ?? []).length > 0 ? (
           <ul className="pulse-incidents">
             {(pulse?.incidents ?? []).map((item) => (
               <li key={item.id}>
                 <strong>{item.severity}</strong> {item.title}
-                {item.acked ? " · ack" : ""}
+                {item.detail ? ` — ${item.detail}` : ""}
+                {item.acked ? (
+                  " · ack"
+                ) : (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="pulse-ack"
+                      disabled={actBusy}
+                      onClick={() =>
+                        void runAction("ack_incident", {
+                          incident_id: item.id,
+                          note: "acked from console",
+                        })
+                      }
+                    >
+                      подтвердить
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="pulse-digest-meta">Открытых инцидентов нет.</p>
+          <p className="pulse-digest-meta">Открытых инцидентов нет — посетители ходят на живой стенд.</p>
         )}
       </section>
 
@@ -194,13 +257,13 @@ export function McpCatalog() {
               ) : null}
             </>
           ) : (
-            <p className="pulse-digest-line">Сводки ещё нет — поставьте периодический сбор.</p>
+            <p className="pulse-digest-line">Сводки ещё нет — включите ночную вахту.</p>
           )}
         </div>
         <div className="pulse-jobs">
           <h3>Расписание</h3>
           {(pulse?.jobs ?? []).length === 0 ? (
-            <p>Нет заданий. Агент может поставить `schedule_digest`.</p>
+            <p>Нет заданий. Ночная вахта ещё не включена.</p>
           ) : (
             <ul>
               {(pulse?.jobs ?? []).map((job) => (
@@ -216,7 +279,10 @@ export function McpCatalog() {
       </section>
 
       <section className="pulse-ops" aria-labelledby="pulse-ops-title">
-        <h3 id="pulse-ops-title">Оператор</h3>
+        <h3 id="pulse-ops-title">Спросить дежурного</h3>
+        <p className="pulse-digest-meta">
+          Агент ходит в MCP и отвечает, что чинить. Не каталог — смена.
+        </p>
         <div className="pulse-presets">
           {PRESETS.map((preset) => (
             <button
@@ -242,7 +308,7 @@ export function McpCatalog() {
             value={ask}
             onChange={(event) => setAsk(event.target.value)}
             disabled={busy}
-            placeholder="Спросить пульс стенда"
+            placeholder="Что сломалось, пока меня не было?"
           />
           <button type="submit" disabled={busy || !ask.trim()}>
             {busy ? "вызов…" : "Спросить"}
@@ -270,6 +336,35 @@ export function McpCatalog() {
           </div>
         ) : null}
       </section>
+
+      <table className="mcp-tools">
+        <caption>Инструменты MCP, которыми пользуется вахта</caption>
+        <thead>
+          <tr>
+            <th scope="col">name</th>
+            <th scope="col">description</th>
+            <th scope="col">params</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(data?.tools ?? []).map((tool) => (
+            <tr key={tool.name}>
+              <td>
+                <code>{tool.name}</code>
+              </td>
+              <td>{tool.description}</td>
+              <td>
+                <code>{paramSummary(tool)}</code>
+              </td>
+            </tr>
+          ))}
+          {!loading && (data?.tools.length ?? 0) === 0 ? (
+            <tr>
+              <td colSpan={3}>Список пуст — сервер не ответил или токен не задан.</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
     </section>
   );
 }
