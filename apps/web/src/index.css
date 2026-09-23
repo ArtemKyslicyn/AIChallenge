@@ -8341,3 +8341,26 @@ textarea {
   word-break: break-word;
   font-size: 0.82rem;
 }
+
+.pulse-watch {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.pulse-watch[data-severity="critical"] {
+  background: color-mix(in srgb, #ef4444 12%, var(--surface));
+}
+
+.pulse-watch[data-severity="warning"] {
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface));
+}
+
+.pulse-watch[data-severity="ok"] {
+  background: color-mix(in srgb, #22c55e 10%, var(--surface));
+}
+
+.pulse-incidents {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+}

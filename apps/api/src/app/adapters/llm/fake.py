@@ -15,7 +15,8 @@ from app.domain.media import IMAGE_TOOL_NAME, ToolCallRequest
 _WORDS = re.compile(r"\S+\s*")
 _PULSE_HINT = re.compile(
     r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
-    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд"
+    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд|"
+    r"вахт|инцидент|watch_brief|дежур"
 )
 
 
@@ -50,6 +51,8 @@ def _summarize_mcp_followup(last: str) -> str:
             f"Стенд отвечает. /health = ok, задержка {blob.get('latency_ms', '—')} мс. "
             "Можно работать дальше."
         )
+    if blob.get("severity") and blob.get("open_incidents") is not None:
+        return f"Вахта {blob.get('severity')}: {blob.get('summary')}"
     if blob.get("summary"):
         return f"Последняя сводка: {blob['summary']}"
     if blob.get("first_digest") or blob.get("job_id"):
@@ -168,7 +171,9 @@ class FakeLLMProvider:
             if _PULSE_HINT.search(last) and names:
                 name = "probe_stand"
                 arguments: dict[str, object] = {}
-                if re.search(r"(?i)расписан|schedule|каждые", last) and "schedule_digest" in names:
+                if re.search(r"(?i)вахт|инцидент|watch_brief|дежур", last) and "watch_brief" in names:
+                    name = "watch_brief"
+                elif re.search(r"(?i)расписан|schedule|каждые", last) and "schedule_digest" in names:
                     name = "schedule_digest"
                     arguments = {"interval_seconds": 60, "hours": 24, "note": "pulse"}
                 elif (

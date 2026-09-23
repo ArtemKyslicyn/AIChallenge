@@ -207,6 +207,27 @@ class FakeMcpCatalog:
                     "Scheduled Pulse jobs.",
                     {"type": "object", "properties": {}},
                 ),
+                McpToolInfo(
+                    "watch_brief",
+                    "On-call brief: severity and open incidents.",
+                    {"type": "object", "properties": {}},
+                ),
+                McpToolInfo(
+                    "ack_incident",
+                    "Acknowledge an open watch incident.",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "incident_id": {"type": "string"},
+                            "note": {"type": "string"},
+                        },
+                    },
+                ),
+                McpToolInfo(
+                    "probe_history",
+                    "Recent /health probes from SQLite.",
+                    {"type": "object", "properties": {"limit": {"type": "integer"}}},
+                ),
             ),
         )
 

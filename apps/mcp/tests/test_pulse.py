@@ -7,10 +7,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aichallenge_mcp.pulse import (
+    ack_incident,
+    build_probe,
     latest_digest_payload,
     list_jobs_payload,
     process_due_jobs,
     schedule_digest_job,
+    watch_brief,
 )
 from aichallenge_mcp.server import PULSE_TOOL_NAMES, dispatch_tool, mcp
 
@@ -36,6 +39,21 @@ def test_due_jobs_write_another_digest(tmp_path: Path, monkeypatch) -> None:
     assert process_due_jobs(future) == 1
     conn_jobs = list_jobs_payload()["jobs"]
     assert conn_jobs[0]["last_run_at"]
+
+
+def test_watch_opens_and_acks_stand_down(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MCP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("STAND_API_URL", "http://127.0.0.1:9")
+    health = build_probe()
+    assert health["ok"] is False
+    brief = watch_brief()
+    assert brief["severity"] == "critical"
+    assert brief["open_count"] >= 1
+    incident_id = brief["open_incidents"][0]["id"]
+    acked = ack_incident(incident_id, "seen")
+    assert acked["ok"] is True
+    after = watch_brief()
+    assert after["open_incidents"][0]["acked"] is True
 
 
 def test_dispatch_unknown_tool() -> None:
