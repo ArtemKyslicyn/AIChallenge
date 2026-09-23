@@ -77,9 +77,13 @@ else:
 PY
 ok "reality dest=127.0.0.1:8443 and required serverNames present"
 
-curl -sf --max-time 5 "http://127.0.0.1:18080/api/v1/health" >/dev/null \
-  || die "loopback web/api health failed on :18080"
-ok "loopback :18080 healthy"
+if [[ "${SKIP_LOOPBACK_HEALTH:-0}" == "1" ]]; then
+  ok "loopback :18080 check skipped (web may be mid-recreate)"
+else
+  curl -sf --max-time 5 "http://127.0.0.1:18080/api/v1/health" >/dev/null \
+    || die "loopback web/api health failed on :18080"
+  ok "loopback :18080 healthy"
+fi
 
 # Local Reality fallthrough (hairpin) — the camouflage path.
 HOST="${PUBLIC_HOST:-aichallenge.arcilite.ru}"
