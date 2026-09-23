@@ -1680,6 +1680,9 @@ export interface McpPulseDto {
     severity?: string;
     summary?: string;
     open_count?: number;
+    latest_probe?: { ok?: boolean; latency_ms?: number; at?: string } | null;
+    latency_delta_ms?: number | null;
+    next_action?: McpNextActionDto | null;
   } | null;
   incidents?: Array<{
     id: string;
@@ -1689,6 +1692,15 @@ export interface McpPulseDto {
     detail?: string;
     acked?: boolean;
   }>;
+  next_action?: McpNextActionDto | null;
+}
+
+export interface McpNextActionDto {
+  id: string;
+  title: string;
+  detail?: string;
+  cta?: string | null;
+  incident_id?: string | null;
 }
 
 export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {
@@ -1697,4 +1709,20 @@ export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {
 
 export function getMcpPulse(signal?: AbortSignal): Promise<McpPulseDto> {
   return request<McpPulseDto>("/mcp/pulse", { signal });
+}
+
+export function invokeMcpTool(
+  name: string,
+  arguments_: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<{ name: string; result: string }> {
+  return request<{ name: string; result: string }>(
+    "/mcp/invoke",
+    {
+      method: "POST",
+      body: JSON.stringify({ name, arguments: arguments_ }),
+      signal,
+    },
+    30_000,
+  );
 }

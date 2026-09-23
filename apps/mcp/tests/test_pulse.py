@@ -12,6 +12,7 @@ from aichallenge_mcp.pulse import (
     latest_digest_payload,
     list_jobs_payload,
     process_due_jobs,
+    recommend_action,
     schedule_digest_job,
     watch_brief,
 )
@@ -54,6 +55,23 @@ def test_watch_opens_and_acks_stand_down(tmp_path: Path, monkeypatch) -> None:
     assert acked["ok"] is True
     after = watch_brief()
     assert after["open_incidents"][0]["acked"] is True
+
+
+def test_recommend_action_is_the_operator_job() -> None:
+    down = recommend_action("critical", [], jobs_count=0)
+    assert down["cta"] == "probe"
+    unacked = recommend_action(
+        "warning",
+        [{"id": "inc-1", "title": "Модель на внимании", "acked": False}],
+        jobs_count=2,
+    )
+    assert unacked["cta"] == "ack"
+    assert unacked["incident_id"] == "inc-1"
+    night = recommend_action("ok", [], jobs_count=0)
+    assert night["cta"] == "schedule"
+    calm = recommend_action("ok", [], jobs_count=1)
+    assert calm["id"] == "ok"
+    assert calm["cta"] is None
 
 
 def test_dispatch_unknown_tool() -> None:

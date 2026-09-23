@@ -523,6 +523,7 @@ def watch_brief() -> dict[str, Any]:
     delta = None
     if latest and previous and latest.get("latency_ms") is not None and previous.get("latency_ms") is not None:
         delta = int(latest["latency_ms"]) - int(previous["latency_ms"])
+    action = recommend_action(severity, incidents, jobs_count=list_jobs_payload()["count"])
     return {
         "severity": severity,
         "summary": summary,
@@ -531,6 +532,46 @@ def watch_brief() -> dict[str, Any]:
         "latest_probe": latest,
         "latency_delta_ms": delta,
         "probes": probes,
+        "next_action": action,
+    }
+
+
+def recommend_action(
+    severity: str,
+    incidents: list[dict[str, Any]],
+    *,
+    jobs_count: int,
+) -> dict[str, Any]:
+    """What the operator should do now — the product, not the tool list."""
+    unacked = [item for item in incidents if not item.get("acked")]
+    if severity == "critical":
+        return {
+            "id": "stand_down",
+            "title": "Стенд не отвечает",
+            "detail": "Посетители не получат ответ модели. Вахта уже открыла инцидент — проверьте API.",
+            "cta": "probe",
+        }
+    if unacked:
+        first = unacked[0]
+        return {
+            "id": "ack",
+            "title": "Есть неподтверждённый инцидент",
+            "detail": str(first.get("title") or "нужно подтверждение"),
+            "cta": "ack",
+            "incident_id": first.get("id"),
+        }
+    if jobs_count < 1:
+        return {
+            "id": "schedule",
+            "title": "Ночная вахта выключена",
+            "detail": "Пока никого нет у экрана, сводки не пишутся. Включите ежечасный обход.",
+            "cta": "schedule",
+        }
+    return {
+        "id": "ok",
+        "title": "Можно отойти",
+        "detail": "Health жив, открытых тревог нет, сводка идёт по расписанию.",
+        "cta": None,
     }
 
 
@@ -545,4 +586,5 @@ def pulse_state() -> dict[str, Any]:
         "latest_at": latest.get("created_at"),
         "watch": brief,
         "incidents": brief["open_incidents"],
+        "next_action": brief.get("next_action"),
     }
