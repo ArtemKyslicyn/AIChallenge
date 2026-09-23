@@ -68,8 +68,8 @@ echo "==> remove macOS metadata junk if present"
 find "$ROOT" \( -name '._*' -o -name '.DS_Store' \) -type f -delete 2>/dev/null || true
 
 if [[ -x /usr/local/sbin/assert-edge-safe.sh ]] || [[ -f "$ROOT/scripts/assert-edge-safe.sh" ]]; then
-  echo "==> edge preflight (host STRICT)"
-  STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || {
+  echo "==> edge preflight (host STRICT; web health skipped until after up)"
+  SKIP_LOOPBACK_HEALTH=1 STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || {
     echo "ERROR: host edge guard failed before deploy — refusing to continue" >&2
     exit 3
   }
