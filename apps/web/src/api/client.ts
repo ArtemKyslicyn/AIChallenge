@@ -857,6 +857,13 @@ export interface AgentWorkshopRunResultDto {
   invariant_conflict?: boolean;
   task_skip_conflict?: boolean;
   invariants?: AgentInvariantDto[];
+  mcp_calls?: AgentMcpCallDto[];
+}
+
+export interface AgentMcpCallDto {
+  name: string;
+  arguments?: Record<string, unknown>;
+  result: string;
 }
 
 export interface AgentInvariantDto {
@@ -1625,6 +1632,11 @@ export function getLabFeedbackStats(
 export interface McpToolDto {
   name: string;
   description: string;
+  parameters?: {
+    type?: string;
+    properties?: Record<string, { type?: string; default?: unknown; title?: string }>;
+    required?: string[];
+  } | null;
 }
 
 export interface McpCatalogDto {
@@ -1635,6 +1647,41 @@ export interface McpCatalogDto {
   error?: string | null;
 }
 
+export interface McpPulseDto {
+  jobs: Array<{
+    id: string;
+    kind: string;
+    interval_seconds: number;
+    hours: number;
+    note?: string;
+    due_at?: string;
+    last_run_at?: string | null;
+    last_error?: string | null;
+  }>;
+  latest_digest?: {
+    generated_at?: string;
+    summary?: string;
+    health?: {
+      ok?: boolean;
+      latency_ms?: number;
+      http_status?: number;
+      error?: string | null;
+    };
+    pulse?: {
+      hours?: number;
+      ranking?: Array<{ model_id?: string; score?: number; n?: number }>;
+      attention?: Array<{ model_id?: string; down_rate?: number }>;
+    };
+  } | null;
+  latest_id?: string | null;
+  latest_at?: string | null;
+  error?: string | null;
+}
+
 export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {
   return request<McpCatalogDto>("/mcp/tools", { signal });
+}
+
+export function getMcpPulse(signal?: AbortSignal): Promise<McpPulseDto> {
+  return request<McpPulseDto>("/mcp/pulse", { signal });
 }

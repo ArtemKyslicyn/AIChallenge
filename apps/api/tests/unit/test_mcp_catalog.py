@@ -6,7 +6,8 @@ async def test_fake_catalog_lists_expected_tools() -> None:
     catalog = await list_mcp_tools(FakeMcpCatalog())
     names = {tool.name for tool in catalog.tools}
     assert catalog.connected is True
-    assert names == {"echo", "time_now", "list_stages"}
+    assert {"echo", "time_now", "list_stages"} <= names
+    assert {"probe_stand", "model_pulse", "schedule_digest"} <= names
 
 
 async def test_http_catalog_without_token_is_disconnected() -> None:

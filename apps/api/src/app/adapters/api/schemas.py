@@ -203,6 +203,12 @@ class AgentContextStrategyResponse(BaseModel):
     covered_by_summary: int = 0
 
 
+class AgentMcpCallResponse(BaseModel):
+    name: str
+    arguments: dict[str, object] = Field(default_factory=dict)
+    result: str
+
+
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
@@ -214,6 +220,7 @@ class AgentWorkshopRunResponse(BaseModel):
     invariant_conflict: bool = False
     task_skip_conflict: bool = False
     invariants: list[dict[str, object]] = Field(default_factory=list)
+    mcp_calls: list[AgentMcpCallResponse] = Field(default_factory=list)
 
 
 class AgentDialogResponse(BaseModel):

@@ -50,7 +50,7 @@ async def main() -> int:
     text = render(result)
     print(text)
     names = {tool.name for tool in result.tools}
-    ok = result.connected and names == EXPECTED_TOOL_NAMES
+    ok = result.connected and EXPECTED_TOOL_NAMES <= names
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "transport": result.transport,
@@ -59,7 +59,7 @@ async def main() -> int:
         "tools": [{"name": t.name, "description": t.description} for t in result.tools],
         "checks": {
             "initialized": result.connected,
-            "tools_match": names == EXPECTED_TOOL_NAMES,
+            "tools_match": EXPECTED_TOOL_NAMES <= names,
         },
     }
     (HERE / "results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

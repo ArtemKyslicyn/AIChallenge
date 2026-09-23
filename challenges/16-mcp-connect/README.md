@@ -3,7 +3,7 @@
 Минимальный клиент на официальном Python SDK: `initialize` → `list_tools`.
 Сервер — `apps/mcp` (stdio в CI, Streamable HTTP на стенде).
 
-Инструменты: `echo`, `time_now`, `list_stages`.
+Инструменты дня 16: `echo`, `time_now`, `list_stages` (плюс Stand Pulse — дни 17/18). Проверка — subset, лишние имена не ломают день 16.
 
 ## На платформе
 

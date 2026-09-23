@@ -18,6 +18,7 @@ from app.adapters.api.schemas import (
     AgentDialogResponse,
     AgentInvariantEventRequest,
     AgentInvariantEventResponse,
+    AgentMcpCallResponse,
     AgentMemorySnapshotResponse,
     AgentMemoryWriteRequest,
     AgentMemoryWriteResponse,
@@ -28,6 +29,7 @@ from app.adapters.api.schemas import (
     AgentWorkshopRunRequest,
     AgentWorkshopRunResponse,
 )
+from app.adapters.mcp_catalog_http import HttpMcpToolRunner
 from app.adapters.persistence.agent_dialog_repo import SqlAlchemyAgentDialogRepository
 from app.adapters.persistence.long_term_memory_repo import SqlAlchemyLongTermMemoryRepository
 from app.adapters.persistence.preference_repo import SqlAlchemyPreferenceProfileRepository
@@ -117,6 +119,21 @@ def _dialog_dto(dialog: AgentDialog) -> AgentDialogResponse:
         branch_label=dialog.branch_label,
         forked_from_message_id=dialog.forked_from_message_id,
     )
+
+
+def _mcp_runner(settings: object) -> HttpMcpToolRunner | None:
+    token = str(getattr(settings, "mcp_shared_token", "") or "").strip()
+    if not token:
+        return None
+    return HttpMcpToolRunner(str(getattr(settings, "mcp_base_url", "")), token)
+
+
+def _mcp_calls_dto(outcome: object) -> list[AgentMcpCallResponse]:
+    calls = getattr(outcome, "mcp_calls", ()) or ()
+    return [
+        AgentMcpCallResponse(name=call.name, arguments=dict(call.arguments), result=call.result)
+        for call in calls
+    ]
 
 
 def _tokens_dto(tokens: TokenBreakdown) -> AgentTokenUsageResponse:
@@ -400,6 +417,7 @@ async def run_workshop_agent(
                 preference=preference,
                 expert_lens_id=lens_id,
                 task_just_resumed=task_just_resumed,
+                mcp_runner=_mcp_runner(settings),
             )
             await db.commit()
             content = outcome.result.content
@@ -422,6 +440,7 @@ async def run_workshop_agent(
                 invariant_conflict=bool(outcome.invariant_conflict),
                 task_skip_conflict=bool(outcome.task_skip_conflict),
                 invariants=list(dialog.invariants or []),
+                mcp_calls=_mcp_calls_dto(outcome),
             )
 
         outcome = await run_agent(
@@ -432,11 +451,17 @@ async def run_workshop_agent(
             max_message_chars=settings.max_message_chars,
             generation=generation,
             context_limit=ctx_limit,
+            mcp_runner=_mcp_runner(settings),
         )
         content = outcome.result.content
         model_id = outcome.result.model_id
         tokens_out = _tokens_dto(outcome.tokens)
-        return AgentWorkshopRunResponse(content=content, model_id=model_id, tokens=tokens_out)
+        return AgentWorkshopRunResponse(
+            content=content,
+            model_id=model_id,
+            tokens=tokens_out,
+            mcp_calls=_mcp_calls_dto(outcome),
+        )
     except Exception:
         status = "error"
         await db.rollback()

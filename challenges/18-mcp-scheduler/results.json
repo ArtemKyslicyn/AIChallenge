@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-09-23T11:31:44.578972+00:00",
+  "schedule": {
+    "job_id": "3612f7ad-d29a-4238-abd8-9beebc7755b4",
+    "kind": "digest",
+    "interval_seconds": 60,
+    "hours": 24,
+    "note": "challenge-18",
+    "next_run": "2026-09-23T11:32:44+00:00",
+    "first_digest": {
+      "generated_at": "2026-09-23T11:31:44+00:00",
+      "summary": "стенд не отвечает (<urlopen error [Errno 61] Connection refused>)",
+      "health": {
+        "ok": false,
+        "url": "http://127.0.0.1:8000/api/v1/health",
+        "http_status": 0,
+        "latency_ms": 7,
+        "payload": null,
+        "error": "<urlopen error [Errno 61] Connection refused>",
+        "checked_at": "2026-09-23T11:31:44+00:00"
+      },
+      "pulse": {
+        "hours": 24,
+        "checked_at": "2026-09-23T11:31:44+00:00",
+        "ranking": [],
+        "attention": [],
+        "cascade": null,
+        "latency_ms": {
+          "pareto": 0,
+          "feedback": 0
+        },
+        "http_status": {
+          "pareto": 0,
+          "feedback": 0
+        },
+        "errors": [
+          "<urlopen error [Errno 61] Connection refused>",
+          "<urlopen error [Errno 61] Connection refused>"
+        ]
+      }
+    }
+  },
+  "latest": {
+    "id": "eff808a2-2370-44f0-813a-f68b95b0043e",
+    "created_at": "2026-09-23T11:31:44+00:00",
+    "digest": {
+      "generated_at": "2026-09-23T11:31:44+00:00",
+      "summary": "стенд не отвечает (<urlopen error [Errno 61] Connection refused>)",
+      "health": {
+        "ok": false,
+        "url": "http://127.0.0.1:8000/api/v1/health",
+        "http_status": 0,
+        "latency_ms": 7,
+        "payload": null,
+        "error": "<urlopen error [Errno 61] Connection refused>",
+        "checked_at": "2026-09-23T11:31:44+00:00"
+      },
+      "pulse": {
+        "hours": 24,
+        "checked_at": "2026-09-23T11:31:44+00:00",
+        "ranking": [],
+        "attention": [],
+        "cascade": null,
+        "latency_ms": {
+          "pareto": 0,
+          "feedback": 0
+        },
+        "http_status": {
+          "pareto": 0,
+          "feedback": 0
+        },
+        "errors": [
+          "<urlopen error [Errno 61] Connection refused>",
+          "<urlopen error [Errno 61] Connection refused>"
+        ]
+      }
+    }
+  },
+  "jobs": {
+    "jobs": [
+      {
+        "id": "3612f7ad-d29a-4238-abd8-9beebc7755b4",
+        "kind": "digest",
+        "interval_seconds": 60,
+        "hours": 24,
+        "note": "challenge-18",
+        "due_at": "2026-09-23T11:32:44+00:00",
+        "last_run_at": "2026-09-23T11:31:44+00:00",
+        "last_error": null,
+        "created_at": "2026-09-23T11:31:44+00:00"
+      }
+    ],
+    "count": 1
+  },
+  "checks": {
+    "job_persisted": true,
+    "digest_returned": true,
+    "jobs_listed": true
+  }
+}

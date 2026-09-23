@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import AsyncIterator, Iterable
 
@@ -12,6 +13,61 @@ from app.domain.generation import GenerationParams
 from app.domain.media import IMAGE_TOOL_NAME, ToolCallRequest
 
 _WORDS = re.compile(r"\S+\s*")
+_PULSE_HINT = re.compile(
+    r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
+    r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд"
+)
+
+
+def _openai_tool_names(tools: list[dict[str, object]] | None) -> set[str]:
+    names: set[str] = set()
+    for item in tools or []:
+        fn = item.get("function") if isinstance(item, dict) else None
+        if isinstance(fn, dict) and fn.get("name"):
+            names.add(str(fn["name"]))
+        elif isinstance(item, dict) and item.get("name"):
+            names.add(str(item["name"]))
+    return names
+
+
+def _summarize_mcp_followup(last: str) -> str:
+    start = last.find("{")
+    end = last.rfind("}")
+    blob: dict[str, object] = {}
+    if start >= 0 and end > start:
+        try:
+            parsed = json.loads(last[start : end + 1])
+            if isinstance(parsed, dict):
+                blob = parsed
+        except json.JSONDecodeError:
+            blob = {}
+    payload = blob.get("payload")
+    healthy = blob.get("ok") is True or (
+        isinstance(payload, dict) and payload.get("status") == "ok"
+    )
+    if healthy:
+        return (
+            f"Стенд отвечает. /health = ok, задержка {blob.get('latency_ms', '—')} мс. "
+            "Можно работать дальше."
+        )
+    if blob.get("summary"):
+        return f"Последняя сводка: {blob['summary']}"
+    if blob.get("first_digest") or blob.get("job_id"):
+        digest = blob.get("first_digest") if isinstance(blob.get("first_digest"), dict) else {}
+        summary = digest.get("summary") if isinstance(digest, dict) else ""
+        interval = blob.get("interval_seconds")
+        return f"Периодическая сводка поставлена ({interval} с). {summary}".strip()
+    if blob.get("ranking") is not None:
+        ranking = blob.get("ranking") or []
+        top = ranking[0] if isinstance(ranking, list) and ranking else None
+        hours = blob.get("hours", 24)
+        if isinstance(top, dict) and top.get("model_id"):
+            return f"Рейтинг за {hours} ч: лидер {top.get('model_id')} (score {top.get('score')})."
+        count = len(ranking) if isinstance(ranking, list) else 0
+        return f"Рейтинг за {hours} ч получен. Моделей в выборке: {count}."
+    if "Результат MCP" in last:
+        return "Инструмент вернул данные. Смотри JSON в трассировке вызова."
+    return DEMO_ANSWER
 
 DEFAULT_FAKE_MODEL_ID = "fake-model"
 
@@ -88,8 +144,13 @@ class FakeLLMProvider:
         tools: list[dict[str, object]] | None = None,
     ) -> CompletionResult:
         self.last_generation = generation
+        last = next((m.content for m in reversed(messages) if m.content), "")
+        if "Результат MCP" in last:
+            return CompletionResult(
+                content=_summarize_mcp_followup(last),
+                model_id=self._resolve(model),
+            )
         if tools:
-            last = next((m.content for m in reversed(messages) if m.content), "")
             if "TOOL_IMAGE:" in last:
                 prompt = last.split("TOOL_IMAGE:", 1)[1].strip() or "test"
                 return CompletionResult(
@@ -103,6 +164,34 @@ class FakeLLMProvider:
                         )
                     ],
                 )
+            names = _openai_tool_names(tools)
+            if _PULSE_HINT.search(last) and names:
+                name = "probe_stand"
+                arguments: dict[str, object] = {}
+                if re.search(r"(?i)расписан|schedule|каждые", last) and "schedule_digest" in names:
+                    name = "schedule_digest"
+                    arguments = {"interval_seconds": 60, "hours": 24, "note": "pulse"}
+                elif (
+                    re.search(r"(?i)рейтинг|ranking|pareto|model_pulse", last)
+                    and "model_pulse" in names
+                ):
+                    name = "model_pulse"
+                    arguments = {"hours": 24}
+                elif (
+                    re.search(r"(?i)сводк|digest|latest_digest", last)
+                    and "latest_digest" in names
+                ):
+                    name = "latest_digest"
+                elif "probe_stand" not in names:
+                    name = next(iter(names))
+                if name in names:
+                    return CompletionResult(
+                        content="",
+                        model_id=self._resolve(model),
+                        tool_calls=[
+                            ToolCallRequest(id="fake-pulse-1", name=name, arguments=arguments)
+                        ],
+                    )
         return CompletionResult(content=self.text, model_id=self._resolve(model))
 
 
