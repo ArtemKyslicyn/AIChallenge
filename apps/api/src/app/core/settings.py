@@ -194,6 +194,10 @@ class Settings(BaseSettings):
     judge_min_runs: int = 5
     judge_timeout_seconds: float = 20.0
 
+    # Internal MCP sidecar (compose service `mcp`). Token names only in git.
+    mcp_base_url: str = "http://mcp:18765"
+    mcp_shared_token: str = ""
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""

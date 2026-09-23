@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-09-23T11:08:28.382350+00:00",
+  "transport": "stdio",
+  "server": "aichallenge-mcp",
+  "connected": true,
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Return the given text unchanged."
+    },
+    {
+      "name": "time_now",
+      "description": "Current UTC time as ISO-8601."
+    },
+    {
+      "name": "list_stages",
+      "description": "Task stages used on the stand: planning, execution, validation, done."
+    }
+  ],
+  "checks": {
+    "initialized": true,
+    "tools_match": true
+  }
+}

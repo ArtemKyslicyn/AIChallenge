@@ -11,6 +11,7 @@ import {
   type SessionCredentials,
 } from "./api/client";
 import { AgentBattle } from "./components/AgentBattle";
+import { McpCatalog } from "./components/McpCatalog";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
 import { AuthPanel } from "./components/AuthPanel";
@@ -32,7 +33,13 @@ export default function App() {
   const setMode = useCallback((mode: ShellMode) => {
     writeShellMode(mode);
     setShellMode(mode);
-    if (mode === "agents" || mode === "graph" || mode === "benchmarks" || mode === "battle") {
+    if (
+      mode === "agents" ||
+      mode === "graph" ||
+      mode === "benchmarks" ||
+      mode === "battle" ||
+      mode === "mcp"
+    ) {
       setSidebarOpen(false);
     }
   }, []);
@@ -120,6 +127,7 @@ export default function App() {
   const inGraph = shellMode === "graph";
   const inBenchmarks = shellMode === "benchmarks";
   const inBattle = shellMode === "battle";
+  const inMcp = shellMode === "mcp";
   const showChatChrome = shellMode === "chat";
   const shellLabel =
     shellMode === "agents"
@@ -130,12 +138,14 @@ export default function App() {
           ? "Замеры"
           : shellMode === "battle"
             ? "Битва"
-            : "Чат";
+            : shellMode === "mcp"
+              ? "MCP"
+              : "Чат";
 
   return (
     <DebugProvider>
       <div
-        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}`}
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}${inMcp ? " app--mcp" : ""}`}
       >
         {showChatChrome ? (
           <SessionSidebar
@@ -166,7 +176,7 @@ export default function App() {
               <span
                 className="dot"
                 data-state={
-                  inAgents || inGraph || inBenchmarks || inBattle || session
+                  inAgents || inGraph || inBenchmarks || inBattle || inMcp || session
                     ? "online"
                     : "offline"
                 }
@@ -228,6 +238,15 @@ export default function App() {
               >
                 Битва
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "mcp"}
+                title="MCP: соединение и список инструментов"
+                onClick={() => setMode("mcp")}
+              >
+                MCP
+              </button>
             </nav>
 
             <AuthPanel />
@@ -251,6 +270,8 @@ export default function App() {
             <BenchmarksBoard />
           ) : inBattle ? (
             <AgentBattle />
+          ) : inMcp ? (
+            <McpCatalog />
           ) : (
             <>
               {(booting || (!session && !error)) && (
