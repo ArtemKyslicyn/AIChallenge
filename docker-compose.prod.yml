@@ -85,20 +85,6 @@ services:
       - "127.0.0.1:18765:18765"
     restart: unless-stopped
 
-  mcp:
-    build:
-      context: ./apps/mcp
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      MCP_TRANSPORT: http
-      MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
-    ports:
-      # Loopback only — public path is /mcp via web nginx, never :443/:8443.
-      - "127.0.0.1:18765:18765"
-    restart: unless-stopped
-
   web:
     build:
       context: ./apps/web
