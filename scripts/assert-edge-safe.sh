@@ -77,12 +77,12 @@ else:
 PY
 ok "reality dest=127.0.0.1:8443 and required serverNames present"
 
-if [[ "${SKIP_LOOPBACK_HEALTH:-0}" == "1" ]]; then
-  ok "loopback :18080 check skipped (web may be mid-recreate)"
-else
-  curl -sf --max-time 5 "http://127.0.0.1:18080/api/v1/health" >/dev/null \
-    || die "loopback web/api health failed on :18080"
+if curl -sf --max-time 5 "http://127.0.0.1:18080/api/v1/health" >/dev/null; then
   ok "loopback :18080 healthy"
+elif [[ "${REQUIRE_LOOPBACK_HEALTH:-0}" == "1" ]]; then
+  die "loopback web/api health failed on :18080"
+else
+  echo "EDGE_GUARD_WARN: loopback :18080 unhealthy (allowed before rolling web recreate)"
 fi
 
 # Local Reality fallthrough (hairpin) — the camouflage path.

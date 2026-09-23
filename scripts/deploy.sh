@@ -90,7 +90,7 @@ for i in $(seq 1 30); do
     docker compose -f docker-compose.prod.yml ps
 
     echo "==> post-deploy edge guard"
-    STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || {
+    REQUIRE_LOOPBACK_HEALTH=1 STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || {
       echo "ERROR: edge broken after deploy" >&2
       # If only Reality is wedged, try one guarded restart (same policy as reality-guard).
       code8443="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 8 -k "https://127.0.0.1:8443/" -H "Host: ${HOST}" || true)"
