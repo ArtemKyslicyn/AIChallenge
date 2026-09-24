@@ -92,8 +92,7 @@ class HttpMcpToolRunner:
                 "function": {
                     "name": tool.name,
                     "description": tool.description,
-                    "parameters": tool.parameters
-                    or {"type": "object", "properties": {}},
+                    "parameters": tool.parameters or {"type": "object", "properties": {}},
                 },
             }
             for tool in catalog.tools
