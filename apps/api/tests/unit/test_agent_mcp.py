@@ -121,3 +121,40 @@ async def test_intent_fallback_when_model_skips_tools() -> None:
     )
     assert runner.calls[0][0] == "probe_stand"
     assert outcome.result.content == "стенд проверен"
+
+
+@pytest.mark.asyncio
+async def test_run_agent_pipeline_search_summarize_save() -> None:
+    runner = FakeMcpToolRunner()
+    router = _RecordingRouter(FakeLLMProvider())
+    outcome = await run_agent(
+        definition=AgentDefinition(
+            name="Pulse",
+            system_prompt="Дежурный оператор стенда.",
+            preferred_model="fake-model",
+        ),
+        message="Собери ночной бриф пайплайном search → summarize → saveToFile",
+        router=router,  # type: ignore[arg-type]
+        enabled=True,
+        max_message_chars=8000,
+        mcp_runner=runner,
+    )
+    names = [name for name, _args in runner.calls]
+    assert names == ["search", "summarize", "saveToFile"]
+    payload = runner.calls[1][1]["payload"]
+    assert '"source": "search"' in payload or '"source":"search"' in payload
+    brief = runner.calls[2][1]["brief"]
+    assert '"source": "summarize"' in brief or '"source":"summarize"' in brief
+    assert [call.name for call in outcome.mcp_calls] == names
+    assert "сохран" in outcome.result.content.lower()
+    assert router.complete_count == 4
+    assert router.last_tools
+
+
+def test_detect_pulse_intent_pipeline() -> None:
+    name, args = detect_pulse_intent(
+        "Собери ночной бриф пайплайном",
+        {"search", "summarize", "saveToFile", "probe_stand"},
+    )
+    assert name == "search"
+    assert args["hours"] == 24

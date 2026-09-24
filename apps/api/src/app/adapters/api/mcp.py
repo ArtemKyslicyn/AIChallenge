@@ -23,6 +23,9 @@ ALLOWED_INVOKE = frozenset(
         "watch_brief",
         "ack_incident",
         "probe_history",
+        "search",
+        "summarize",
+        "saveToFile",
     }
 )
 
@@ -65,6 +68,7 @@ async def mcp_pulse(request: Request) -> dict[str, object]:
         "watch": snapshot.watch,
         "incidents": list(snapshot.incidents),
         "next_action": snapshot.next_action,
+        "latest_brief": snapshot.latest_brief,
     }
 
 

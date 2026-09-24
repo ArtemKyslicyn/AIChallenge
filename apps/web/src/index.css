@@ -8248,6 +8248,45 @@ textarea {
   font-size: 1.05rem;
 }
 
+.pulse-brief {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.pulse-brief[data-ok="1"] {
+  background: color-mix(in srgb, #38bdf8 10%, var(--surface));
+}
+
+.pulse-pipe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.55rem 0 0.7rem;
+  padding: 0;
+  list-style: none;
+}
+
+.pulse-pipe li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  font-size: 0.92rem;
+}
+
+.pulse-pipe li[data-done="1"] {
+  border-style: solid;
+  background: color-mix(in srgb, #22c55e 12%, var(--surface));
+}
+
+.pulse-pipe span {
+  font-weight: 700;
+}
+
 .pulse-digest {
   padding: 0.75rem 0.85rem;
   border-radius: var(--radius-md);

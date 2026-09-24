@@ -13,9 +13,12 @@ from starlette.responses import JSONResponse
 
 from aichallenge_mcp.pulse import (
     ack_incident as ack_incident_record,
+    archive_brief,
     build_digest,
     build_model_pulse,
     build_probe,
+    collect_stand,
+    compose_brief,
     latest_digest_payload,
     list_jobs_payload,
     probe_history as load_probe_history,
@@ -37,6 +40,9 @@ PULSE_TOOL_NAMES = frozenset(
         "watch_brief",
         "ack_incident",
         "probe_history",
+        "search",
+        "summarize",
+        "saveToFile",
     }
 )
 
@@ -118,6 +124,24 @@ def probe_history(limit: int = 12) -> str:
     return json.dumps(load_probe_history(limit), ensure_ascii=False)
 
 
+@mcp.tool()
+def search(hours: int = 24) -> str:
+    """Collect stand facts: /health, model ranking, open incidents. First step of the night-brief pipeline."""
+    return json.dumps(collect_stand(hours), ensure_ascii=False)
+
+
+@mcp.tool()
+def summarize(payload: str) -> str:
+    """Turn search JSON into an operator brief. Second pipeline step; pass the previous tool result."""
+    return json.dumps(compose_brief(payload), ensure_ascii=False)
+
+
+@mcp.tool()
+def saveToFile(brief: str, name: str = "night-brief") -> str:
+    """Save the summarized brief to disk and SQLite. Third pipeline step; pass summarize output."""
+    return json.dumps(archive_brief(brief, name), ensure_ascii=False)
+
+
 def dispatch_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
     args = dict(arguments or {})
     if name == "echo":
@@ -154,6 +178,15 @@ def dispatch_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
         return json.dumps(load_probe_history(int(args.get("limit") or 12)), ensure_ascii=False)
     if name == "run_digest_now":
         return json.dumps(build_digest(int(args.get("hours") or 24)), ensure_ascii=False)
+    if name == "search":
+        return json.dumps(collect_stand(int(args.get("hours") or 24)), ensure_ascii=False)
+    if name == "summarize":
+        return json.dumps(compose_brief(str(args.get("payload") or "")), ensure_ascii=False)
+    if name == "saveToFile":
+        return json.dumps(
+            archive_brief(str(args.get("brief") or ""), str(args.get("name") or "night-brief")),
+            ensure_ascii=False,
+        )
     raise ValueError(f"unknown tool: {name}")
 
 
