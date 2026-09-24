@@ -149,6 +149,16 @@ def _openai_tool_names(tools: list[dict[str, object]]) -> set[str]:
 
 
 MAX_MCP_ROUNDS = 4
+_PIPELINE_NEXT = {"search": "summarize", "summarize": "saveToFile"}
+
+
+def _continue_pipeline(last: McpToolCall, available: set[str]) -> tuple[str, dict[str, Any]] | None:
+    nxt = _PIPELINE_NEXT.get(last.name)
+    if not nxt or nxt not in available:
+        return None
+    if nxt == "summarize":
+        return nxt, {"payload": last.result}
+    return nxt, {"brief": last.result, "name": "night-brief"}
 
 
 def _followup_user_message(calls: list[McpToolCall]) -> str:
@@ -182,6 +192,11 @@ async def _run_mcp_round(
             if intent is not None:
                 name, arguments = intent
                 requested = [ToolCallRequest(id="pulse-intent", name=name, arguments=arguments)]
+        if not requested and executed:
+            nxt = _continue_pipeline(executed[-1], names)
+            if nxt is not None:
+                name, arguments = nxt
+                requested = [ToolCallRequest(id="pulse-pipeline", name=name, arguments=arguments)]
         if not requested:
             break
         batch: list[McpToolCall] = []

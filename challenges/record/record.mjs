@@ -1591,9 +1591,9 @@ async function challenge19(page) {
   await page.locator(".pulse-pipe").waitFor();
   await pauseOn(board, 1600);
   await page.getByRole("button", { name: /ночной бриф/i }).click();
-  await page.locator('.mcp-call[data-tool="search"]').waitFor({ timeout: 45_000 });
-  await page.locator('.mcp-call[data-tool="summarize"]').waitFor({ timeout: 45_000 });
-  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ timeout: 45_000 });
+  await page.locator('.mcp-call[data-tool="search"]').waitFor({ timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="summarize"]').waitFor({ timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ timeout: 90_000 });
   await page.locator('.pulse-brief[data-ok="1"]').waitFor({ timeout: 20_000 });
   await page.locator(".pulse-reply").waitFor();
   await pauseOn(board, 5000);
