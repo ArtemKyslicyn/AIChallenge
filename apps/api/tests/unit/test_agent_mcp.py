@@ -33,7 +33,10 @@ class _RecordingRouter:
         self.last_tools = tools
         self.last_messages = list(messages)
         return await self.provider.complete_chat(
-            messages, preferred_model, generation=generation, tools=tools  # type: ignore[arg-type]
+            messages,
+            preferred_model,
+            generation=generation,
+            tools=tools,  # type: ignore[arg-type]
         )
 
     async def stream_chat(self, *args: object, **kwargs: object):  # pragma: no cover

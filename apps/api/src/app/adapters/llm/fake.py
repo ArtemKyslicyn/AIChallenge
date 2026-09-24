@@ -28,9 +28,7 @@ def _extract_json_blob(text: str) -> str:
     return ""
 
 
-def _next_pipeline_call(
-    last: str, names: set[str]
-) -> tuple[str, dict[str, object]] | None:
+def _next_pipeline_call(last: str, names: set[str]) -> tuple[str, dict[str, object]] | None:
     blob = _extract_json_blob(last)
     if "Результат MCP search" in last and "summarize" in names:
         return "summarize", {"payload": blob}
@@ -94,6 +92,7 @@ def _summarize_mcp_followup(last: str) -> str:
     if "Результат MCP" in last:
         return "Инструмент вернул данные. Смотри JSON в трассировке вызова."
     return DEMO_ANSWER
+
 
 DEFAULT_FAKE_MODEL_ID = "fake-model"
 
@@ -179,9 +178,7 @@ class FakeLLMProvider:
                 return CompletionResult(
                     content="",
                     model_id=self._resolve(model),
-                    tool_calls=[
-                        ToolCallRequest(id="fake-pipe", name=name, arguments=arguments)
-                    ],
+                    tool_calls=[ToolCallRequest(id="fake-pipe", name=name, arguments=arguments)],
                 )
             return CompletionResult(
                 content=_summarize_mcp_followup(last),
@@ -204,9 +201,10 @@ class FakeLLMProvider:
             if _PULSE_HINT.search(last) and names:
                 name = "probe_stand"
                 arguments: dict[str, object] = {}
-                if re.search(
-                    r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", last
-                ) and "search" in names:
+                if (
+                    re.search(r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", last)
+                    and "search" in names
+                ):
                     name = "search"
                     arguments = {"hours": 24}
                 elif (
@@ -215,8 +213,7 @@ class FakeLLMProvider:
                 ):
                     name = "watch_brief"
                 elif (
-                    re.search(r"(?i)расписан|schedule|каждые", last)
-                    and "schedule_digest" in names
+                    re.search(r"(?i)расписан|schedule|каждые", last) and "schedule_digest" in names
                 ):
                     name = "schedule_digest"
                     arguments = {"interval_seconds": 60, "hours": 24, "note": "pulse"}
@@ -227,8 +224,7 @@ class FakeLLMProvider:
                     name = "model_pulse"
                     arguments = {"hours": 24}
                 elif (
-                    re.search(r"(?i)сводк|digest|latest_digest", last)
-                    and "latest_digest" in names
+                    re.search(r"(?i)сводк|digest|latest_digest", last) and "latest_digest" in names
                 ):
                     name = "latest_digest"
                 elif "probe_stand" not in names:

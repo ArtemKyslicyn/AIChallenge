@@ -102,9 +102,7 @@ _PULSE_HINT = re.compile(
 )
 
 
-def detect_pulse_intent(
-    text: str, available: set[str]
-) -> tuple[str, dict[str, Any]] | None:
+def detect_pulse_intent(text: str, available: set[str]) -> tuple[str, dict[str, Any]] | None:
     clean = text or ""
     if "Результат MCP" in clean:
         return None
@@ -117,9 +115,7 @@ def detect_pulse_intent(
         return "watch_brief", {}
     if re.search(r"(?i)расписан|schedule_digest|каждые", clean) and "schedule_digest" in available:
         seconds = 60
-        match = re.search(r"(\d+)\s*(?:сек|sec|с\b)", clean) or re.search(
-            r"каждые\s+(\d+)", clean
-        )
+        match = re.search(r"(\d+)\s*(?:сек|sec|с\b)", clean) or re.search(r"каждые\s+(\d+)", clean)
         if match:
             seconds = int(match.group(1))
         return "schedule_digest", {
@@ -191,9 +187,7 @@ async def _run_mcp_round(
         batch: list[McpToolCall] = []
         for call in requested[:3]:
             raw = await mcp_runner.call_tool(call.name, dict(call.arguments or {}))
-            item = McpToolCall(
-                name=call.name, arguments=dict(call.arguments or {}), result=raw
-            )
+            item = McpToolCall(name=call.name, arguments=dict(call.arguments or {}), result=raw)
             batch.append(item)
             executed.append(item)
         if not batch:
