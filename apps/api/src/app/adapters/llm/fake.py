@@ -174,11 +174,13 @@ class FakeLLMProvider:
         if "Результат MCP" in last:
             nxt = _next_pipeline_call(last, names)
             if nxt is not None:
-                name, arguments = nxt
+                pipe_name, pipe_args = nxt
                 return CompletionResult(
                     content="",
                     model_id=self._resolve(model),
-                    tool_calls=[ToolCallRequest(id="fake-pipe", name=name, arguments=arguments)],
+                    tool_calls=[
+                        ToolCallRequest(id="fake-pipe", name=pipe_name, arguments=pipe_args)
+                    ],
                 )
             return CompletionResult(
                 content=_summarize_mcp_followup(last),
