@@ -150,7 +150,7 @@ async def test_run_agent_pipeline_search_summarize_save() -> None:
     assert '"source": "summarize"' in brief or '"source":"summarize"' in brief
     assert [call.name for call in outcome.mcp_calls] == names
     assert "сохран" in outcome.result.content.lower()
-    assert router.complete_count == 4
+    assert router.complete_count == 2
     assert router.last_tools
 
 

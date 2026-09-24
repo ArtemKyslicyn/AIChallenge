@@ -207,6 +207,15 @@ async def _run_mcp_round(
             executed.append(item)
         if not batch:
             break
+        nxt = _continue_pipeline(batch[-1], names)
+        if nxt is not None:
+            name, arguments = nxt
+            current = CompletionResult(
+                content=current.content or "",
+                model_id=current.model_id,
+                tool_calls=[ToolCallRequest(id="pulse-pipeline", name=name, arguments=arguments)],
+            )
+            continue
         conversation = [
             *conversation,
             ChatMessage(
