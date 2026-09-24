@@ -39,6 +39,36 @@ const PRESETS = [
   },
 ] as const;
 
+function callPayload(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function handoffLines(call: AgentMcpCallDto): string[] {
+  const body = callPayload(call.result);
+  if (call.name === "search") {
+    const health = body.health as { ok?: boolean; latency_ms?: number } | undefined;
+    const live = health?.ok ? `health ok${health.latency_ms != null ? `, ${health.latency_ms} мс` : ""}` : "health down";
+    return [`собрал факты: ${live}`, "JSON уходит в summarize → payload"];
+  }
+  if (call.name === "summarize") {
+    const from = typeof body.from === "string" ? body.from : "search";
+    const lead = typeof body.body === "string" ? body.body.split("\n").find((line) => line && !line.startsWith("#")) : "";
+    return [`принял payload из ${from}`, lead ? lead : "бриф собран", "JSON уходит в saveToFile → brief"];
+  }
+  if (call.name === "saveToFile") {
+    const from = typeof body.from === "string" ? body.from : "summarize";
+    const path = typeof body.path === "string" ? body.path : "файл";
+    const bytes = body.bytes != null ? `${body.bytes} байт` : "";
+    return [`принял brief из ${from}`, `записал ${path}${bytes ? ` · ${bytes}` : ""}`];
+  }
+  return [];
+}
+
 function paramSummary(tool: McpCatalogDto["tools"][number]): string {
   const props = tool.parameters?.properties;
   if (!props || Object.keys(props).length === 0) return "—";
@@ -366,6 +396,13 @@ export function McpCatalog() {
                 <header>
                   <span>{index + 1}</span> <code>{call.name}</code>
                 </header>
+                {handoffLines(call).length > 0 ? (
+                  <ul className="mcp-handoff">
+                    {handoffLines(call).map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <pre>{call.result}</pre>
               </article>
             ))}

@@ -1596,8 +1596,14 @@ async function challenge19(page) {
   await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ timeout: 90_000 });
   await page.locator('.pulse-brief[data-ok="1"]').waitFor({ timeout: 20_000 });
   await page.locator(".pulse-reply").waitFor();
-  await pauseOn(board, 5000);
-  await settle(page, 800);
+  for (const name of ["search", "summarize", "saveToFile"]) {
+    const card = page.locator(`.mcp-call[data-tool="${name}"]`);
+    await card.scrollIntoViewIfNeeded();
+    await pauseOn(card, 2800);
+  }
+  await page.locator(".pulse-brief").scrollIntoViewIfNeeded();
+  await pauseOn(page.locator(".pulse-brief"), 2500);
+  await settle(page, 600);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
