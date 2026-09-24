@@ -154,6 +154,35 @@ async def test_run_agent_pipeline_search_summarize_save() -> None:
     assert router.last_tools
 
 
+@pytest.mark.asyncio
+async def test_pipeline_continues_when_model_only_narrates() -> None:
+    class NarratingRouter:
+        async def complete_chat(
+            self, messages, preferred_model="auto", *, generation=None, tools=None
+        ):
+            _ = tools
+            if any("Результат MCP saveToFile" in (m.content or "") for m in messages):
+                return CompletionResult(content="Бриф сохранён: /tmp/night-brief.md", model_id="x")
+            return CompletionResult(content="сейчас вызову следующий инструмент", model_id="x")
+
+        async def stream_chat(self, *args, **kwargs):  # pragma: no cover
+            raise NotImplementedError
+
+    runner = FakeMcpToolRunner()
+    outcome = await run_agent(
+        definition=AgentDefinition(name="P", system_prompt="ops", preferred_model="x"),
+        message="Собери ночной бриф пайплайном",
+        router=NarratingRouter(),  # type: ignore[arg-type]
+        enabled=True,
+        max_message_chars=8000,
+        mcp_runner=runner,
+    )
+    assert [name for name, _args in runner.calls] == ["search", "summarize", "saveToFile"]
+    assert "search" in runner.calls[1][1]["payload"]
+    assert "summarize" in runner.calls[2][1]["brief"]
+    assert "сохран" in outcome.result.content.lower()
+
+
 def test_detect_pulse_intent_pipeline() -> None:
     name, args = detect_pulse_intent(
         "Собери ночной бриф пайплайном",
