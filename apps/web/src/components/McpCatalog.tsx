@@ -14,11 +14,13 @@ import {
 const PULSE_AGENT = {
   name: "Stand Watch",
   system_prompt:
-    "Ты дежурный оператор стенда. Сначала watch_brief. Потом детали: probe_stand, model_pulse, latest_digest. Ночную вахту ставь schedule_digest. Инцидент подтверждай ack_incident. Говори человеку, что делать дальше, без каталога инструментов.",
+    "Ты дежурный оператор стенда. Сначала watch_brief. Потом детали: probe_stand, model_pulse, latest_digest. Ночную вахту ставь schedule_digest. Инцидент подтверждай ack_incident. Ночной бриф — пайплайн из трёх MCP-инструментов: search собирает JSON, summarize(payload) обрабатывает его, saveToFile(brief) сохраняет файл. Не останавливайся после первого вызова, передай JSON дальше. Говори человеку, что делать дальше, без каталога инструментов.",
   preferred_model: "auto",
   temperature: 0.2,
   max_tokens: 700,
 };
+
+const PIPELINE = ["search", "summarize", "saveToFile"] as const;
 
 const PRESETS = [
   { id: "watch", label: "Вахта", message: "Что на вахте? Открой инциденты" },
@@ -29,6 +31,11 @@ const PRESETS = [
     id: "schedule",
     label: "Сводка каждые 60 с",
     message: "Поставь периодическую сводку каждые 60 секунд",
+  },
+  {
+    id: "pipeline",
+    label: "Ночной бриф",
+    message: "Собери ночной бриф пайплайном search → summarize → saveToFile",
   },
 ] as const;
 
@@ -117,6 +124,8 @@ export function McpCatalog() {
   const ranking = digest?.pulse?.ranking ?? [];
   const action = pulse?.next_action ?? pulse?.watch?.next_action;
   const probe = pulse?.watch?.latest_probe;
+  const archived = pulse?.latest_brief;
+  const callNames = new Set((reply?.mcp_calls ?? []).map((call) => call.name));
 
   return (
     <section className="mcp-board mcp-board--pulse" aria-labelledby="mcp-title">
@@ -125,7 +134,7 @@ export function McpCatalog() {
           <h2 id="mcp-title">MCP</h2>
           <p className="mcp-board-sub">
             Дежурство стенда. Пока модели отвечают посетителям, эта страница смотрит health,
-            жалобы на модели и пишет ночную сводку. Агент вызывает те же MCP-инструменты.
+            жалобы на модели и пишет ночной бриф пайплайном search → summarize → saveToFile.
           </p>
         </div>
         <p className="mcp-status" data-state={data?.connected ? "ok" : "off"} aria-live="polite">
@@ -276,13 +285,36 @@ export function McpCatalog() {
             </ul>
           )}
         </div>
+        <div className="pulse-brief" data-ok={archived ? "1" : "0"}>
+          <h3>Архив брифа</h3>
+          {archived ? (
+            <>
+              <p className="pulse-digest-line">{archived.title || "Ночной бриф"}</p>
+              <p className="pulse-digest-meta">
+                {archived.path ? <code>{archived.path}</code> : "файл записан"}
+                {archived.created_at ? ` · ${archived.created_at}` : ""}
+              </p>
+            </>
+          ) : (
+            <p className="pulse-digest-line">Файла ещё нет — запустите пайплайн «Ночной бриф».</p>
+          )}
+        </div>
       </section>
 
       <section className="pulse-ops" aria-labelledby="pulse-ops-title">
         <h3 id="pulse-ops-title">Спросить дежурного</h3>
         <p className="pulse-digest-meta">
-          Агент ходит в MCP и отвечает, что чинить. Не каталог — смена.
+          Агент ходит в MCP и отвечает, что чинить. Ночной бриф сам проходит search → summarize →
+          saveToFile.
         </p>
+        <ol className="pulse-pipe" aria-label="Пайплайн MCP">
+          {PIPELINE.map((name, index) => (
+            <li key={name} data-done={callNames.has(name) ? "1" : "0"}>
+              <span>{index + 1}</span>
+              <code>{name}</code>
+            </li>
+          ))}
+        </ol>
         <div className="pulse-presets">
           {PRESETS.map((preset) => (
             <button
@@ -325,10 +357,14 @@ export function McpCatalog() {
               model_id <code>{reply.model_id}</code>
             </p>
             <p className="pulse-reply-body">{reply.content}</p>
-            {(reply.mcp_calls ?? []).map((call: AgentMcpCallDto) => (
-              <article key={`${call.name}-${call.result.slice(0, 24)}`} className="mcp-call">
+            {(reply.mcp_calls ?? []).map((call: AgentMcpCallDto, index) => (
+              <article
+                key={`${call.name}-${index}`}
+                className="mcp-call"
+                data-tool={call.name}
+              >
                 <header>
-                  <code>{call.name}</code>
+                  <span>{index + 1}</span> <code>{call.name}</code>
                 </header>
                 <pre>{call.result}</pre>
               </article>

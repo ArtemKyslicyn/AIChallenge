@@ -1578,6 +1578,28 @@ async function challenge18(page) {
   await settle(page, 800);
 }
 
+async function challenge19(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=mcp", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.15);
+  await settle(page, 1000);
+  const board = page.locator(".mcp-board");
+  await board.waitFor({ timeout: 20_000 });
+  await page.getByRole("cell", { name: "search", exact: true }).waitFor({ timeout: 20_000 });
+  await page.getByRole("cell", { name: "summarize", exact: true }).waitFor();
+  await page.getByRole("cell", { name: "saveToFile", exact: true }).waitFor();
+  await page.locator(".pulse-pipe").waitFor();
+  await pauseOn(board, 1600);
+  await page.getByRole("button", { name: /ночной бриф/i }).click();
+  await page.locator('.mcp-call[data-tool="search"]').waitFor({ timeout: 45_000 });
+  await page.locator('.mcp-call[data-tool="summarize"]').waitFor({ timeout: 45_000 });
+  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ timeout: 45_000 });
+  await page.locator('.pulse-brief[data-ok="1"]').waitFor({ timeout: 20_000 });
+  await page.locator(".pulse-reply").waitFor();
+  await pauseOn(board, 5000);
+  await settle(page, 800);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1593,8 +1615,9 @@ const out15 = path.join(__dirname, "../15-task-transitions/challenge-15.webm");
 const out16 = path.join(__dirname, "../16-mcp-connect/challenge-16.webm");
 const out17 = path.join(__dirname, "../17-mcp-tool/challenge-17.webm");
 const out18 = path.join(__dirname, "../18-mcp-scheduler/challenge-18.webm");
+const out19 = path.join(__dirname, "../19-mcp-compose/challenge-19.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1675,5 +1698,9 @@ if (ONLY.includes("17")) {
 if (ONLY.includes("18")) {
   console.log("Recording challenge 18 against", BASE);
   await recordChallenge("18", out18, (page) => challenge18(page));
+}
+if (ONLY.includes("19")) {
+  console.log("Recording challenge 19 against", BASE);
+  await recordChallenge("19", out19, (page) => challenge19(page));
 }
 console.log("done");

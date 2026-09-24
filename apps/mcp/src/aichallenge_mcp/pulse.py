@@ -86,6 +86,13 @@ def _connect() -> sqlite3.Connection:
             acked_at TEXT,
             ack_note TEXT
         );
+        CREATE TABLE IF NOT EXISTS briefs (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            path TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL
+        );
         """
     )
     conn.commit()
@@ -575,10 +582,134 @@ def recommend_action(
     }
 
 
+def collect_stand(hours: int = 24) -> dict[str, Any]:
+    """Search step: pull live stand facts for the next tool."""
+    window = max(1, min(int(hours), MAX_HOURS))
+    health = build_probe(persist=True)
+    pulse = build_model_pulse(window)
+    evaluate_watch(health=health, pulse=pulse)
+    return {
+        "source": "search",
+        "hours": window,
+        "collected_at": _now_iso(),
+        "health": health,
+        "pulse": pulse,
+        "watch": watch_brief(),
+    }
+
+
+def _parse_payload(raw: str) -> dict[str, Any]:
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return {"body": text}
+        else:
+            return {"body": text}
+    return parsed if isinstance(parsed, dict) else {"value": parsed}
+
+
+def compose_brief(payload: str) -> dict[str, Any]:
+    """Summarize step: turn search JSON into an operator brief."""
+    data = _parse_payload(payload)
+    health = data.get("health") if isinstance(data.get("health"), dict) else {}
+    pulse = data.get("pulse") if isinstance(data.get("pulse"), dict) else {}
+    watch = data.get("watch") if isinstance(data.get("watch"), dict) else {}
+    ranking = list(pulse.get("ranking") or [])
+    top = ranking[0] if ranking else {}
+    incidents = list(watch.get("open_incidents") or [])
+    if health.get("ok"):
+        lead = f"стенд жив, {health.get('latency_ms')} мс"
+    else:
+        lead = f"стенд не отвечает ({health.get('error') or health.get('http_status')})"
+    if top.get("model_id"):
+        lead += f"; лидер {top.get('model_id')}"
+    if incidents:
+        lead += f"; инцидентов {len(incidents)}"
+    title = "Ночной бриф стенда"
+    body = "\n".join(
+        [
+            f"# {title}",
+            "",
+            lead,
+            "",
+            f"severity: {watch.get('severity') or 'unknown'}",
+            f"next: {(watch.get('next_action') or {}).get('title') or '—'}",
+        ]
+    )
+    return {
+        "source": "summarize",
+        "title": title,
+        "body": body,
+        "severity": watch.get("severity") or ("ok" if health.get("ok") else "critical"),
+        "from": data.get("source") or "search",
+        "composed_at": _now_iso(),
+    }
+
+
+def archive_brief(brief: str, name: str = "night-brief") -> dict[str, Any]:
+    """saveToFile step: persist the summarized brief to disk and SQLite."""
+    data = _parse_payload(brief)
+    title = str(data.get("title") or name or "night-brief")
+    body = str(data.get("body") or brief)
+    stamp = _now().strftime("%Y%m%dT%H%M%SZ")
+    slug = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in (name or "brief"))[:40]
+    folder = data_dir() / "briefs"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{stamp}-{slug}.md"
+    path.write_text(body + "\n", encoding="utf-8")
+    ident = str(uuid4())
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO briefs (id, created_at, path, title, payload) VALUES (?, ?, ?, ?, ?)",
+            (ident, _now_iso(), str(path), title[:200], json.dumps(data, ensure_ascii=False)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "source": "saveToFile",
+        "id": ident,
+        "path": str(path),
+        "title": title,
+        "bytes": path.stat().st_size,
+        "from": data.get("source") or "summarize",
+        "saved_at": _now_iso(),
+    }
+
+
+def latest_brief_payload() -> dict[str, Any]:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, created_at, path, title FROM briefs ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return {"brief": None}
+    return {
+        "id": row["id"],
+        "created_at": row["created_at"],
+        "path": row["path"],
+        "title": row["title"],
+    }
+
+
 def pulse_state() -> dict[str, Any]:
     latest = latest_digest_payload()
     jobs = list_jobs_payload()
     brief = watch_brief()
+    archived = latest_brief_payload()
     return {
         "jobs": jobs["jobs"],
         "latest_digest": latest.get("digest"),
@@ -587,4 +718,5 @@ def pulse_state() -> dict[str, Any]:
         "watch": brief,
         "incidents": brief["open_incidents"],
         "next_action": brief.get("next_action"),
+        "latest_brief": archived if archived.get("id") else None,
     }

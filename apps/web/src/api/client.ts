@@ -1693,6 +1693,12 @@ export interface McpPulseDto {
     acked?: boolean;
   }>;
   next_action?: McpNextActionDto | null;
+  latest_brief?: {
+    id?: string;
+    created_at?: string;
+    path?: string;
+    title?: string;
+  } | null;
 }
 
 export interface McpNextActionDto {

@@ -8,6 +8,7 @@ async def test_fake_catalog_lists_expected_tools() -> None:
     assert catalog.connected is True
     assert {"echo", "time_now", "list_stages"} <= names
     assert {"probe_stand", "model_pulse", "schedule_digest"} <= names
+    assert {"search", "summarize", "saveToFile"} <= names
 
 
 async def test_http_catalog_without_token_is_disconnected() -> None:

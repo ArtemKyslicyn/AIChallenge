@@ -149,6 +149,7 @@ class HttpMcpPulse:
             item for item in (payload.get("incidents") or []) if isinstance(item, dict)
         )
         action = payload.get("next_action")
+        brief = payload.get("latest_brief")
         return McpPulseSnapshot(
             jobs=jobs,
             latest_digest=digest if isinstance(digest, dict) else None,
@@ -157,6 +158,7 @@ class HttpMcpPulse:
             watch=watch if isinstance(watch, dict) else None,
             incidents=incidents,
             next_action=action if isinstance(action, dict) else None,
+            latest_brief=brief if isinstance(brief, dict) else None,
         )
 
 
@@ -236,6 +238,27 @@ class FakeMcpCatalog:
                     "Recent /health probes from SQLite.",
                     {"type": "object", "properties": {"limit": {"type": "integer"}}},
                 ),
+                McpToolInfo(
+                    "search",
+                    "Collect stand facts for the night-brief pipeline.",
+                    {"type": "object", "properties": {"hours": {"type": "integer"}}},
+                ),
+                McpToolInfo(
+                    "summarize",
+                    "Turn search JSON into an operator brief.",
+                    {"type": "object", "properties": {"payload": {"type": "string"}}},
+                ),
+                McpToolInfo(
+                    "saveToFile",
+                    "Save the brief to disk and SQLite.",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "brief": {"type": "string"},
+                            "name": {"type": "string"},
+                        },
+                    },
+                ),
             ),
         )
 
@@ -263,4 +286,16 @@ class FakeMcpToolRunner:
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         self.calls.append((name, dict(arguments or {})))
+        if name == "search":
+            return (
+                '{"source":"search","health":{"ok":true,"latency_ms":12,'
+                '"payload":{"status":"ok"}},"pulse":{"ranking":[]},"watch":{"severity":"ok"}}'
+            )
+        if name == "summarize":
+            return (
+                '{"source":"summarize","title":"Ночной бриф стенда",'
+                '"body":"стенд жив, 12 мс","severity":"ok"}'
+            )
+        if name == "saveToFile":
+            return '{"source":"saveToFile","path":"/tmp/night-brief.md","id":"brief-1","bytes":32}'
         return self._result

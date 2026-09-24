@@ -16,8 +16,27 @@ _WORDS = re.compile(r"\S+\s*")
 _PULSE_HINT = re.compile(
     r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
     r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд|"
-    r"вахт|инцидент|watch_brief|дежур"
+    r"вахт|инцидент|watch_brief|дежур|пайплайн|цепочк|ночной бриф|saveToFile|summarize"
 )
+
+
+def _extract_json_blob(text: str) -> str:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return text[start : end + 1]
+    return ""
+
+
+def _next_pipeline_call(
+    last: str, names: set[str]
+) -> tuple[str, dict[str, object]] | None:
+    blob = _extract_json_blob(last)
+    if "Результат MCP search" in last and "summarize" in names:
+        return "summarize", {"payload": blob}
+    if "Результат MCP summarize" in last and "saveToFile" in names:
+        return "saveToFile", {"brief": blob, "name": "night-brief"}
+    return None
 
 
 def _openai_tool_names(tools: list[dict[str, object]] | None) -> set[str]:
@@ -51,6 +70,10 @@ def _summarize_mcp_followup(last: str) -> str:
             f"Стенд отвечает. /health = ok, задержка {blob.get('latency_ms', '—')} мс. "
             "Можно работать дальше."
         )
+    if blob.get("source") == "saveToFile" or blob.get("path"):
+        return f"Бриф сохранён: {blob.get('path') or blob.get('title')}"
+    if blob.get("source") == "summarize" and blob.get("body"):
+        return str(blob.get("body"))
     if blob.get("severity") and blob.get("open_incidents") is not None:
         return f"Вахта {blob.get('severity')}: {blob.get('summary')}"
     if blob.get("summary"):
@@ -148,7 +171,18 @@ class FakeLLMProvider:
     ) -> CompletionResult:
         self.last_generation = generation
         last = next((m.content for m in reversed(messages) if m.content), "")
+        names = _openai_tool_names(tools) if tools else set()
         if "Результат MCP" in last:
+            nxt = _next_pipeline_call(last, names)
+            if nxt is not None:
+                name, arguments = nxt
+                return CompletionResult(
+                    content="",
+                    model_id=self._resolve(model),
+                    tool_calls=[
+                        ToolCallRequest(id="fake-pipe", name=name, arguments=arguments)
+                    ],
+                )
             return CompletionResult(
                 content=_summarize_mcp_followup(last),
                 model_id=self._resolve(model),
@@ -167,13 +201,23 @@ class FakeLLMProvider:
                         )
                     ],
                 )
-            names = _openai_tool_names(tools)
             if _PULSE_HINT.search(last) and names:
                 name = "probe_stand"
                 arguments: dict[str, object] = {}
-                if re.search(r"(?i)вахт|инцидент|watch_brief|дежур", last) and "watch_brief" in names:
+                if re.search(
+                    r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", last
+                ) and "search" in names:
+                    name = "search"
+                    arguments = {"hours": 24}
+                elif (
+                    re.search(r"(?i)вахт|инцидент|watch_brief|дежур", last)
+                    and "watch_brief" in names
+                ):
                     name = "watch_brief"
-                elif re.search(r"(?i)расписан|schedule|каждые", last) and "schedule_digest" in names:
+                elif (
+                    re.search(r"(?i)расписан|schedule|каждые", last)
+                    and "schedule_digest" in names
+                ):
                     name = "schedule_digest"
                     arguments = {"interval_seconds": 60, "hours": 24, "note": "pulse"}
                 elif (

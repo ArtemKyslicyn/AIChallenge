@@ -8,7 +8,11 @@ from pathlib import Path
 
 from aichallenge_mcp.pulse import (
     ack_incident,
+    archive_brief,
     build_probe,
+    collect_stand,
+    compose_brief,
+    latest_brief_payload,
     latest_digest_payload,
     list_jobs_payload,
     process_due_jobs,
@@ -91,3 +95,30 @@ def test_pulse_tools_have_parameter_schemas() -> None:
     sched = tools["schedule_digest"].parameters
     assert "interval_seconds" in sched["properties"]
     assert "hours" in sched["properties"]
+    assert "hours" in tools["search"].parameters["properties"]
+    assert "payload" in tools["summarize"].parameters["properties"]
+    assert "brief" in tools["saveToFile"].parameters["properties"]
+
+
+def test_pipeline_search_summarize_save(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MCP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("STAND_API_URL", "http://127.0.0.1:9")
+    collected = collect_stand(hours=6)
+    assert collected["source"] == "search"
+    assert collected["hours"] == 6
+    assert "health" in collected
+    summarized = compose_brief(json.dumps(collected, ensure_ascii=False))
+    assert summarized["source"] == "summarize"
+    assert summarized["from"] == "search"
+    assert summarized["title"]
+    assert "стенд" in summarized["body"]
+    saved = archive_brief(json.dumps(summarized, ensure_ascii=False), name="night-brief")
+    assert saved["source"] == "saveToFile"
+    assert saved["from"] == "summarize"
+    path = Path(saved["path"])
+    assert path.is_file()
+    assert "Ночной бриф" in path.read_text(encoding="utf-8")
+    latest = latest_brief_payload()
+    assert latest["id"] == saved["id"]
+    via_dispatch = json.loads(dispatch_tool("search", {"hours": 6}))
+    assert via_dispatch["source"] == "search"

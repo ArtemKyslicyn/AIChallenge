@@ -98,7 +98,7 @@ def merge_system_extra(system_prompt: str, system_extra: str) -> str:
 _PULSE_HINT = re.compile(
     r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
     r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд|"
-    r"вахт|инцидент|watch_brief|дежур"
+    r"вахт|инцидент|watch_brief|дежур|пайплайн|цепочк|ночной бриф|saveToFile|summarize"
 )
 
 
@@ -110,6 +110,9 @@ def detect_pulse_intent(
         return None
     if not _PULSE_HINT.search(clean):
         return None
+    if re.search(r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", clean):
+        if "search" in available:
+            return "search", {"hours": 24}
     if re.search(r"(?i)вахт|инцидент|watch_brief|дежур", clean) and "watch_brief" in available:
         return "watch_brief", {}
     if re.search(r"(?i)расписан|schedule_digest|каждые", clean) and "schedule_digest" in available:
@@ -149,11 +152,15 @@ def _openai_tool_names(tools: list[dict[str, object]]) -> set[str]:
     return names
 
 
+MAX_MCP_ROUNDS = 4
+
+
 def _followup_user_message(calls: list[McpToolCall]) -> str:
     blocks = [f"Результат MCP {call.name}:\n{call.result}" for call in calls]
     return (
         "\n\n".join(blocks)
-        + "\n\nОтветь оператору по этим данным. Без выдумки, коротко, по фактам."
+        + "\n\nЕсли пайплайн не закончен — вызови следующую ступень и передай JSON. "
+        "Иначе ответь оператору по фактам, без выдумки."
     )
 
 
@@ -169,33 +176,43 @@ async def _run_mcp_round(
     user_message: str,
 ) -> tuple[CompletionResult, tuple[McpToolCall, ...]]:
     names = _openai_tool_names(tools)
-    requested = list(result.tool_calls or [])
-    if not requested:
-        intent = detect_pulse_intent(user_message, names)
-        if intent is None:
-            return result, ()
-        name, arguments = intent
-        requested = [ToolCallRequest(id="pulse-intent", name=name, arguments=arguments)]
-
+    conversation = list(turns)
+    current = result
     executed: list[McpToolCall] = []
-    for call in requested[:3]:
-        raw = await mcp_runner.call_tool(call.name, dict(call.arguments or {}))
-        executed.append(
-            McpToolCall(name=call.name, arguments=dict(call.arguments or {}), result=raw)
+    for round_index in range(MAX_MCP_ROUNDS):
+        requested = list(current.tool_calls or [])
+        if not requested and round_index == 0:
+            intent = detect_pulse_intent(user_message, names)
+            if intent is not None:
+                name, arguments = intent
+                requested = [ToolCallRequest(id="pulse-intent", name=name, arguments=arguments)]
+        if not requested:
+            break
+        batch: list[McpToolCall] = []
+        for call in requested[:3]:
+            raw = await mcp_runner.call_tool(call.name, dict(call.arguments or {}))
+            item = McpToolCall(
+                name=call.name, arguments=dict(call.arguments or {}), result=raw
+            )
+            batch.append(item)
+            executed.append(item)
+        if not batch:
+            break
+        conversation = [
+            *conversation,
+            ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=current.content or f"Вызвал {', '.join(item.name for item in batch)}",
+            ),
+            ChatMessage(role=MessageRole.USER, content=_followup_user_message(batch)),
+        ]
+        current = await router.complete_chat(
+            conversation,
+            preferred_model=preferred,
+            generation=generation,
+            tools=tools,
         )
-    if not executed:
-        return result, ()
-
-    follow = [
-        *turns,
-        ChatMessage(
-            role=MessageRole.ASSISTANT,
-            content=result.content or f"Вызвал {', '.join(item.name for item in executed)}",
-        ),
-        ChatMessage(role=MessageRole.USER, content=_followup_user_message(executed)),
-    ]
-    final = await router.complete_chat(follow, preferred_model=preferred, generation=generation)
-    return final, tuple(executed)
+    return current, tuple(executed)
 
 
 async def run_agent(

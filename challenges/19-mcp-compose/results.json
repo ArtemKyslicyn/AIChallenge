@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-09-24T11:24:09.058726+00:00",
+  "transport": "stdio",
+  "tools": [
+    "ack_incident",
+    "echo",
+    "latest_digest",
+    "list_jobs",
+    "list_stages",
+    "model_pulse",
+    "probe_history",
+    "probe_stand",
+    "saveToFile",
+    "schedule_digest",
+    "search",
+    "summarize",
+    "time_now",
+    "watch_brief"
+  ],
+  "search": {
+    "source": "search",
+    "hours": 24,
+    "collected_at": "2026-09-24T11:24:08+00:00",
+    "health": {
+      "ok": true,
+      "url": "http://127.0.0.1:8000/api/v1/health",
+      "http_status": 200,
+      "latency_ms": 7,
+      "payload": {
+        "status": "ok"
+      },
+      "error": null,
+      "checked_at": "2026-09-24T11:24:08+00:00"
+    },
+    "pulse": {
+      "hours": 24,
+      "checked_at": "2026-09-24T11:24:08+00:00",
+      "ranking": [],
+      "attention": [],
+      "cascade": null,
+      "latency_ms": {
+        "pareto": 4,
+        "feedback": 4
+      },
+      "http_status": {
+        "pareto": 200,
+        "feedback": 200
+      },
+      "errors": []
+    },
+    "watch": {
+      "severity": "ok",
+      "summary": "вахта спокойна, 7 мс",
+      "open_incidents": [],
+      "open_count": 0,
+      "latest_probe": {
+        "at": "2026-09-24T11:24:08+00:00",
+        "ok": true,
+        "latency_ms": 7
+      },
+      "latency_delta_ms": null,
+      "probes": [
+        {
+          "at": "2026-09-24T11:24:08+00:00",
+          "ok": true,
+          "latency_ms": 7
+        }
+      ],
+      "next_action": {
+        "id": "schedule",
+        "title": "Ночная вахта выключена",
+        "detail": "Пока никого нет у экрана, сводки не пишутся. Включите ежечасный обход.",
+        "cta": "schedule"
+      }
+    }
+  },
+  "summarize": {
+    "source": "summarize",
+    "title": "Ночной бриф стенда",
+    "body": "# Ночной бриф стенда\n\nстенд жив, 7 мс\n\nseverity: ok\nnext: Ночная вахта выключена",
+    "severity": "ok",
+    "from": "search",
+    "composed_at": "2026-09-24T11:24:08+00:00"
+  },
+  "saveToFile": {
+    "source": "saveToFile",
+    "id": "a4c516ff-72ac-4620-95d2-6c588fef1b3a",
+    "path": "/var/folders/pp/k9p3p7rj5c710yym2sbglj5c0000gn/T/pulse-19-_q1krt8t/briefs/20260924T112409Z-night-brief.md",
+    "title": "Ночной бриф стенда",
+    "bytes": 127,
+    "from": "summarize",
+    "saved_at": "2026-09-24T11:24:09+00:00"
+  },
+  "checks": {
+    "tools_registered": true,
+    "search_source": true,
+    "summarize_from_search": true,
+    "saved_from_summarize": true
+  }
+}

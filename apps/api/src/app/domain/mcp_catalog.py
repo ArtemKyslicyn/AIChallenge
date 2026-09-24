@@ -39,6 +39,7 @@ class McpPulseSnapshot:
     watch: dict[str, Any] | None = None
     incidents: tuple[dict[str, Any], ...] = ()
     next_action: dict[str, Any] | None = None
+    latest_brief: dict[str, Any] | None = None
 
 
 class McpCatalogPort(Protocol):
