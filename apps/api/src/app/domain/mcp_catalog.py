@@ -11,6 +11,7 @@ class McpToolInfo:
     name: str
     description: str
     parameters: dict[str, Any] | None = None
+    server: str = ""
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class McpToolCall:
     name: str
     arguments: dict[str, Any]
     result: str
+    server: str = ""
 
 
 @dataclass(frozen=True)

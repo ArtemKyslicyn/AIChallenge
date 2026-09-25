@@ -28,6 +28,36 @@ from aichallenge_mcp.pulse import (
 )
 
 SERVER_NAME = "aichallenge-mcp"
+#: Logical MCP servers the agent routes between. Tools stay on this process.
+ORCH_SERVERS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("watch", "Вахта", ("probe_stand", "watch_brief", "ack_incident", "probe_history")),
+    ("models", "Модели", ("model_pulse", "schedule_digest", "latest_digest", "list_jobs")),
+    ("brief", "Бриф", ("search", "summarize", "saveToFile")),
+    ("stand", "Стенд", ("echo", "time_now", "list_stages")),
+)
+
+
+def server_for_tool(name: str) -> str:
+    for server_id, _title, tools in ORCH_SERVERS:
+        if name in tools:
+            return server_id
+    return "stand"
+
+
+def orch_catalog() -> list[dict[str, Any]]:
+    rows = []
+    owned = {tool["name"]: tool for tool in _tool_catalog_rows()}
+    for server_id, title, tools in ORCH_SERVERS:
+        rows.append(
+            {
+                "id": server_id,
+                "title": title,
+                "tools": [owned[name] for name in tools if name in owned],
+            }
+        )
+    return rows
+
+
 TASK_STAGES = ("planning", "execution", "validation", "done")
 EXPECTED_TOOL_NAMES = frozenset({"echo", "time_now", "list_stages"})
 PULSE_TOOL_NAMES = frozenset(
@@ -190,7 +220,7 @@ def dispatch_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
     raise ValueError(f"unknown tool: {name}")
 
 
-def _tool_catalog() -> list[dict[str, Any]]:
+def _tool_catalog_rows() -> list[dict[str, Any]]:
     tools = getattr(mcp, "_tool_manager").list_tools()
     rows: list[dict[str, Any]] = []
     for tool in tools:
@@ -203,9 +233,14 @@ def _tool_catalog() -> list[dict[str, Any]]:
                 "name": tool.name,
                 "description": (tool.description or "").strip(),
                 "parameters": params,
+                "server": server_for_tool(tool.name),
             }
         )
     return rows
+
+
+def _tool_catalog() -> list[dict[str, Any]]:
+    return _tool_catalog_rows()
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -234,13 +269,25 @@ async def invoke(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "name required"}, status_code=400)
     if not isinstance(arguments, dict):
         return JSONResponse({"ok": False, "error": "arguments must be an object"}, status_code=400)
+    owner = server_for_tool(name)
+    requested = str(body.get("server") or "").strip()
+    if requested and requested != owner:
+        return JSONResponse(
+            {"ok": False, "error": f"{name} is on server {owner}, not {requested}"},
+            status_code=409,
+        )
     try:
         result = dispatch_tool(name, arguments)
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=404)
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
-    return JSONResponse({"ok": True, "name": name, "result": result})
+    return JSONResponse({"ok": True, "name": name, "server": owner, "result": result})
+
+
+@mcp.custom_route("/servers", methods=["GET"])
+async def servers(_request: Request) -> JSONResponse:
+    return JSONResponse({"servers": orch_catalog()})
 
 
 @mcp.custom_route("/pulse", methods=["GET"])

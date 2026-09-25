@@ -16,7 +16,8 @@ _WORDS = re.compile(r"\S+\s*")
 _PULSE_HINT = re.compile(
     r"(?i)пульс|здоров|health|рейтинг|сводк|digest|probe_stand|model_pulse|"
     r"ranking|расписан|schedule|pareto|статус стенда|проверь стенд|"
-    r"вахт|инцидент|watch_brief|дежур|пайплайн|цепочк|ночной бриф|saveToFile|summarize"
+    r"вахт|инцидент|watch_brief|дежур|пайплайн|цепочк|ночной бриф|saveToFile|summarize|"
+    r"разбор смены|orchestration|несколько сервер"
 )
 
 
@@ -203,7 +204,11 @@ class FakeLLMProvider:
             if _PULSE_HINT.search(last) and names:
                 name = "probe_stand"
                 arguments: dict[str, object] = {}
-                if (
+                if re.search(r"(?i)разбор смены|orchestration|несколько сервер", last) and (
+                    "watch_brief" in names
+                ):
+                    name = "watch_brief"
+                elif (
                     re.search(r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", last)
                     and "search" in names
                 ):

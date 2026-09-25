@@ -183,6 +183,36 @@ async def test_pipeline_continues_when_model_only_narrates() -> None:
     assert "сохран" in outcome.result.content.lower()
 
 
+@pytest.mark.asyncio
+async def test_shift_review_routes_across_servers() -> None:
+    runner = FakeMcpToolRunner()
+    router = _RecordingRouter(FakeLLMProvider())
+    outcome = await run_agent(
+        definition=AgentDefinition(name="Pulse", system_prompt="ops", preferred_model="fake-model"),
+        message="Сделай разбор смены через несколько серверов",
+        router=router,  # type: ignore[arg-type]
+        enabled=True,
+        max_message_chars=8000,
+        mcp_runner=runner,
+    )
+    assert [name for name, _args in runner.calls] == [
+        "watch_brief",
+        "model_pulse",
+        "search",
+        "summarize",
+        "saveToFile",
+    ]
+    assert [call.server for call in outcome.mcp_calls] == [
+        "watch",
+        "models",
+        "brief",
+        "brief",
+        "brief",
+    ]
+    assert "search" in runner.calls[3][1]["payload"]
+    assert runner.calls[4][1]["name"] == "shift-review"
+
+
 def test_detect_pulse_intent_pipeline() -> None:
     name, args = detect_pulse_intent(
         "Собери ночной бриф пайплайном",

@@ -48,6 +48,7 @@ async def mcp_tools(request: Request) -> dict[str, object]:
                 "name": tool.name,
                 "description": tool.description,
                 "parameters": tool.parameters,
+                "server": tool.server,
             }
             for tool in catalog.tools
         ],

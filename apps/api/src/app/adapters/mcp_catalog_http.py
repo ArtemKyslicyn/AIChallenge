@@ -23,6 +23,7 @@ def _tool_info(item: dict[str, Any]) -> McpToolInfo | None:
         name=name,
         description=str(item.get("description") or ""),
         parameters=params if isinstance(params, dict) else None,
+        server=str(item.get("server") or ""),
     )
 
 
@@ -81,17 +82,21 @@ class HttpMcpToolRunner:
         self._base = base_url.rstrip("/")
         self._token = token
         self._catalog = HttpMcpCatalog(base_url, token)
+        self._servers: dict[str, str] = {}
 
     async def openai_tools(self) -> list[dict[str, object]]:
         catalog = await self._catalog.fetch()
         if not catalog.connected:
             return []
+        self._servers = {tool.name: tool.server for tool in catalog.tools if tool.server}
         return [
             {
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": (
+                        f"[{tool.server}] {tool.description}" if tool.server else tool.description
+                    ),
                     "parameters": tool.parameters or {"type": "object", "properties": {}},
                 },
             }
@@ -106,7 +111,11 @@ class HttpMcpToolRunner:
                 response = await client.post(
                     f"{self._base}/invoke",
                     headers=_headers(self._token),
-                    json={"name": name, "arguments": arguments or {}},
+                    json={
+                        "name": name,
+                        "arguments": arguments or {},
+                        "server": self._servers.get(name, ""),
+                    },
                 )
         except httpx.HTTPError as exc:
             return json_error("mcp unreachable", str(exc))
@@ -185,6 +194,7 @@ class FakeMcpCatalog:
                     "probe_stand",
                     "Live health of the stand API: /health status and latency in milliseconds.",
                     {"type": "object", "properties": {}},
+                    "watch",
                 ),
                 McpToolInfo(
                     "model_pulse",
@@ -193,6 +203,7 @@ class FakeMcpCatalog:
                         "type": "object",
                         "properties": {"hours": {"type": "integer", "default": 24}},
                     },
+                    "models",
                 ),
                 McpToolInfo(
                     "schedule_digest",
@@ -220,6 +231,7 @@ class FakeMcpCatalog:
                     "watch_brief",
                     "On-call brief: severity and open incidents.",
                     {"type": "object", "properties": {}},
+                    "watch",
                 ),
                 McpToolInfo(
                     "ack_incident",
@@ -241,11 +253,13 @@ class FakeMcpCatalog:
                     "search",
                     "Collect stand facts for the night-brief pipeline.",
                     {"type": "object", "properties": {"hours": {"type": "integer"}}},
+                    "brief",
                 ),
                 McpToolInfo(
                     "summarize",
                     "Turn search JSON into an operator brief.",
                     {"type": "object", "properties": {"payload": {"type": "string"}}},
+                    "brief",
                 ),
                 McpToolInfo(
                     "saveToFile",
@@ -257,6 +271,7 @@ class FakeMcpCatalog:
                             "name": {"type": "string"},
                         },
                     },
+                    "brief",
                 ),
             ),
         )
@@ -276,7 +291,9 @@ class FakeMcpToolRunner:
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": (
+                        f"[{tool.server}] {tool.description}" if tool.server else tool.description
+                    ),
                     "parameters": tool.parameters or {"type": "object", "properties": {}},
                 },
             }
