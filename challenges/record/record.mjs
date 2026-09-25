@@ -1591,9 +1591,9 @@ async function challenge19(page) {
   await page.locator(".pulse-pipe").waitFor();
   await pauseOn(board, 1600);
   await page.getByRole("button", { name: /ночной бриф/i }).click();
-  await page.locator('.mcp-call[data-tool="search"]').waitFor({ timeout: 90_000 });
-  await page.locator('.mcp-call[data-tool="summarize"]').waitFor({ timeout: 90_000 });
-  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="search"]').waitFor({ state: "attached", timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="summarize"]').waitFor({ state: "attached", timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ state: "attached", timeout: 90_000 });
   await page.locator('.pulse-brief[data-ok="1"]').waitFor({ timeout: 20_000 });
   await page.locator(".pulse-reply").waitFor();
   for (const name of ["search", "summarize", "saveToFile"]) {
@@ -1603,6 +1603,29 @@ async function challenge19(page) {
   }
   await page.locator(".pulse-brief").scrollIntoViewIfNeeded();
   await pauseOn(page.locator(".pulse-brief"), 2500);
+  await settle(page, 600);
+}
+
+async function challenge20(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=mcp", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.15);
+  await settle(page, 1000);
+  const board = page.locator(".mcp-board");
+  await board.waitFor({ timeout: 20_000 });
+  await page.locator('.mcp-server[data-server="watch"]').waitFor({ timeout: 20_000 });
+  await page.locator('.mcp-server[data-server="models"]').waitFor();
+  await page.locator('.mcp-server[data-server="brief"]').waitFor();
+  await pauseOn(page.locator(".mcp-servers"), 1800);
+  await page.getByRole("button", { name: "Разбор смены", exact: true }).click();
+  await page.locator('.mcp-call[data-server="watch"]').waitFor({ state: "attached", timeout: 90_000 });
+  await page.locator('.mcp-call[data-server="models"]').waitFor({ state: "attached", timeout: 90_000 });
+  await page.locator('.mcp-call[data-tool="saveToFile"]').waitFor({ state: "attached", timeout: 90_000 });
+  for (const name of ["watch_brief", "model_pulse", "search", "summarize", "saveToFile"]) {
+    const card = page.locator(`.mcp-call[data-tool="${name}"]`);
+    await card.scrollIntoViewIfNeeded();
+    await pauseOn(card, 2200);
+  }
   await settle(page, 600);
 }
 
@@ -1622,8 +1645,9 @@ const out16 = path.join(__dirname, "../16-mcp-connect/challenge-16.webm");
 const out17 = path.join(__dirname, "../17-mcp-tool/challenge-17.webm");
 const out18 = path.join(__dirname, "../18-mcp-scheduler/challenge-18.webm");
 const out19 = path.join(__dirname, "../19-mcp-compose/challenge-19.webm");
+const out20 = path.join(__dirname, "../20-mcp-orchestration/challenge-20.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1708,5 +1732,9 @@ if (ONLY.includes("18")) {
 if (ONLY.includes("19")) {
   console.log("Recording challenge 19 against", BASE);
   await recordChallenge("19", out19, (page) => challenge19(page));
+}
+if (ONLY.includes("20")) {
+  console.log("Recording challenge 20 against", BASE);
+  await recordChallenge("20", out20, (page) => challenge20(page));
 }
 console.log("done");

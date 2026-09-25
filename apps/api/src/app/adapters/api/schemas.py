@@ -207,6 +207,7 @@ class AgentMcpCallResponse(BaseModel):
     name: str
     arguments: dict[str, object] = Field(default_factory=dict)
     result: str
+    server: str = ""
 
 
 class AgentWorkshopRunResponse(BaseModel):

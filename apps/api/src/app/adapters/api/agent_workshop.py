@@ -131,7 +131,12 @@ def _mcp_runner(settings: object) -> HttpMcpToolRunner | None:
 def _mcp_calls_dto(outcome: object) -> list[AgentMcpCallResponse]:
     calls = getattr(outcome, "mcp_calls", ()) or ()
     return [
-        AgentMcpCallResponse(name=call.name, arguments=dict(call.arguments), result=call.result)
+        AgentMcpCallResponse(
+            name=call.name,
+            arguments=dict(call.arguments),
+            result=call.result,
+            server=str(getattr(call, "server", "") or ""),
+        )
         for call in calls
     ]
 

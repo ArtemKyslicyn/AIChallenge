@@ -20,7 +20,7 @@ from aichallenge_mcp.pulse import (
     schedule_digest_job,
     watch_brief,
 )
-from aichallenge_mcp.server import PULSE_TOOL_NAMES, dispatch_tool, mcp
+from aichallenge_mcp.server import PULSE_TOOL_NAMES, dispatch_tool, mcp, server_for_tool
 
 
 def test_schedule_writes_sqlite_and_first_digest(tmp_path: Path, monkeypatch) -> None:
@@ -76,6 +76,15 @@ def test_recommend_action_is_the_operator_job() -> None:
     calm = recommend_action("ok", [], jobs_count=1)
     assert calm["id"] == "ok"
     assert calm["cta"] is None
+
+
+def test_servers_own_distinct_tools() -> None:
+    assert server_for_tool("watch_brief") == "watch"
+    assert server_for_tool("model_pulse") == "models"
+    assert server_for_tool("search") == "brief"
+    assert server_for_tool("summarize") == "brief"
+    assert server_for_tool("saveToFile") == "brief"
+    assert server_for_tool("echo") == "stand"
 
 
 def test_dispatch_unknown_tool() -> None:

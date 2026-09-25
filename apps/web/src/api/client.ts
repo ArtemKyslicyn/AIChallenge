@@ -864,6 +864,7 @@ export interface AgentMcpCallDto {
   name: string;
   arguments?: Record<string, unknown>;
   result: string;
+  server?: string;
 }
 
 export interface AgentInvariantDto {
@@ -1632,6 +1633,7 @@ export function getLabFeedbackStats(
 export interface McpToolDto {
   name: string;
   description: string;
+  server?: string;
   parameters?: {
     type?: string;
     properties?: Record<string, { type?: string; default?: unknown; title?: string }>;

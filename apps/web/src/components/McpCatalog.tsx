@@ -37,6 +37,17 @@ const PRESETS = [
     label: "Ночной бриф",
     message: "Собери ночной бриф пайплайном search → summarize → saveToFile",
   },
+  {
+    id: "shift",
+    label: "Разбор смены",
+    message: "Сделай разбор смены через несколько серверов",
+  },
+] as const;
+
+const ORCH_SERVERS = [
+  { id: "watch", title: "Вахта", tools: "watch_brief" },
+  { id: "models", title: "Модели", tools: "model_pulse" },
+  { id: "brief", title: "Бриф", tools: "search → summarize → saveToFile" },
 ] as const;
 
 function callPayload(raw: string): Record<string, unknown> {
@@ -392,9 +403,12 @@ export function McpCatalog() {
                 key={`${call.name}-${index}`}
                 className="mcp-call"
                 data-tool={call.name}
+                data-server={call.server || ""}
               >
                 <header>
-                  <span>{index + 1}</span> <code>{call.name}</code>
+                  <span>{index + 1}</span>{" "}
+                  {call.server ? <code className="mcp-server-tag">{call.server}</code> : null}{" "}
+                  <code>{call.name}</code>
                 </header>
                 {handoffLines(call).length > 0 ? (
                   <ul className="mcp-handoff">
@@ -408,6 +422,18 @@ export function McpCatalog() {
             ))}
           </div>
         ) : null}
+      </section>
+
+      <section className="mcp-servers" aria-label="MCP-серверы">
+        {ORCH_SERVERS.map((server) => (
+          <article key={server.id} className="mcp-server" data-server={server.id}>
+            <header>
+              <code>{server.id}</code>
+            </header>
+            <p>{server.title}</p>
+            <p className="pulse-digest-meta">{server.tools}</p>
+          </article>
+        ))}
       </section>
 
       <table className="mcp-tools">

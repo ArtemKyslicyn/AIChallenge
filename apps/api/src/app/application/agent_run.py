@@ -106,6 +106,9 @@ def detect_pulse_intent(text: str, available: set[str]) -> tuple[str, dict[str, 
     clean = text or ""
     if "Результат MCP" in clean:
         return None
+    if re.search(r"(?i)разбор смены|orchestration|несколько сервер", clean):
+        if "watch_brief" in available:
+            return "watch_brief", {}
     if not _PULSE_HINT.search(clean):
         return None
     if re.search(r"(?i)пайплайн|цепочк|ночной бриф|saveToFile|архив бриф", clean):
@@ -148,8 +151,46 @@ def _openai_tool_names(tools: list[dict[str, object]]) -> set[str]:
     return names
 
 
-MAX_MCP_ROUNDS = 4
+MAX_MCP_ROUNDS = 6
 _PIPELINE_NEXT = {"search": "summarize", "summarize": "saveToFile"}
+_SHIFT_HINT = re.compile(r"(?i)разбор смены|orchestration|несколько сервер")
+_SHIFT_ORDER = ("watch_brief", "model_pulse", "search", "summarize", "saveToFile")
+
+
+def _tool_servers(tools: list[dict[str, object]]) -> dict[str, str]:
+    servers: dict[str, str] = {}
+    for item in tools:
+        fn = item.get("function") if isinstance(item, dict) else None
+        source = fn if isinstance(fn, dict) else item
+        if not isinstance(source, dict) or not source.get("name"):
+            continue
+        desc = str(source.get("description") or "")
+        if desc.startswith("[") and "]" in desc:
+            servers[str(source["name"])] = desc[1 : desc.index("]")]
+    return servers
+
+
+def _next_shift_step(
+    executed: list[McpToolCall], available: set[str]
+) -> tuple[str, dict[str, Any]] | None:
+    done = {call.name for call in executed}
+    for step in _SHIFT_ORDER:
+        if step in done or step not in available:
+            continue
+        if step == "model_pulse":
+            return step, {"hours": 24}
+        if step == "search":
+            return step, {"hours": 24}
+        if step == "summarize":
+            prev = next((call.result for call in reversed(executed) if call.name == "search"), "")
+            return step, {"payload": prev}
+        if step == "saveToFile":
+            prev = next(
+                (call.result for call in reversed(executed) if call.name == "summarize"), ""
+            )
+            return step, {"brief": prev, "name": "shift-review"}
+        return step, {}
+    return None
 
 
 def _continue_pipeline(last: McpToolCall, available: set[str]) -> tuple[str, dict[str, Any]] | None:
@@ -182,6 +223,8 @@ async def _run_mcp_round(
     user_message: str,
 ) -> tuple[CompletionResult, tuple[McpToolCall, ...]]:
     names = _openai_tool_names(tools)
+    servers = _tool_servers(tools)
+    shift = bool(_SHIFT_HINT.search(user_message))
     conversation = list(turns)
     current = result
     executed: list[McpToolCall] = []
@@ -193,7 +236,11 @@ async def _run_mcp_round(
                 name, arguments = intent
                 requested = [ToolCallRequest(id="pulse-intent", name=name, arguments=arguments)]
         if not requested and executed:
-            nxt = _continue_pipeline(executed[-1], names)
+            nxt = (
+                _next_shift_step(executed, names)
+                if shift
+                else _continue_pipeline(executed[-1], names)
+            )
             if nxt is not None:
                 name, arguments = nxt
                 requested = [ToolCallRequest(id="pulse-pipeline", name=name, arguments=arguments)]
@@ -202,12 +249,17 @@ async def _run_mcp_round(
         batch: list[McpToolCall] = []
         for call in requested[:3]:
             raw = await mcp_runner.call_tool(call.name, dict(call.arguments or {}))
-            item = McpToolCall(name=call.name, arguments=dict(call.arguments or {}), result=raw)
+            item = McpToolCall(
+                name=call.name,
+                arguments=dict(call.arguments or {}),
+                result=raw,
+                server=servers.get(call.name, ""),
+            )
             batch.append(item)
             executed.append(item)
         if not batch:
             break
-        nxt = _continue_pipeline(batch[-1], names)
+        nxt = _next_shift_step(executed, names) if shift else _continue_pipeline(batch[-1], names)
         if nxt is not None:
             name, arguments = nxt
             current = CompletionResult(
