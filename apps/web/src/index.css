@@ -804,6 +804,96 @@ textarea {
 
 /* ---------- empty state ---------- */
 
+.live-who {
+  width: 100%;
+  max-width: 36rem;
+  text-align: left;
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.live-who-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.live-who-source,
+.live-who-why,
+.live-who-alts p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.live-who-lead {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.live-who-lead code {
+  font-size: inherit;
+}
+
+.live-who-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.live-who-cta {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 650;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+}
+
+.live-who-quiet,
+.live-who-refresh {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.live-who-alts {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.live-who-alts p {
+  font-weight: 650;
+  color: var(--text);
+}
+
+.live-who-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.live-who[data-picked="1"] .live-who-lead {
+  color: color-mix(in srgb, #16a34a 55%, var(--text));
+}
+
 .empty {
   margin: auto 0;
   text-align: center;

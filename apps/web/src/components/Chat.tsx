@@ -4,6 +4,7 @@ import {
   MAX_MESSAGE_CHARS,
   isNotFound,
   listMessages,
+  listModels,
   probeComplete,
   sendMessageSSE,
   type ChatEvent,
@@ -28,8 +29,10 @@ import {
   isTempStudioTurn,
   isTurn,
 } from "../types";
+import { initSessionChatPrefs, loadGlobalChatPrefs } from "../chatPrefs";
 import { compareTemplateLabel, CompareTurnView } from "./CompareTurnView";
 import { Composer, type OutgoingMessage } from "./Composer";
+import { LiveWhoToAsk } from "./LiveWhoToAsk";
 import { DebugFloat } from "./DebugFloat";
 import { emptyLabSlots, LabTurnView } from "./LabTurnView";
 import { LabResultsFloat, type LabResultsPayload } from "./LabResultsFloat";
@@ -115,6 +118,10 @@ export function Chat({
   const [resultsPayload, setResultsPayload] = useState<LabResultsPayload | null>(null);
   const [labExpanded, setLabExpanded] = useState<Record<string, boolean>>({});
   const [activeMediaJob, setActiveMediaJob] = useState<MediaJobState | null>(null);
+  const [modelPin, setModelPin] = useState(
+    () => initSessionChatPrefs(session.id, loadGlobalChatPrefs().defaultChatMode).modelIdOverride,
+  );
+  const [catalogIds, setCatalogIds] = useState<string[]>([]);
 
   // Float mutex: at most one panel is expanded. A `false` from a panel only
   // closes the dock when that panel is the one currently open, so a stale
@@ -136,6 +143,22 @@ export function Chat({
   const reportStaleSession = useEffectEvent(() => {
     onStaleSession();
   });
+
+  useEffect(() => {
+    setModelPin(initSessionChatPrefs(session.id, loadGlobalChatPrefs().defaultChatMode).modelIdOverride);
+  }, [session.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listModels()
+      .then((models) => {
+        if (!cancelled) setCatalogIds(models.map((item) => item.id));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -909,6 +932,7 @@ export function Chat({
 
           {empty && (
             <div className="empty">
+              <LiveWhoToAsk selectedId={modelPin} catalogIds={catalogIds} onPick={setModelPin} />
               <h2>Чем помочь?</h2>
               <p>
                 Пишите как в чате — под каждым ответом видно, какая модель ответила. Для картинки —
@@ -1092,6 +1116,8 @@ export function Chat({
 
       <Composer
         sessionId={session.id}
+        modelPin={modelPin}
+        onModelPin={setModelPin}
         onSend={(message) => void send(message)}
         onStop={() => abort.current?.abort()}
         busy={busy}

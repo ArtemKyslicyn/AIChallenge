@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  fetchLiveModelPulse,
-  type LiveModelPulseDto,
-  type LiveModelRow,
-} from "../api/client";
+import { fetchLiveModelPulse, type LiveModelPulseDto } from "../api/client";
 
 interface Props {
   selectedId: string;
-  catalogIds: string[];
   onPick: (modelId: string) => void;
 }
 
@@ -17,9 +12,8 @@ function shortId(id: string): string {
   return tail.length > 22 ? `${tail.slice(0, 20)}…` : tail;
 }
 
-export function LiveModelPulse({ selectedId, catalogIds, onPick }: Props) {
+export function LiveModelPulse({ selectedId, onPick }: Props) {
   const [pulse, setPulse] = useState<LiveModelPulseDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inflight = useRef<AbortController | null>(null);
 
@@ -28,12 +22,10 @@ export function LiveModelPulse({ selectedId, catalogIds, onPick }: Props) {
     const ac = new AbortController();
     inflight.current = ac;
     setBusy(true);
-    setError(null);
     try {
       setPulse(await fetchLiveModelPulse(ac.signal));
-    } catch (exc) {
+    } catch {
       if (ac.signal.aborted) return;
-      setError(exc instanceof Error ? exc.message : "пульс недоступен");
     } finally {
       if (inflight.current === ac) setBusy(false);
     }
@@ -44,61 +36,29 @@ export function LiveModelPulse({ selectedId, catalogIds, onPick }: Props) {
     return () => inflight.current?.abort();
   }, [refresh]);
 
-  const live = (pulse?.ranking ?? []).filter((row) => !row.avoid).slice(0, 3);
-  const avoid = pulse?.attention.slice(0, 2) ?? [];
-  const extras: LiveModelRow[] =
-    live.length === 0
-      ? catalogIds.filter((id) => id && id !== "auto").slice(0, 3).map((model_id) => ({ model_id, avoid: false }))
-      : [];
-  const takeRows = live.length ? live : extras;
-  const phase = busy ? "busy" : error ? "error" : pulse ? "ready" : "idle";
+  const leader = (pulse?.ranking ?? []).find((row) => !row.avoid);
+  const label = selectedId ? shortId(selectedId) : leader ? shortId(leader.model_id) : "Авто";
+  const phase = busy ? "busy" : pulse ? "ready" : "idle";
 
   return (
     <section
       className="composer-live-pulse"
-      aria-label="Живой выбор модели"
+      aria-label="Сейчас в чат"
       data-phase={phase}
-      data-open="0"
       data-pulse-count={pulse ? "1" : "0"}
     >
-      <div className="composer-live-chips">
-        {takeRows.map((row) => (
-          <button
-            key={row.model_id}
-            type="button"
-            className="composer-live-chip"
-            data-state={selectedId === row.model_id ? "on" : "live"}
-            onClick={() => onPick(row.model_id)}
-          >
-            <code>{shortId(row.model_id)}</code>
-          </button>
-        ))}
-        {avoid.map((row) => (
-          <button
-            key={`avoid-${row.model_id}`}
-            type="button"
-            className="composer-live-chip"
-            data-state="avoid"
-            disabled
-            title="Модель в attention у вахты"
-          >
-            <code>{shortId(row.model_id)}</code>
-          </button>
-        ))}
-      </div>
+      <span className="composer-live-now-kicker">сейчас</span>
       <button
         type="button"
-        className="composer-live-refresh"
-        disabled={busy}
-        onClick={() => void refresh()}
+        className="composer-live-chip"
+        data-state={selectedId ? "on" : "live"}
+        onClick={() => onPick(selectedId || leader?.model_id || "")}
       >
+        <code>{label}</code>
+      </button>
+      <button type="button" className="composer-live-refresh" disabled={busy} onClick={() => void refresh()}>
         {busy ? "…" : "пульс"}
       </button>
-      {error ? (
-        <span className="composer-live-empty" role="status">
-          {error}
-        </span>
-      ) : null}
     </section>
   );
 }
