@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchLiveModelPulse,
@@ -14,192 +14,91 @@ interface Props {
 
 function shortId(id: string): string {
   const tail = id.split("/").pop() || id;
-  return tail.length > 28 ? `${tail.slice(0, 26)}…` : tail;
-}
-
-function clockNow(): string {
-  return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return tail.length > 22 ? `${tail.slice(0, 20)}…` : tail;
 }
 
 export function LiveModelPulse({ selectedId, catalogIds, onPick }: Props) {
-  const [open, setOpen] = useState(false);
   const [pulse, setPulse] = useState<LiveModelPulseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [takenAt, setTakenAt] = useState<string | null>(null);
-  const [pulseCount, setPulseCount] = useState(0);
+  const inflight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    inflight.current?.abort();
+    const ac = new AbortController();
+    inflight.current = ac;
     setBusy(true);
     setError(null);
-    setOpen(true);
     try {
-      setPulse(await fetchLiveModelPulse());
-      setTakenAt(clockNow());
-      setPulseCount((n) => n + 1);
+      setPulse(await fetchLiveModelPulse(ac.signal));
     } catch (exc) {
+      if (ac.signal.aborted) return;
       setError(exc instanceof Error ? exc.message : "пульс недоступен");
     } finally {
-      setBusy(false);
+      if (inflight.current === ac) setBusy(false);
     }
   }, []);
 
-  const avoidIds = new Set(pulse?.attention.map((row) => row.model_id) ?? []);
-  const live = (pulse?.ranking ?? []).filter((row) => !row.avoid).slice(0, 4);
-  const avoid = pulse?.attention.slice(0, 3) ?? [];
-  const selectedAvoid = Boolean(selectedId && avoidIds.has(selectedId));
-  const leader = live[0];
-  const catalogFallback: LiveModelRow[] =
-    live.length === 0 && avoid.length === 0 && pulse
-      ? catalogIds.filter((id) => id && id !== "auto").slice(0, 4).map((model_id) => ({ model_id, avoid: false }))
-      : [];
-  const takeRows = live.length ? live : catalogFallback;
-  const fromCatalog = live.length === 0 && catalogFallback.length > 0;
-  const pinnedFromPulse = Boolean(selectedId && takeRows.some((row) => row.model_id === selectedId));
-  const phase = busy ? "busy" : error ? "error" : !pulse ? "idle" : pinnedFromPulse ? "pinned" : "ready";
-  const nowLabel = selectedId ? shortId(selectedId) : "Авто";
+  useEffect(() => {
+    void refresh();
+    return () => inflight.current?.abort();
+  }, [refresh]);
 
-  const status = useMemo(() => {
-    if (busy) return "Снимаем пульс MCP… ждём model_pulse";
-    if (error) return `Пульс не пришёл. Старый список моделей на месте. ${error}`;
-    if (!pulse) return "Стенд на связи. «Снять пульс» спрашивает MCP model_pulse.";
-    if (pinnedFromPulse) return `Пин стоит. Ответ пойдёт от ${shortId(selectedId)}.`;
-    return "Пульс снят. Нажмите зелёную модель — она станет пином.";
-  }, [busy, error, pulse, pinnedFromPulse, selectedId]);
+  const avoidIds = new Set(pulse?.attention.map((row) => row.model_id) ?? []);
+  const live = (pulse?.ranking ?? []).filter((row) => !row.avoid).slice(0, 3);
+  const avoid = pulse?.attention.slice(0, 2) ?? [];
+  const extras: LiveModelRow[] =
+    live.length === 0
+      ? catalogIds.filter((id) => id && id !== "auto").slice(0, 3).map((model_id) => ({ model_id, avoid: false }))
+      : [];
+  const takeRows = live.length ? live : extras;
+  const phase = busy ? "busy" : error ? "error" : pulse ? "ready" : "idle";
 
   return (
     <section
       className="composer-live-pulse"
       aria-label="Живой выбор модели"
       data-phase={phase}
-      data-open={open ? "1" : "0"}
-      data-pulse-count={String(pulseCount)}
+      data-open="0"
+      data-pulse-count={pulse ? "1" : "0"}
     >
-      <div className="composer-live-bar">
-        <button
-          type="button"
-          className="composer-live-toggle"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          Живые модели
-        </button>
-        <p className="composer-live-bar-now" data-picked={pinnedFromPulse ? "1" : "0"}>
-          <span>в чат</span> <code>{nowLabel}</code>
-        </p>
-        <button
-          type="button"
-          className="composer-live-refresh"
-          disabled={busy}
-          onClick={() => void refresh()}
-        >
-          {busy ? "Снимаем…" : pulseCount > 0 ? "Пульс ещё раз" : "Снять пульс"}
-        </button>
-      </div>
-
-      {open ? (
-        <div className="composer-live-sheet">
-          <header className="composer-live-head">
-            <p className="composer-live-stamp">Чат · живой выбор</p>
-            <h2 className="composer-live-title">Стенд сам говорит, какую модель брать</h2>
-            <p className="composer-live-source">
-              Источник: MCP · сервер <code>models</code> · инструмент <code>model_pulse</code>
-            </p>
-          </header>
-
-          <ol className="composer-live-steps">
-            <li data-done={pulse || busy ? "1" : "0"}>1. Стенд на связи</li>
-            <li data-done={pulse ? "1" : "0"}>2. Снять пульс</li>
-            <li data-done={pinnedFromPulse ? "1" : "0"}>3. Выбрать живую</li>
-          </ol>
-
-          <div className="composer-live-now" data-picked={pinnedFromPulse ? "1" : "0"}>
-            <p className="composer-live-now-kicker">Сейчас в чат пойдёт</p>
-            <p className="composer-live-now-id">
-              <code>{selectedId ? shortId(selectedId) : "Авто — модель ещё не выбрана"}</code>
-            </p>
-            <p className="composer-live-status" role="status">
-              {status}
-            </p>
-          </div>
-
-          {takenAt ? (
-            <p className="composer-live-taken">
-              Снимок №{pulseCount} в {takenAt}
-            </p>
-          ) : (
-            <p className="composer-live-taken">Снимка ещё не было</p>
-          )}
-
-          {error ? (
-            <p className="composer-live-empty" role="status">
-              Пульс не пришёл — селект моделей ниже как был. {error}
-            </p>
-          ) : pulse ? (
-            <div className="composer-live-lanes">
-              <div className="composer-live-lane" data-lane="live">
-                <p className="composer-live-lane-title">Брать — живые</p>
-                <p className="composer-live-lane-sub">
-                  {fromCatalog ? "Рейтинг пуст, показываем каталог" : "Клик ставит пин в селект «Модель»"}
-                </p>
-                <div className="composer-live-chips">
-                  {takeRows.map((row) => (
-                    <button
-                      key={row.model_id}
-                      type="button"
-                      className="composer-live-chip"
-                      data-state={selectedId === row.model_id ? "on" : "live"}
-                      onClick={() => onPick(row.model_id)}
-                    >
-                      <code>{shortId(row.model_id)}</code>
-                      {row.score != null ? <span>score {row.score}</span> : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="composer-live-lane" data-lane="avoid">
-                <p className="composer-live-lane-title">Не брать — сыплются</p>
-                <p className="composer-live-lane-sub">Вахта models · кликнуть нельзя</p>
-                <div className="composer-live-chips">
-                  {avoid.length === 0 ? (
-                    <span className="composer-live-empty">Сейчас никто в attention</span>
-                  ) : (
-                    avoid.map((row) => (
-                      <button
-                        key={row.model_id}
-                        type="button"
-                        className="composer-live-chip"
-                        data-state="avoid"
-                        disabled
-                        title="Модель в attention у вахты"
-                      >
-                        <code>{shortId(row.model_id)}</code>
-                        {row.down_rate != null ? <span>down {row.down_rate}</span> : null}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="composer-live-empty" data-wait="pulse">
-              Список появится после пульса. Вкладка MCP со старыми днями на месте.
-            </p>
-          )}
-
-          {selectedAvoid && leader ? (
-            <p className="composer-live-warn">
-              Выбранная модель сыпется.{" "}
-              <button type="button" onClick={() => onPick(leader.model_id)}>
-                Взять лидера {shortId(leader.model_id)}
-              </button>
-            </p>
-          ) : null}
-
-          <button type="button" className="composer-live-close" onClick={() => setOpen(false)}>
-            Свернуть — вернуть чат
+      <div className="composer-live-chips">
+        {takeRows.map((row) => (
+          <button
+            key={row.model_id}
+            type="button"
+            className="composer-live-chip"
+            data-state={selectedId === row.model_id ? "on" : "live"}
+            onClick={() => onPick(row.model_id)}
+          >
+            <code>{shortId(row.model_id)}</code>
           </button>
-        </div>
+        ))}
+        {avoid.map((row) => (
+          <button
+            key={`avoid-${row.model_id}`}
+            type="button"
+            className="composer-live-chip"
+            data-state="avoid"
+            disabled
+            title="Модель в attention у вахты"
+          >
+            <code>{shortId(row.model_id)}</code>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="composer-live-refresh"
+        disabled={busy}
+        onClick={() => void refresh()}
+      >
+        {busy ? "…" : "пульс"}
+      </button>
+      {error ? (
+        <span className="composer-live-empty" role="status">
+          {error}
+        </span>
       ) : null}
     </section>
   );

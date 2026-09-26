@@ -44,6 +44,13 @@ const PRESETS = [
   },
 ] as const;
 
+const DIRECT_PRESETS: Record<string, { name: string; args: Record<string, unknown> }> = {
+  probe: { name: "probe_stand", args: {} },
+  rank: { name: "model_pulse", args: { hours: 24 } },
+  digest: { name: "latest_digest", args: {} },
+  schedule: { name: "schedule_digest", args: { interval_seconds: 60, hours: 24, note: "night-watch" } },
+};
+
 const ORCH_SERVERS = [
   { id: "watch", title: "Вахта", tools: "watch_brief" },
   { id: "models", title: "Модели", tools: "model_pulse" },
@@ -130,13 +137,22 @@ export function McpCatalog() {
     if (!text || busy) return;
     setBusy(true);
     setAskError(null);
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), 90_000);
     try {
-      const result = await runAgentWorkshop(PULSE_AGENT, text);
+      const result = await runAgentWorkshop(PULSE_AGENT, text, { signal: ac.signal });
       setReply(result);
       await refreshPulse();
     } catch (exc) {
-      setAskError(exc instanceof Error ? exc.message : "не удалось вызвать агента");
+      setAskError(
+        exc instanceof Error && (exc.name === "AbortError" || exc.name === "TimeoutError")
+          ? "дежурный не ответил за 90 с — MCP занят, повторите"
+          : exc instanceof Error
+            ? exc.message
+            : "не удалось вызвать агента",
+      );
     } finally {
+      window.clearTimeout(timer);
       setBusy(false);
     }
   }
@@ -365,6 +381,11 @@ export function McpCatalog() {
               disabled={busy}
               onClick={() => {
                 setAsk(preset.message);
+                const direct = DIRECT_PRESETS[preset.id];
+                if (direct) {
+                  void runAction(direct.name, direct.args);
+                  return;
+                }
                 void runAsk(preset.message);
               }}
             >

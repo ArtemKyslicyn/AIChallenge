@@ -1698,21 +1698,18 @@ async function openChatPulse(page) {
   const pulse = page.locator(".composer-live-pulse");
   await pulse.waitFor({ timeout: 20_000 });
   await pulse.scrollIntoViewIfNeeded();
-  const toggle = page.getByRole("button", { name: /живые модели/i });
-  if ((await page.locator('.composer-live-pulse[data-open="0"]').count()) > 0) {
-    await toggle.click();
-  }
   return pulse;
 }
 
 async function takeLivePulse(page, pulse) {
-  const btn = page.getByRole("button", { name: /снять пульс/i });
+  const btn = page.getByRole("button", { name: /пульс/i });
   await btn.click();
   await page
     .locator(
-      '.composer-live-pulse[data-phase="ready"], .composer-live-pulse[data-phase="pinned"], .composer-live-pulse[data-phase="error"]',
+      '.composer-live-pulse[data-phase="ready"], .composer-live-pulse[data-phase="error"], .composer-live-chip',
     )
-    .waitFor({ timeout: 25_000 });
+    .first()
+    .waitFor({ timeout: 12_000 });
   await pauseOn(pulse, 9000);
 }
 
