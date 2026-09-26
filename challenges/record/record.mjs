@@ -49,6 +49,12 @@ async function bumpReadability(page, zoom = 1.2) {
         max-height: min(90vh, 940px) !important;
         height: min(90vh, 940px) !important;
       }
+      .composer-live-pulse {
+        box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.4) !important;
+      }
+      .composer-live-chip[data-state="on"] {
+        outline: 2px solid rgba(234, 88, 12, 0.7) !important;
+      }
       .temp-studio-frame-body {
         max-height: 22rem !important;
         overflow: auto !important;
@@ -1629,6 +1635,283 @@ async function challenge20(page) {
   await settle(page, 600);
 }
 
+async function showRecordCard(page, { day, title, beat, hold = 8000 }) {
+  await page.evaluate(({ day, title, beat }) => {
+    let el = document.getElementById("record-caption");
+    if (!el) {
+      el = document.createElement("aside");
+      el.id = "record-caption";
+      el.setAttribute("aria-hidden", "true");
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<p>${day}</p><strong>${title}</strong><span>${beat}</span>`;
+    el.style.cssText = [
+      "position:fixed",
+      "top:12px",
+      "left:50%",
+      "transform:translateX(-50%)",
+      "z-index:2147483647",
+      "width:min(980px,94vw)",
+      "background:#14171c",
+      "color:#f7f7f5",
+      "border-radius:16px",
+      "padding:14px 22px 16px",
+      "font:600 16px/1.35 system-ui,sans-serif",
+      "box-shadow:0 16px 48px rgba(0,0,0,.4)",
+    ].join(";");
+    const dayEl = el.querySelector("p");
+    const titleEl = el.querySelector("strong");
+    const beatEl = el.querySelector("span");
+    if (dayEl) {
+      dayEl.style.cssText = "margin:0;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#9db0ff";
+    }
+    if (titleEl) {
+      titleEl.style.cssText = "display:block;margin:.15rem 0 .25rem;font-size:22px;line-height:1.25";
+    }
+    if (beatEl) {
+      beatEl.style.cssText = "display:block;font-weight:500;font-size:16px;color:#d5d8de";
+    }
+  }, { day, title, beat });
+  await settle(page, hold);
+}
+
+async function hideRecordCard(page) {
+  await page.evaluate(() => document.getElementById("record-caption")?.remove());
+}
+
+async function prepLiveRecord(page) {
+  await page.addStyleTag({
+    content: `
+      .empty, .empty-more, .empty-stand-links { display: none !important; }
+      .composer-wrap { position: static !important; padding-top: 6.2rem !important; }
+      .composer-live-pulse { max-width: 56rem !important; }
+    `,
+  });
+}
+
+async function openChatPulse(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=chat", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.08);
+  await prepLiveRecord(page);
+  await settle(page, 1000);
+  const pulse = page.locator(".composer-live-pulse");
+  await pulse.waitFor({ timeout: 20_000 });
+  await pulse.scrollIntoViewIfNeeded();
+  return pulse;
+}
+
+async function takeLivePulse(page, pulse) {
+  const btn = page.getByRole("button", { name: /снять пульс/i });
+  await btn.click();
+  await page
+    .locator(
+      '.composer-live-pulse[data-phase="ready"], .composer-live-pulse[data-phase="pinned"], .composer-live-pulse[data-phase="error"]',
+    )
+    .waitFor({ timeout: 25_000 });
+  await pauseOn(pulse, 9000);
+}
+
+async function pickLiveChip(page) {
+  const live = page.locator('.composer-live-chip[data-state="live"]').first();
+  const chip = (await live.count()) > 0 ? live : page.locator(".composer-live-chip").first();
+  if ((await chip.count()) === 0) return;
+  await chip.click();
+  await page.locator('.composer-live-chip[data-state="on"]').waitFor({ timeout: 8_000 }).catch(() => {});
+  await page.locator('.composer-live-now[data-picked="1"]').waitFor({ timeout: 8_000 }).catch(() => {});
+}
+
+async function challenge16v2(page) {
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 16 · версия 2",
+    title: "Чат видит MCP без вкладки MCP",
+    beat: "Доска «живой выбор» — это handshake: стенд на связи, источник model_pulse.",
+    hold: 9000,
+  });
+  await pauseOn(pulse, 10000);
+  await showRecordCard(page, {
+    day: "День 16 · версия 2",
+    title: "Снимаем пульс — первый разговор со стендом",
+    beat: "Кнопка ходит в тот же MCP. Шаг 2 загорится, когда ответ придёт.",
+    hold: 8000,
+  });
+  await takeLivePulse(page, pulse);
+  await showRecordCard(page, {
+    day: "День 16 · версия 2",
+    title: "Старый день 16 не снесён",
+    beat: "Вкладка MCP на месте: таблица инструментов как в первой версии.",
+    hold: 8000,
+  });
+  await page.getByRole("button", { name: /^MCP$/i }).click();
+  await page.locator(".mcp-board").waitFor({ timeout: 20_000 });
+  await page.getByRole("heading", { name: /^MCP$/i }).waitFor({ timeout: 15_000 });
+  await pauseOn(page.locator(".mcp-board"), 12000);
+  await showRecordCard(page, {
+    day: "День 16 · версия 2",
+    title: "Что доказано",
+    beat: "Чат видит стенд. Вкладка MCP со старой таблицей жива.",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
+}
+
+async function challenge17v2(page) {
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 17 · версия 2",
+    title: "Пульс кормит выбор модели, не JSON",
+    beat: "Тот же model_pulse, но зритель видит «брать», а не каталог tool.",
+    hold: 9000,
+  });
+  await takeLivePulse(page, pulse);
+  await showRecordCard(page, {
+    day: "День 17 · версия 2",
+    title: "Клик по живой модели ставит пин",
+    beat: "Чип включается, строка «Сейчас в чат пойдёт» повторяет id, селект «Модель» меняется.",
+    hold: 8000,
+  });
+  await pickLiveChip(page);
+  await pauseOn(page.locator(".composer-live-now"), 10000);
+  await pauseOn(page.locator(".composer-model-picker").first(), 9000);
+  await showRecordCard(page, {
+    day: "День 17 · версия 2",
+    title: "Что доказано",
+    beat: "Зелёный чип = пин. Селект «Модель» больше не Авто.",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
+}
+
+async function challenge18v2(page) {
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 18 · версия 2",
+    title: "Пульс не разовый — его снимают снова",
+    beat: "Смотрите номер снимка и время. Второй клик — те же данные, свежее время.",
+    hold: 9000,
+  });
+  await takeLivePulse(page, pulse);
+  await pauseOn(page.locator(".composer-live-taken"), 8000);
+  await showRecordCard(page, {
+    day: "День 18 · версия 2",
+    title: "Второй снимок",
+    beat: "Кнопка уже «Снять пульс ещё раз». Счётчик станет №2.",
+    hold: 8000,
+  });
+  await takeLivePulse(page, pulse);
+  await pauseOn(page.locator(".composer-live-taken"), 9000);
+  await showRecordCard(page, {
+    day: "День 18 · версия 2",
+    title: "Ночная вахта на MCP жива",
+    beat: "Первая версия дня: «Сводка каждые 60 с». Её не удаляли.",
+    hold: 8000,
+  });
+  await page.getByRole("button", { name: /^MCP$/i }).click();
+  await page.locator(".pulse-jobs").waitFor({ timeout: 20_000 });
+  await page.getByRole("button", { name: /сводка каждые 60/i }).waitFor();
+  await pauseOn(page.locator(".pulse-jobs"), 12000);
+  await showRecordCard(page, {
+    day: "День 18 · версия 2",
+    title: "Что доказано",
+    beat: "Два снимка с разным временем. Расписание на MCP на месте.",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
+}
+
+async function challenge19v2(page) {
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 19 · версия 2",
+    title: "Цепочка: пульс → выбор → ответ",
+    beat: "Три шага на доске. Потом сообщение. model_id в пузыре = пин.",
+    hold: 9000,
+  });
+  await takeLivePulse(page, pulse);
+  await pickLiveChip(page);
+  await pauseOn(page.locator(".composer-live-now[data-picked='1']"), 10000);
+  await showRecordCard(page, {
+    day: "День 19 · версия 2",
+    title: "Отправляем вопрос выбранной модели",
+    beat: "В ответе бейдж model_id должен совпасть со строкой «Сейчас в чат пойдёт».",
+    hold: 8000,
+  });
+  const box = page.locator("textarea").last();
+  await box.fill("Коротко: какая модель отвечает? Назови свой model_id.");
+  await settle(page, 2000);
+  await page.getByRole("button", { name: /Отправить|Send/i }).click();
+  await page.locator(".turn.assistant .badge").first().waitFor({ timeout: 60_000 });
+  await settle(page, 2000);
+  await pauseOn(page.locator(".composer-live-now"), 8000);
+  await pauseOn(page.locator(".turn.assistant").last(), 12000);
+  await showRecordCard(page, {
+    day: "День 19 · версия 2",
+    title: "Что доказано",
+    beat: "Пульс → пин → ответ. model_id на бейдже тот же, что на доске.",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
+}
+
+async function challenge20v2(page) {
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 20 · версия 2",
+    title: "Чат спрашивает только сервер models",
+    beat: "Слева «брать», справа «не брать». Сыплющиеся из attention кликнуть нельзя.",
+    hold: 9000,
+  });
+  await takeLivePulse(page, pulse);
+  await pauseOn(page.locator('.composer-live-lane[data-lane="live"]'), 9000);
+  await pauseOn(page.locator('.composer-live-lane[data-lane="avoid"]'), 10000);
+  await showRecordCard(page, {
+    day: "День 20 · версия 2",
+    title: "На MCP те же три сервера",
+    beat: "watch / models / brief. Разбор смены — старая версия дня, она на месте.",
+    hold: 8000,
+  });
+  await page.getByRole("button", { name: /^MCP$/i }).click();
+  await page.locator('.mcp-server[data-server="watch"]').waitFor({ timeout: 20_000 });
+  await page.locator('.mcp-server[data-server="models"]').waitFor();
+  await page.locator('.mcp-server[data-server="brief"]').waitFor();
+  await pauseOn(page.locator(".mcp-servers"), 12000);
+  await page.getByRole("button", { name: "Разбор смены", exact: true }).waitFor();
+  await pauseOn(page.getByRole("button", { name: "Разбор смены", exact: true }), 8000);
+  await showRecordCard(page, {
+    day: "День 20 · версия 2",
+    title: "Что доказано",
+    beat: "Чат бьёт models. Три сервера и разбор смены на MCP живы.",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
+}
+
+async function challenge21(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=chat", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.12);
+  await settle(page, 800);
+  const pulse = page.locator(".composer-live-pulse");
+  await pulse.waitFor({ timeout: 20_000 });
+  await page.getByRole("button", { name: /снять пульс/i }).click();
+  await page.locator(".composer-live-chip").first().waitFor({ timeout: 20_000 });
+  await pauseOn(pulse, 4000);
+  const live = page.locator('.composer-live-chip[data-state="live"], .composer-live-chip[data-state="on"]').first();
+  if ((await live.count()) > 0) {
+    await live.click();
+    await page.locator('.composer-live-chip[data-state="on"]').waitFor({ timeout: 10_000 });
+  }
+  await pauseOn(pulse, 4000);
+  const avoid = page.locator('.composer-live-chip[data-state="avoid"]').first();
+  if ((await avoid.count()) > 0) {
+    await pauseOn(avoid, 2500);
+  }
+  await page.locator("#composer-model-select").scrollIntoViewIfNeeded();
+  await pauseOn(page.locator(".composer-model-picker").first(), 2500);
+  await settle(page, 800);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1646,8 +1929,14 @@ const out17 = path.join(__dirname, "../17-mcp-tool/challenge-17.webm");
 const out18 = path.join(__dirname, "../18-mcp-scheduler/challenge-18.webm");
 const out19 = path.join(__dirname, "../19-mcp-compose/challenge-19.webm");
 const out20 = path.join(__dirname, "../20-mcp-orchestration/challenge-20.webm");
+const out21 = path.join(__dirname, "../21-live-models/challenge-21.webm");
+const out16v2 = path.join(__dirname, "../16-mcp-connect/версия 2.webm");
+const out17v2 = path.join(__dirname, "../17-mcp-tool/версия 2.webm");
+const out18v2 = path.join(__dirname, "../18-mcp-scheduler/версия 2.webm");
+const out19v2 = path.join(__dirname, "../19-mcp-compose/версия 2.webm");
+const out20v2 = path.join(__dirname, "../20-mcp-orchestration/версия 2.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -1736,5 +2025,29 @@ if (ONLY.includes("19")) {
 if (ONLY.includes("20")) {
   console.log("Recording challenge 20 against", BASE);
   await recordChallenge("20", out20, (page) => challenge20(page));
+}
+if (ONLY.includes("21")) {
+  console.log("Recording challenge 21 against", BASE);
+  await recordChallenge("21", out21, (page) => challenge21(page));
+}
+if (ONLY.includes("16v2") || ONLY.includes("v2")) {
+  console.log("Recording day 16 version 2 against", BASE);
+  await recordChallenge("16v2", out16v2, (page) => challenge16v2(page));
+}
+if (ONLY.includes("17v2") || ONLY.includes("v2")) {
+  console.log("Recording day 17 version 2 against", BASE);
+  await recordChallenge("17v2", out17v2, (page) => challenge17v2(page));
+}
+if (ONLY.includes("18v2") || ONLY.includes("v2")) {
+  console.log("Recording day 18 version 2 against", BASE);
+  await recordChallenge("18v2", out18v2, (page) => challenge18v2(page));
+}
+if (ONLY.includes("19v2") || ONLY.includes("v2")) {
+  console.log("Recording day 19 version 2 against", BASE);
+  await recordChallenge("19v2", out19v2, (page) => challenge19v2(page));
+}
+if (ONLY.includes("20v2") || ONLY.includes("v2")) {
+  console.log("Recording day 20 version 2 against", BASE);
+  await recordChallenge("20v2", out20v2, (page) => challenge20v2(page));
 }
 console.log("done");

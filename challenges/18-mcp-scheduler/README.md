@@ -18,3 +18,5 @@ cd challenges/record && RECORD_ONLY=18 npm run record
 Текст: [`VIDEO.md`](VIDEO.md)
 
 Клиент: https://github.com/ArtemKyslicyn/stand-pulse (`pulse schedule`, `pulse digest`).
+
+Вторая версия (повторный пульс в чате): [`VERSION-2.md`](VERSION-2.md)

@@ -1719,6 +1719,69 @@ export function getMcpPulse(signal?: AbortSignal): Promise<McpPulseDto> {
   return request<McpPulseDto>("/mcp/pulse", { signal });
 }
 
+export interface LiveModelRow {
+  model_id: string;
+  score?: number;
+  n?: number;
+  down_rate?: number;
+  avoid: boolean;
+}
+
+export interface LiveModelPulseDto {
+  ranking: LiveModelRow[];
+  attention: LiveModelRow[];
+  source: "model_pulse";
+}
+
+function asLiveRow(raw: Record<string, unknown>, avoid: boolean): LiveModelRow | null {
+  const model_id = String(raw.model_id || "").trim();
+  if (!model_id) return null;
+  return {
+    model_id,
+    score: typeof raw.score === "number" ? raw.score : undefined,
+    n: typeof raw.n === "number" ? raw.n : undefined,
+    down_rate: typeof raw.down_rate === "number" ? raw.down_rate : undefined,
+    avoid,
+  };
+}
+
+export function parseModelPulseResult(raw: string): LiveModelPulseDto {
+  let body: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const rankingSrc = Array.isArray(body.ranking) ? body.ranking : [];
+  const attentionSrc = Array.isArray(body.attention) ? body.attention : [];
+  const attentionIds = new Set(
+    attentionSrc
+      .map((row) => (row && typeof row === "object" ? String((row as { model_id?: string }).model_id || "") : ""))
+      .filter(Boolean),
+  );
+  const ranking = rankingSrc
+    .map((row) =>
+      row && typeof row === "object"
+        ? asLiveRow(row as Record<string, unknown>, attentionIds.has(String((row as { model_id?: string }).model_id || "")))
+        : null,
+    )
+    .filter((row): row is LiveModelRow => row !== null);
+  const attention = attentionSrc
+    .map((row) =>
+      row && typeof row === "object" ? asLiveRow(row as Record<string, unknown>, true) : null,
+    )
+    .filter((row): row is LiveModelRow => row !== null);
+  return { ranking, attention, source: "model_pulse" };
+}
+
+export async function fetchLiveModelPulse(
+  signal?: AbortSignal,
+): Promise<LiveModelPulseDto> {
+  const invoked = await invokeMcpTool("model_pulse", { hours: 24 }, signal);
+  return parseModelPulseResult(invoked.result);
+}
+
 export function invokeMcpTool(
   name: string,
   arguments_: Record<string, unknown> = {},
