@@ -23,6 +23,7 @@ import {
   normalizeTempTriple,
 } from "../strategies/tempStudio";
 import { ComposerSettings } from "./ComposerSettings";
+import { LiveModelPulse } from "./LiveModelPulse";
 
 export interface OutgoingMessage {
   display: string;
@@ -311,6 +312,14 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         </p>
       )}
 
+      <LiveModelPulse
+        selectedId={session.modelIdOverride || effective.modelId}
+        catalogIds={models.map((item) => item.id)}
+        onPick={(modelId) => {
+          patchSession({ modelIdOverride: modelId });
+          setSettingsTab("session");
+        }}
+      />
       <div className="composer-shell">
         <div className="composer-options-bar">
           <label className="composer-model-picker" htmlFor="composer-model-select">

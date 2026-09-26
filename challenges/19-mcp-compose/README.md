@@ -16,3 +16,5 @@ cd challenges/record && RECORD_ONLY=19 npm run record
 ```
 
 Текст: [`VIDEO.md`](VIDEO.md)
+
+Вторая версия (пульс → пин → ответ): [`VERSION-2.md`](VERSION-2.md)

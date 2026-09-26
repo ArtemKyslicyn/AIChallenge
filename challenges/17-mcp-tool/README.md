@@ -19,3 +19,5 @@ cd challenges/record && RECORD_ONLY=17 npm run record
 
 Локальный клиент (видео): [`stand-pulse-cli.mp4`](stand-pulse-cli.mp4)  
 Репозиторий: https://github.com/ArtemKyslicyn/stand-pulse — `pulse --stdio watch`
+
+Вторая версия (пульс в чате): [`VERSION-2.md`](VERSION-2.md)

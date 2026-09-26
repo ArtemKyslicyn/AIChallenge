@@ -992,6 +992,220 @@ textarea {
   border-color: var(--border);
 }
 
+.composer-live-pulse {
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem 1.1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.composer-live-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.composer-live-stamp {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.composer-live-title {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
+  font-weight: 750;
+}
+
+.composer-live-source {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.composer-live-source code {
+  font-size: 0.92em;
+}
+
+.composer-live-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-live-steps li {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.composer-live-steps li[data-done="1"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, #16a34a 45%, var(--border));
+  background: color-mix(in srgb, #22c55e 16%, var(--surface));
+}
+
+.composer-live-now {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.composer-live-now[data-picked="1"] {
+  border-color: color-mix(in srgb, #16a34a 50%, var(--border));
+  background: color-mix(in srgb, #22c55e 12%, var(--surface));
+}
+
+.composer-live-now-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.composer-live-now-id {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.composer-live-now-id code {
+  font-size: inherit;
+}
+
+.composer-live-status,
+.composer-live-empty,
+.composer-live-lane-sub,
+.composer-live-taken {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.composer-live-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.composer-live-refresh {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.composer-live-refresh:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.composer-live-lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.composer-live-lane {
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.composer-live-lane-title {
+  margin: 0;
+  font-weight: 750;
+  font-size: 1rem;
+}
+
+.composer-live-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.composer-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.composer-live-chip[data-state="live"] {
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+}
+
+.composer-live-chip[data-state="on"] {
+  border-color: color-mix(in srgb, #16a34a 55%, var(--border));
+  background: color-mix(in srgb, #22c55e 26%, var(--surface));
+  font-weight: 700;
+}
+
+.composer-live-chip[data-state="avoid"] {
+  cursor: not-allowed;
+  background: color-mix(in srgb, #ef4444 14%, var(--surface));
+}
+
+.composer-live-warn {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.composer-live-warn button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .composer-live-lanes {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-live-now-id {
+    font-size: 1.15rem;
+  }
+}
+
 .composer-options-label {
   font-size: 12px;
   color: var(--text-muted);
