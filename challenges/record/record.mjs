@@ -1698,6 +1698,10 @@ async function openChatPulse(page) {
   const pulse = page.locator(".composer-live-pulse");
   await pulse.waitFor({ timeout: 20_000 });
   await pulse.scrollIntoViewIfNeeded();
+  const toggle = page.getByRole("button", { name: /живые модели/i });
+  if ((await page.locator('.composer-live-pulse[data-open="0"]').count()) > 0) {
+    await toggle.click();
+  }
   return pulse;
 }
 
