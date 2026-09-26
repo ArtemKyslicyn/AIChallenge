@@ -44,7 +44,6 @@ export function LiveModelPulse({ selectedId, catalogIds, onPick }: Props) {
     return () => inflight.current?.abort();
   }, [refresh]);
 
-  const avoidIds = new Set(pulse?.attention.map((row) => row.model_id) ?? []);
   const live = (pulse?.ranking ?? []).filter((row) => !row.avoid).slice(0, 3);
   const avoid = pulse?.attention.slice(0, 2) ?? [];
   const extras: LiveModelRow[] =
