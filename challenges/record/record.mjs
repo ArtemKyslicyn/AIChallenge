@@ -1717,11 +1717,11 @@ async function pickLiveChip(page) {
   const cta = page.locator(".live-who-cta");
   await cta.waitFor({ timeout: 15_000 });
   await cta.click();
-  await page.locator('.live-who[data-picked="1"]').waitFor({ timeout: 8_000 });
+  await page.locator('.live-who[data-picked="1"]').waitFor({ timeout: 10_000 });
   await page.waitForFunction(() => {
     const sel = document.querySelector("#composer-model-select");
-    return Boolean(sel && sel.value);
-  }, { timeout: 8_000 });
+    return Boolean(sel && sel.value && sel.value !== "auto");
+  }, { timeout: 12_000 });
 }
 
 async function challenge16v2(page) {
