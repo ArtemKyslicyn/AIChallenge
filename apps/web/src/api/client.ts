@@ -1791,7 +1791,7 @@ function fromLabRows(
   return parseModelPulseResult(
     JSON.stringify({
       ranking: rankingSrc,
-      attention: attentionSrc.filter((row) => row.down_rate >= 0.25 || row.penalized),
+      attention: attentionSrc.filter((row) => (row.down_rate ?? 0) >= 0.25 || Boolean(row.penalized)),
     }),
   );
 }
