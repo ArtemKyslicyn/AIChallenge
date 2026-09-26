@@ -203,10 +203,17 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
       effective.customRulesText,
     );
 
-  const modelOptions =
-    models.length > 0
-      ? models
-      : [{ id: "auto", label: "Авто (цепочка)", capabilities: { reasoning: false } }];
+  const modelOptions = useMemo(() => {
+    const base =
+      models.length > 0
+        ? models
+        : [{ id: "auto", label: "Авто (цепочка)", capabilities: { reasoning: false } }];
+    const pin = session.modelIdOverride;
+    if (pin && !base.some((m) => m.id === pin)) {
+      return [...base, { id: pin, label: pin, capabilities: { reasoning: false } }];
+    }
+    return base;
+  }, [models, session.modelIdOverride]);
 
   const selectedModel = modelOptions.find((m) => m.id === effective.modelId);
   const reasoningAllowed = selectedModel?.capabilities.reasoning ?? true;
