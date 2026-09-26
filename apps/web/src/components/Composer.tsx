@@ -45,6 +45,8 @@ export type ComposerSeed = {
 
 interface Props {
   sessionId: string;
+  modelPin?: string;
+  onModelPin?: (modelId: string) => void;
   onSend: (message: OutgoingMessage) => void;
   onStop: () => void;
   busy: boolean;
@@ -74,7 +76,7 @@ function looksLikeMediaIntent(text: string): boolean {
   return comic.test(t) || image.test(t) || video.test(t);
 }
 
-export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Props) {
+export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy, maxChars, seed }: Props) {
   const [value, setValue] = useState("");
   const [global, setGlobal] = useState<GlobalChatPrefs>(() => loadGlobalChatPrefs());
   const [session, setSession] = useState<SessionChatPrefs>(() =>
@@ -115,6 +117,16 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
   useEffect(() => {
     setSession(initSessionChatPrefs(sessionId, global.defaultChatMode));
   }, [sessionId, global.defaultChatMode]);
+
+  useEffect(() => {
+    if (modelPin === undefined) return;
+    setSession((prev) => {
+      if (prev.modelIdOverride === modelPin) return prev;
+      const next = { ...prev, modelIdOverride: modelPin };
+      saveSessionChatPrefs(sessionId, next);
+      return next;
+    });
+  }, [modelPin, sessionId]);
 
   const effective = useMemo(() => mergeChatPrefs(global, session), [global, session]);
 
@@ -316,9 +328,9 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
         <div className="composer-options-bar">
           <LiveModelPulse
             selectedId={session.modelIdOverride || effective.modelId}
-            catalogIds={models.map((item) => item.id)}
             onPick={(modelId) => {
               patchSession({ modelIdOverride: modelId });
+              onModelPin?.(modelId);
               setSettingsTab("session");
             }}
           />
@@ -330,6 +342,7 @@ export function Composer({ sessionId, onSend, onStop, busy, maxChars, seed }: Pr
               value={session.modelIdOverride}
               onChange={(e) => {
                 patchSession({ modelIdOverride: e.target.value });
+                onModelPin?.(e.target.value);
                 if (e.target.value) setSettingsTab("session");
               }}
             >

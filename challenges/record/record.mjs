@@ -1647,10 +1647,12 @@ async function showRecordCard(page, { day, title, beat, hold = 8000 }) {
     el.innerHTML = `<p>${day}</p><strong>${title}</strong><span>${beat}</span>`;
     el.style.cssText = [
       "position:fixed",
-      "top:12px",
       "left:50%",
+      "bottom:12px",
+      "top:auto",
       "transform:translateX(-50%)",
       "z-index:2147483647",
+      "pointer-events:none",
       "width:min(980px,94vw)",
       "background:#14171c",
       "color:#f7f7f5",
@@ -1682,9 +1684,9 @@ async function hideRecordCard(page) {
 async function prepLiveRecord(page) {
   await page.addStyleTag({
     content: `
-      .empty, .empty-more, .empty-stand-links { display: none !important; }
-      .composer-wrap { position: static !important; padding-top: 6.2rem !important; }
-      .composer-live-pulse { max-width: 56rem !important; }
+      .empty-more, .empty-stand-links, .empty-more-toggle { display: none !important; }
+      .live-who { outline: 2px solid rgba(234, 88, 12, 0.55) !important; outline-offset: 3px; }
+      .float-dock { display: none !important; }
     `,
   });
 }
@@ -1692,68 +1694,68 @@ async function prepLiveRecord(page) {
 async function openChatPulse(page) {
   acceptDialogs(page);
   await page.goto(BASE + "/?shell=chat", { waitUntil: "networkidle", timeout: 90_000 });
-  await bumpReadability(page, 1.08);
+  await bumpReadability(page, 1.05);
   await prepLiveRecord(page);
-  await settle(page, 1000);
-  const pulse = page.locator(".composer-live-pulse");
-  await pulse.waitFor({ timeout: 20_000 });
-  await pulse.scrollIntoViewIfNeeded();
-  return pulse;
+  const fresh = page.getByRole("button", { name: /новый чат/i });
+  if ((await fresh.count()) > 0) await fresh.click().catch(() => {});
+  await settle(page, 1200);
+  const hero = page.locator(".live-who");
+  await hero.waitFor({ timeout: 20_000 });
+  await page.locator(".live-who-lead, .live-who-why").first().waitFor({ timeout: 20_000 });
+  await hero.scrollIntoViewIfNeeded();
+  return hero;
 }
 
-async function takeLivePulse(page, pulse) {
-  const btn = page.getByRole("button", { name: /пульс/i });
-  await btn.click();
-  await page
-    .locator(
-      '.composer-live-pulse[data-phase="ready"], .composer-live-pulse[data-phase="error"], .composer-live-chip',
-    )
-    .first()
-    .waitFor({ timeout: 12_000 });
-  await pauseOn(pulse, 9000);
+async function takeLivePulse(page, hero) {
+  const btn = page.locator(".live-who-refresh");
+  if ((await btn.count()) > 0) await btn.click();
+  await page.locator(".live-who-lead, .live-who-why").first().waitFor({ timeout: 12_000 });
+  await pauseOn(hero, 7000);
 }
 
 async function pickLiveChip(page) {
-  const live = page.locator('.composer-live-chip[data-state="live"]').first();
-  const chip = (await live.count()) > 0 ? live : page.locator(".composer-live-chip").first();
-  if ((await chip.count()) === 0) return;
-  await chip.click();
-  await page.locator('.composer-live-chip[data-state="on"]').waitFor({ timeout: 8_000 }).catch(() => {});
-  await page.locator('.composer-live-now[data-picked="1"]').waitFor({ timeout: 8_000 }).catch(() => {});
+  const cta = page.locator(".live-who-cta");
+  await cta.waitFor({ timeout: 15_000 });
+  await cta.click();
+  await page.locator('.live-who[data-picked="1"]').waitFor({ timeout: 8_000 });
+  await page.waitForFunction(() => {
+    const sel = document.querySelector("#composer-model-select");
+    return Boolean(sel && sel.value);
+  }, { timeout: 8_000 });
 }
 
 async function challenge16v2(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
     day: "День 16 · версия 2",
-    title: "Чат видит MCP без вкладки MCP",
-    beat: "Доска «живой выбор» — это handshake: стенд на связи, источник model_pulse.",
+    title: "Открыт Чат, не вкладка MCP",
+    beat: "Над полем ввода чипы живых моделей — handshake со стендом. Без пульса полоски нет.",
     hold: 9000,
   });
-  await pauseOn(pulse, 10000);
+  await pauseOn(pulse, 9000);
   await showRecordCard(page, {
     day: "День 16 · версия 2",
-    title: "Снимаем пульс — первый разговор со стендом",
-    beat: "Кнопка ходит в тот же MCP. Шаг 2 загорится, когда ответ придёт.",
+    title: "Кнопка «пульс» спрашивает стенд",
+    beat: "Тот же контур, что list_tools в дне 16. Чипы появляются после ответа.",
     hold: 8000,
   });
   await takeLivePulse(page, pulse);
   await showRecordCard(page, {
     day: "День 16 · версия 2",
     title: "Старый день 16 не снесён",
-    beat: "Вкладка MCP на месте: таблица инструментов как в первой версии.",
+    beat: "Вкладка MCP: connected и таблица инструментов. Доскроллить ниже вахты.",
     hold: 8000,
   });
   await page.getByRole("button", { name: /^MCP$/i }).click();
   await page.locator(".mcp-board").waitFor({ timeout: 20_000 });
-  await page.getByRole("heading", { name: /^MCP$/i }).waitFor({ timeout: 15_000 });
-  await pauseOn(page.locator(".mcp-board"), 12000);
-  await showRecordCard(page, {
-    day: "День 16 · версия 2",
-    title: "Что доказано",
-    beat: "Чат видит стенд. Вкладка MCP со старой таблицей жива.",
-    hold: 8000,
-  });
+  await page.locator(".mcp-status").waitFor({ timeout: 15_000 });
+  const echo = page.getByRole("cell", { name: "echo" });
+  if ((await echo.count()) > 0) {
+    await echo.scrollIntoViewIfNeeded();
+    await pauseOn(echo, 8000);
+  } else {
+    await pauseOn(page.locator(".mcp-board"), 10000);
+  }
   await hideRecordCard(page);
 }
 
@@ -1761,26 +1763,31 @@ async function challenge17v2(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
     day: "День 17 · версия 2",
-    title: "Пульс кормит выбор модели, не JSON",
-    beat: "Тот же model_pulse, но зритель видит «брать», а не каталог tool.",
+    title: "Пульс кормит выбор модели",
+    beat: "Зритель видит живые id, не JSON tool. Клик по чипу ставит пин.",
     hold: 9000,
   });
   await takeLivePulse(page, pulse);
   await showRecordCard(page, {
     day: "День 17 · версия 2",
-    title: "Клик по живой модели ставит пин",
-    beat: "Чип включается, строка «Сейчас в чат пойдёт» повторяет id, селект «Модель» меняется.",
+    title: "Клик по зелёному чипу",
+    beat: "Чип on. Селект «Модель» меняется с Авто на выбранный id.",
     hold: 8000,
   });
   await pickLiveChip(page);
-  await pauseOn(page.locator(".composer-live-now"), 10000);
+  await pauseOn(page.locator(".live-who"), 7000);
   await pauseOn(page.locator(".composer-model-picker").first(), 9000);
   await showRecordCard(page, {
     day: "День 17 · версия 2",
-    title: "Что доказано",
-    beat: "Зелёный чип = пин. Селект «Модель» больше не Авто.",
-    hold: 8000,
+    title: "Старый день 17 на MCP",
+    beat: "Жмём «Проверить стенд» — тот же probe_stand, что кормит пульс.",
+    hold: 6000,
   });
+  await page.getByRole("button", { name: /^MCP$/i }).click();
+  await page.getByRole("button", { name: /проверить стенд/i }).waitFor({ timeout: 15_000 });
+  await page.getByRole("button", { name: /проверить стенд/i }).click();
+  await page.locator(".mcp-call, .pulse-reply").first().waitFor({ timeout: 20_000 }).catch(() => {});
+  await pauseOn(page.locator(".mcp-call, .pulse-reply, .mcp-board").first(), 9000);
   await hideRecordCard(page);
 }
 
@@ -1788,36 +1795,29 @@ async function challenge18v2(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
     day: "День 18 · версия 2",
-    title: "Пульс не разовый — его снимают снова",
-    beat: "Смотрите номер снимка и время. Второй клик — те же данные, свежее время.",
+    title: "Пульс не разовый",
+    beat: "Первый снимок уже в чипах. Второй клик «пульс» обновляет тот же ряд.",
     hold: 9000,
   });
   await takeLivePulse(page, pulse);
-  await pauseOn(page.locator(".composer-live-taken"), 8000);
   await showRecordCard(page, {
     day: "День 18 · версия 2",
-    title: "Второй снимок",
-    beat: "Кнопка уже «Снять пульс ещё раз». Счётчик станет №2.",
+    title: "Снимаем ещё раз",
+    beat: "Кнопка коротко пишет «…». Каталог не пересобираем — только свежие данные.",
     hold: 8000,
   });
   await takeLivePulse(page, pulse);
-  await pauseOn(page.locator(".composer-live-taken"), 9000);
   await showRecordCard(page, {
     day: "День 18 · версия 2",
     title: "Ночная вахта на MCP жива",
-    beat: "Первая версия дня: «Сводка каждые 60 с». Её не удаляли.",
-    hold: 8000,
+    beat: "Жмём «Сводка каждые 60 с» — job в расписании.",
+    hold: 7000,
   });
   await page.getByRole("button", { name: /^MCP$/i }).click();
-  await page.locator(".pulse-jobs").waitFor({ timeout: 20_000 });
-  await page.getByRole("button", { name: /сводка каждые 60/i }).waitFor();
-  await pauseOn(page.locator(".pulse-jobs"), 12000);
-  await showRecordCard(page, {
-    day: "День 18 · версия 2",
-    title: "Что доказано",
-    beat: "Два снимка с разным временем. Расписание на MCP на месте.",
-    hold: 8000,
-  });
+  await page.getByRole("button", { name: /сводка каждые 60/i }).waitFor({ timeout: 15_000 });
+  await page.getByRole("button", { name: /сводка каждые 60/i }).click();
+  await page.locator(".pulse-jobs, .mcp-call").first().waitFor({ timeout: 20_000 }).catch(() => {});
+  await pauseOn(page.locator(".pulse-jobs"), 10000);
   await hideRecordCard(page);
 }
 
@@ -1826,32 +1826,37 @@ async function challenge19v2(page) {
   await showRecordCard(page, {
     day: "День 19 · версия 2",
     title: "Цепочка: пульс → выбор → ответ",
-    beat: "Три шага на доске. Потом сообщение. model_id в пузыре = пин.",
+    beat: "Три шага без JSON: снять пульс, кликнуть живую, отправить сообщение.",
     hold: 9000,
   });
   await takeLivePulse(page, pulse);
   await pickLiveChip(page);
-  await pauseOn(page.locator(".composer-live-now[data-picked='1']"), 10000);
+  await pauseOn(page.locator(".live-who-lead"), 7000);
   await showRecordCard(page, {
     day: "День 19 · версия 2",
-    title: "Отправляем вопрос выбранной модели",
-    beat: "В ответе бейдж model_id должен совпасть со строкой «Сейчас в чат пойдёт».",
-    hold: 8000,
+    title: "Отправляем выбранной модели",
+    beat: "Титр внизу. В пузыре бейдж model_id = лидер карточки.",
+    hold: 6000,
   });
   const box = page.locator("textarea").last();
   await box.fill("Коротко: какая модель отвечает? Назови свой model_id.");
-  await settle(page, 2000);
+  await settle(page, 1500);
+  await hideRecordCard(page);
   await page.getByRole("button", { name: /Отправить|Send/i }).click();
-  await page.locator(".turn.assistant .badge").first().waitFor({ timeout: 60_000 });
-  await settle(page, 2000);
-  await pauseOn(page.locator(".composer-live-now"), 8000);
+  await page.locator(".turn.assistant .badge").first().waitFor({ timeout: 90_000 });
+  await settle(page, 1500);
   await pauseOn(page.locator(".turn.assistant").last(), 12000);
   await showRecordCard(page, {
     day: "День 19 · версия 2",
-    title: "Что доказано",
-    beat: "Пульс → пин → ответ. model_id на бейдже тот же, что на доске.",
-    hold: 8000,
+    title: "Ночной бриф на MCP",
+    beat: "Запускаем пайплайн search → summarize → saveToFile.",
+    hold: 5000,
   });
+  await page.getByRole("button", { name: /^MCP$/i }).click();
+  await page.getByRole("button", { name: /ночной бриф/i }).waitFor({ timeout: 20_000 });
+  await page.getByRole("button", { name: /ночной бриф/i }).click();
+  await page.locator('.mcp-call[data-tool="search"]').waitFor({ state: "attached", timeout: 90_000 }).catch(() => {});
+  await pauseOn(page.locator(".mcp-call, .pulse-pipe").first(), 10000);
   await hideRecordCard(page);
 }
 
@@ -1859,58 +1864,42 @@ async function challenge20v2(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
     day: "День 20 · версия 2",
-    title: "Чат спрашивает только сервер models",
-    beat: "Слева «брать», справа «не брать». Сыплющиеся из attention кликнуть нельзя.",
+    title: "Чат спрашивает сервер models",
+    beat: "Зелёные чипы — брать. Красные disabled — не брать (attention / down_rate).",
     hold: 9000,
   });
   await takeLivePulse(page, pulse);
-  await pauseOn(page.locator('.composer-live-lane[data-lane="live"]'), 9000);
-  await pauseOn(page.locator('.composer-live-lane[data-lane="avoid"]'), 10000);
+  await pauseOn(page.locator('.live-who-alts[data-lane="avoid"]'), 8000);
   await showRecordCard(page, {
     day: "День 20 · версия 2",
-    title: "На MCP те же три сервера",
-    beat: "watch / models / brief. Разбор смены — старая версия дня, она на месте.",
-    hold: 8000,
+    title: "На MCP три сервера",
+    beat: "watch / models / brief. Запускаем «Разбор смены».",
+    hold: 6000,
   });
   await page.getByRole("button", { name: /^MCP$/i }).click();
   await page.locator('.mcp-server[data-server="watch"]').waitFor({ timeout: 20_000 });
   await page.locator('.mcp-server[data-server="models"]').waitFor();
   await page.locator('.mcp-server[data-server="brief"]').waitFor();
-  await pauseOn(page.locator(".mcp-servers"), 12000);
-  await page.getByRole("button", { name: "Разбор смены", exact: true }).waitFor();
-  await pauseOn(page.getByRole("button", { name: "Разбор смены", exact: true }), 8000);
-  await showRecordCard(page, {
-    day: "День 20 · версия 2",
-    title: "Что доказано",
-    beat: "Чат бьёт models. Три сервера и разбор смены на MCP живы.",
-    hold: 8000,
-  });
+  await pauseOn(page.locator(".mcp-servers"), 10000);
+  await page.getByRole("button", { name: "Разбор смены", exact: true }).click();
+  await page.locator(".mcp-call").first().waitFor({ state: "attached", timeout: 90_000 }).catch(() => {});
+  await pauseOn(page.locator(".mcp-call, .mcp-servers").first(), 8000);
   await hideRecordCard(page);
 }
 
 async function challenge21(page) {
-  acceptDialogs(page);
-  await page.goto(BASE + "/?shell=chat", { waitUntil: "networkidle", timeout: 90_000 });
-  await bumpReadability(page, 1.12);
-  await settle(page, 800);
-  const pulse = page.locator(".composer-live-pulse");
-  await pulse.waitFor({ timeout: 20_000 });
-  await page.getByRole("button", { name: /снять пульс/i }).click();
-  await page.locator(".composer-live-chip").first().waitFor({ timeout: 20_000 });
-  await pauseOn(pulse, 4000);
-  const live = page.locator('.composer-live-chip[data-state="live"], .composer-live-chip[data-state="on"]').first();
-  if ((await live.count()) > 0) {
-    await live.click();
-    await page.locator('.composer-live-chip[data-state="on"]').waitFor({ timeout: 10_000 });
-  }
-  await pauseOn(pulse, 4000);
-  const avoid = page.locator('.composer-live-chip[data-state="avoid"]').first();
-  if ((await avoid.count()) > 0) {
-    await pauseOn(avoid, 2500);
-  }
-  await page.locator("#composer-model-select").scrollIntoViewIfNeeded();
-  await pauseOn(page.locator(".composer-model-picker").first(), 2500);
-  await settle(page, 800);
+  const pulse = await openChatPulse(page);
+  await showRecordCard(page, {
+    day: "День 21",
+    title: "Сборка: живой выбор в обычном чате",
+    beat: "Чипы из пульса стенда. MCP-вкладка не нужна, чтобы выбрать модель.",
+    hold: 8000,
+  });
+  await takeLivePulse(page, pulse);
+  await pickLiveChip(page);
+  await pauseOn(page.locator(".live-who"), 8000);
+  await pauseOn(page.locator(".composer-model-picker").first(), 6000);
+  await hideRecordCard(page);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
