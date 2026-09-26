@@ -1716,7 +1716,7 @@ export function listMcpTools(signal?: AbortSignal): Promise<McpCatalogDto> {
 }
 
 export function getMcpPulse(signal?: AbortSignal): Promise<McpPulseDto> {
-  return request<McpPulseDto>("/mcp/pulse", { signal });
+  return request<McpPulseDto>("/mcp/pulse", { signal }, 8_000);
 }
 
 export interface LiveModelRow {
@@ -1775,11 +1775,55 @@ export function parseModelPulseResult(raw: string): LiveModelPulseDto {
   return { ranking, attention, source: "model_pulse" };
 }
 
+const LIVE_PULSE_CACHE_MS = 45_000;
+let livePulseCache: { at: number; data: LiveModelPulseDto } | null = null;
+
+function fromDigestPulse(snapshot: McpPulseDto): LiveModelPulseDto | null {
+  const raw = snapshot.latest_digest?.pulse;
+  if (!raw) return null;
+  return parseModelPulseResult(JSON.stringify(raw));
+}
+
+function fromLabRows(
+  rankingSrc: Array<{ model_id: string; score?: number; n?: number }>,
+  attentionSrc: Array<{ model_id: string; down_rate?: number; penalized?: boolean }>,
+): LiveModelPulseDto {
+  return parseModelPulseResult(
+    JSON.stringify({
+      ranking: rankingSrc,
+      attention: attentionSrc.filter((row) => row.down_rate >= 0.25 || row.penalized),
+    }),
+  );
+}
+
 export async function fetchLiveModelPulse(
   signal?: AbortSignal,
 ): Promise<LiveModelPulseDto> {
-  const invoked = await invokeMcpTool("model_pulse", { hours: 24 }, signal);
-  return parseModelPulseResult(invoked.result);
+  if (livePulseCache && Date.now() - livePulseCache.at < LIVE_PULSE_CACHE_MS) {
+    return livePulseCache.data;
+  }
+  try {
+    const snapshot = await getMcpPulse(signal);
+    const fromSnap = fromDigestPulse(snapshot);
+    if (fromSnap && (fromSnap.ranking.length || fromSnap.attention.length)) {
+      livePulseCache = { at: Date.now(), data: fromSnap };
+      return fromSnap;
+    }
+  } catch {
+    /* snapshot busy — fall through to lab reads, never /mcp/invoke */
+  }
+  try {
+    const [pareto, feedback] = await Promise.all([
+      request<LabParetoDto>("/lab/pareto?hours=24", { signal }, 4_000),
+      request<LabFeedbackStatsDto>("/lab/feedback-stats?hours=24", { signal }, 4_000),
+    ]);
+    const data = fromLabRows(pareto.models, feedback.models);
+    livePulseCache = { at: Date.now(), data };
+    return data;
+  } catch {
+    if (livePulseCache) return livePulseCache.data;
+    throw new Error("пульс недоступен");
+  }
 }
 
 export function invokeMcpTool(
@@ -1794,6 +1838,6 @@ export function invokeMcpTool(
       body: JSON.stringify({ name, arguments: arguments_ }),
       signal,
     },
-    30_000,
+    12_000,
   );
 }
