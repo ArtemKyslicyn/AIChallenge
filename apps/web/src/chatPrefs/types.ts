@@ -34,6 +34,8 @@ export interface SessionChatPrefs {
   sessionContext: string;
   /** Three temperatures for ×T studio (low / mid / high). */
   tempStudioTemps: [number, number, number];
+  /** When false, guest MCP tools are skipped for this chat (URL stays connected). */
+  guestMcpEnabled: boolean;
 }
 
 /** Merged view used by Composer and outgoing message builder. */
@@ -69,4 +71,5 @@ export const DEFAULT_SESSION_CHAT_PREFS: SessionChatPrefs = {
   customRulesOverride: null,
   sessionContext: "",
   tempStudioTemps: [0, 0.7, 1.2],
+  guestMcpEnabled: true,
 };

@@ -8,12 +8,21 @@ import {
   type ResponseTemplateId,
 } from "../promptControls";
 import type { ChatMode, GlobalChatPrefs, SessionChatPrefs } from "../chatPrefs/types";
+import { GuestMcpPanel } from "./GuestMcpPanel";
 
-type SettingsTab = "global" | "session";
+export type SettingsTab = "global" | "session" | "connections";
+
+const TAB_GLOBAL_ID = "settings-tab-global";
+const TAB_SESSION_ID = "settings-tab-session";
+const TAB_CONNECTIONS_ID = "settings-tab-connections";
+const PANEL_GLOBAL_ID = "settings-panel-global";
+const PANEL_SESSION_ID = "settings-panel-session";
+const PANEL_CONNECTIONS_ID = "settings-panel-connections";
 
 interface Props {
   tab: SettingsTab;
   onTabChange: (tab: SettingsTab) => void;
+  sessionId: string;
   global: GlobalChatPrefs;
   session: SessionChatPrefs;
   onPatchGlobal: (patch: Partial<GlobalChatPrefs>) => void;
@@ -26,6 +35,7 @@ interface Props {
 export function ComposerSettings({
   tab,
   onTabChange,
+  sessionId,
   global,
   session,
   onPatchGlobal,
@@ -67,9 +77,11 @@ export function ComposerSettings({
       <div className="settings-tabs" role="tablist" aria-label="Уровень настроек">
         <button
           type="button"
+          id={TAB_GLOBAL_ID}
           role="tab"
           className="settings-tab"
           aria-selected={tab === "global"}
+          aria-controls={PANEL_GLOBAL_ID}
           onClick={() => onTabChange("global")}
         >
           Общие
@@ -77,18 +89,38 @@ export function ComposerSettings({
         </button>
         <button
           type="button"
+          id={TAB_SESSION_ID}
           role="tab"
           className="settings-tab"
           aria-selected={tab === "session"}
+          aria-controls={PANEL_SESSION_ID}
           onClick={() => onTabChange("session")}
         >
-          Этот чат
+          Чат
           <span className="settings-tab-hint">только здесь</span>
+        </button>
+        <button
+          type="button"
+          id={TAB_CONNECTIONS_ID}
+          role="tab"
+          className="settings-tab"
+          title="свои серверы"
+          aria-selected={tab === "connections"}
+          aria-controls={PANEL_CONNECTIONS_ID}
+          onClick={() => onTabChange("connections")}
+        >
+          Подключения
+          <span className="settings-tab-hint">свои серверы</span>
         </button>
       </div>
 
       {tab === "global" && (
-        <div className="settings-panel" role="tabpanel">
+        <div
+          id={PANEL_GLOBAL_ID}
+          className="settings-panel"
+          role="tabpanel"
+          aria-labelledby={TAB_GLOBAL_ID}
+        >
           <p className="composer-more-lead">
             Общие настройки сохраняются в браузере и применяются к новым чатам. Их можно переопределить
             на вкладке «Этот чат».
@@ -182,11 +214,28 @@ export function ComposerSettings({
       )}
 
       {tab === "session" && (
-        <div className="settings-panel" role="tabpanel">
+        <div
+          id={PANEL_SESSION_ID}
+          className="settings-panel"
+          role="tabpanel"
+          aria-labelledby={TAB_SESSION_ID}
+        >
           <p className="composer-more-lead">
             Настройки этого чата живут, пока открыта вкладка. Смена чата или «Новый чат» — другой
             набор переопределений.
           </p>
+
+          <label className="composer-toggle">
+            <input
+              type="checkbox"
+              checked={session.guestMcpEnabled}
+              onChange={(e) => onPatchSession({ guestMcpEnabled: e.target.checked })}
+            />
+            <span>Свой сервер в этом чате</span>
+          </label>
+          <span className="composer-field-hint">
+            В ×2, ×T и ×4 набор не вызывается.
+          </span>
 
           <label className="composer-field">
             <span>Режим для этого сообщения</span>
@@ -404,6 +453,17 @@ export function ComposerSettings({
               )}
             </div>
           </details>
+        </div>
+      )}
+
+      {tab === "connections" && (
+        <div
+          id={PANEL_CONNECTIONS_ID}
+          className="settings-panel"
+          role="tabpanel"
+          aria-labelledby={TAB_CONNECTIONS_ID}
+        >
+          <GuestMcpPanel sessionId={sessionId} />
         </div>
       )}
     </div>
