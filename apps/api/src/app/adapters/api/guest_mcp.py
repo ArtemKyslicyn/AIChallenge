@@ -122,6 +122,7 @@ async def patch_guest_mcp_server(
     payload: GuestMcpPatchRequest,
     request: Request,
     session: AuthorizedSession,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> GuestMcpServerResponse:
     container = get_container(request)
     try:
@@ -130,6 +131,8 @@ async def patch_guest_mcp_server(
             server_id,
             payload.enabled,
             registry=container.guest_mcp_registry,
+            analytics=container.analytics,
+            distinct_id=_distinct_id(request, client_visitor_id),
         )
     except KeyError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сервер не найден.") from None
@@ -141,9 +144,16 @@ async def delete_guest_mcp_server(
     server_id: UUID,
     request: Request,
     session: AuthorizedSession,
+    client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> None:
     container = get_container(request)
-    record = await container.guest_mcp_registry.get(session.id, server_id)
-    if record is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сервер не найден.")
-    await disconnect_guest_mcp(session.id, server_id, registry=container.guest_mcp_registry)
+    try:
+        await disconnect_guest_mcp(
+            session.id,
+            server_id,
+            registry=container.guest_mcp_registry,
+            analytics=container.analytics,
+            distinct_id=_distinct_id(request, client_visitor_id),
+        )
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сервер не найден.") from None

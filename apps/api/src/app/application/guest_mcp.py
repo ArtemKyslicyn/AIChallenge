@@ -14,6 +14,7 @@ from app.domain.guest_mcp import (
     GuestMcpRegistry,
     GuestMcpServer,
     GuestMcpUrlError,
+    assert_guest_mcp_resolved,
     assert_guest_mcp_url,
     url_host,
 )
@@ -60,6 +61,7 @@ async def connect_guest_mcp(
 
     try:
         normalized = assert_guest_mcp_url(url, allow_loopback=allow_loopback)
+        assert_guest_mcp_resolved(url_host(normalized), allow_loopback=allow_loopback)
     except GuestMcpUrlError as exc:
         await emit_guest_event(
             analytics,
@@ -153,12 +155,20 @@ async def set_guest_enabled(
     enabled: bool,
     *,
     registry: GuestMcpRegistry,
+    analytics: AnalyticsCapture,
+    distinct_id: str,
 ) -> GuestMcpServer:
     record = await registry.get(session_id, server_id)
     if record is None:
         raise KeyError(server_id)
     server = replace(record.server, enabled=enabled)
     await registry.put(session_id, GuestMcpRecord(server=server, token=record.token))
+    await emit_guest_event(
+        analytics,
+        "guest_mcp_toggled",
+        distinct_id,
+        {"enabled": enabled, "url_host": url_host(server.url)},
+    )
     return server
 
 
@@ -167,5 +177,17 @@ async def disconnect_guest_mcp(
     server_id: UUID,
     *,
     registry: GuestMcpRegistry,
+    analytics: AnalyticsCapture,
+    distinct_id: str,
 ) -> None:
+    record = await registry.get(session_id, server_id)
+    if record is None:
+        raise KeyError(server_id)
+    host = url_host(record.server.url)
     await registry.delete(session_id, server_id)
+    await emit_guest_event(
+        analytics,
+        "guest_mcp_disconnect",
+        distinct_id,
+        {"url_host": host},
+    )

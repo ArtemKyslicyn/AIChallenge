@@ -342,6 +342,7 @@ async def send_user_message_and_stream(
     use_guest_mcp: bool | None = True,
     guest_mcp_registry: GuestMcpRegistry | None = None,
     guest_mcp_client: GuestMcpClient | None = None,
+    guest_mcp_allow_loopback: bool = False,
     guest_tool_runner: GuestToolRunner | None = None,
     analytics: AnalyticsCapture | None = None,
     analytics_distinct_id: str | None = None,
@@ -761,6 +762,7 @@ async def send_user_message_and_stream(
             client=guest_mcp_client,
             analytics=analytics,
             distinct_id=distinct_id,
+            allow_loopback=guest_mcp_allow_loopback,
         )
         guest_tools = await runner.openai_tools()
         if guest_tools:

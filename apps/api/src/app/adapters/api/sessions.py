@@ -521,6 +521,7 @@ async def send_message(
                 use_guest_mcp=payload.use_guest_mcp,
                 guest_mcp_registry=container.guest_mcp_registry,
                 guest_mcp_client=container.guest_mcp_client,
+                guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,
                 analytics=container.analytics,
                 analytics_distinct_id=(session.visitor_hash or "").strip() or "anonymous",
             )

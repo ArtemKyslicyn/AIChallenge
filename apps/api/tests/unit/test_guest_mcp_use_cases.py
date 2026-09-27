@@ -5,9 +5,23 @@ from app.adapters.persistence.guest_mcp_memory import InMemoryGuestMcpRegistry
 from app.application.guest_mcp import (
     GuestMcpAuthError,
     connect_guest_mcp,
+    disconnect_guest_mcp,
     list_guest_mcp,
+    set_guest_enabled,
 )
 from app.domain.guest_mcp import GuestMcpRecord, GuestMcpServer, GuestMcpUrlError
+
+
+@pytest.fixture(autouse=True)
+def _stub_guest_mcp_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ipaddress
+
+    from app.domain import guest_mcp as domain_guest_mcp
+
+    def fake_resolve(host: str) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]:
+        return (ipaddress.ip_address("8.8.8.8"),)
+
+    monkeypatch.setattr(domain_guest_mcp, "_default_resolve", fake_resolve)
 
 
 class _FakeClient:
@@ -155,3 +169,68 @@ async def test_connect_unauthorized_emits_fail() -> None:
         )
     assert analytics.names == ["guest_mcp_connect_started", "guest_mcp_connect_fail"]
     assert analytics.props[-1].get("reason") == "unauthorized"
+
+
+async def test_set_enabled_emits_toggled() -> None:
+    session_id = uuid4()
+    server_id = uuid4()
+    analytics = _NoopAnalytics()
+    registry = InMemoryGuestMcpRegistry()
+    await registry.put(
+        session_id,
+        GuestMcpRecord(
+            server=GuestMcpServer(
+                id=server_id,
+                name="kit",
+                url="https://kit.example.com/mcp",
+                enabled=True,
+                tool_names=("echo",),
+                status="connected",
+            ),
+            token="tok",
+        ),
+    )
+    server = await set_guest_enabled(
+        session_id,
+        server_id,
+        False,
+        registry=registry,
+        analytics=analytics,
+        distinct_id="v1",
+    )
+    assert server.enabled is False
+    assert analytics.names == ["guest_mcp_toggled"]
+    assert analytics.props[0] == {"enabled": False, "url_host": "kit.example.com"}
+    assert all("token" not in p for p in analytics.props)
+
+
+async def test_disconnect_emits_event() -> None:
+    session_id = uuid4()
+    server_id = uuid4()
+    analytics = _NoopAnalytics()
+    registry = InMemoryGuestMcpRegistry()
+    await registry.put(
+        session_id,
+        GuestMcpRecord(
+            server=GuestMcpServer(
+                id=server_id,
+                name="kit",
+                url="https://kit.example.com/mcp",
+                enabled=True,
+                tool_names=("echo",),
+                status="connected",
+            ),
+            token="tok",
+        ),
+    )
+    await disconnect_guest_mcp(
+        session_id,
+        server_id,
+        registry=registry,
+        analytics=analytics,
+        distinct_id="v1",
+    )
+    assert await registry.list(session_id) == ()
+    assert analytics.names == ["guest_mcp_disconnect"]
+    assert analytics.props[0] == {"url_host": "kit.example.com"}
+    assert all("token" not in p for p in analytics.props)

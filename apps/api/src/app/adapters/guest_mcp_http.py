@@ -112,6 +112,7 @@ class HttpGuestMcpClient:
             async with httpx.AsyncClient(
                 transport=self._transport,
                 timeout=timeout,
+                follow_redirects=False,
             ) as client:
                 response = await client.post(
                     url,
