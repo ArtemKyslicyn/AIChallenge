@@ -50,6 +50,7 @@ export function loadGenerationPrefs(): GenerationPrefs {
     customRulesOverride: null,
     sessionContext: "",
     tempStudioTemps: [0, 0.7, 1.2],
+    guestMcpEnabled: true,
   });
   return toLegacyPrefs(effective, global.responseTemplateId, global.promptControls, global.customRulesText);
 }

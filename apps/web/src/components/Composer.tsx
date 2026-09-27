@@ -22,7 +22,7 @@ import {
   matchPresetId,
   normalizeTempTriple,
 } from "../strategies/tempStudio";
-import { ComposerSettings } from "./ComposerSettings";
+import { ComposerSettings, type SettingsTab } from "./ComposerSettings";
 import { LiveModelPulse } from "./LiveModelPulse";
 
 export interface OutgoingMessage {
@@ -83,7 +83,7 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
     initSessionChatPrefs(sessionId, loadGlobalChatPrefs().defaultChatMode),
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"global" | "session">("global");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("global");
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
@@ -549,6 +549,7 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
             <ComposerSettings
               tab={settingsTab}
               onTabChange={setSettingsTab}
+              sessionId={sessionId}
               global={global}
               session={session}
               onPatchGlobal={patchGlobal}

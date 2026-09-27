@@ -2022,7 +2022,7 @@ textarea {
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-1);
   padding: 3px;
   border-radius: var(--radius-md);
@@ -2035,6 +2035,7 @@ textarea {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+  min-height: 24px;
   padding: var(--space-2) var(--space-3);
   border: none;
   border-radius: calc(var(--radius-md) - 2px);
@@ -2063,6 +2064,131 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  max-height: min(40vh, 22rem);
+  overflow-y: auto;
+}
+
+.composer-field input[type="text"],
+.composer-field input[type="url"],
+.composer-field input[type="password"] {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+}
+
+.guest-mcp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.guest-mcp-connect-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.guest-mcp-form-error {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--danger, #b91c1c);
+}
+
+.guest-mcp-muted {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
+.guest-mcp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.guest-mcp-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+}
+
+.guest-mcp-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-small);
+}
+
+.guest-mcp-row-toggle {
+  flex: 1 1 8rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.guest-mcp-row-name {
+  font-weight: 600;
+}
+
+.guest-mcp-row-host {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.guest-mcp-row-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.guest-mcp-row-enable {
+  margin: 0;
+}
+
+.guest-mcp-tool-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.guest-mcp-delete {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.guest-mcp-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--border);
+}
+
+.guest-mcp-help {
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.guest-mcp-add-toggle {
+  align-self: flex-start;
+  font-size: 12px;
 }
 
 .settings-overrides {

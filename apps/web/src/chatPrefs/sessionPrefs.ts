@@ -59,6 +59,10 @@ export function loadSessionChatPrefs(sessionId: string): SessionChatPrefs {
         typeof parsed.customRulesOverride === "string" ? parsed.customRulesOverride : null,
       sessionContext: typeof parsed.sessionContext === "string" ? parsed.sessionContext : "",
       tempStudioTemps: normalizeTempTriple(parsed.tempStudioTemps),
+      guestMcpEnabled:
+        typeof parsed.guestMcpEnabled === "boolean"
+          ? parsed.guestMcpEnabled
+          : DEFAULT_SESSION_CHAT_PREFS.guestMcpEnabled,
     };
   } catch {
     return { ...DEFAULT_SESSION_CHAT_PREFS, promptControlsOverride: null };
