@@ -37,6 +37,18 @@ GUEST_SERVER_ID = UUID("abcd1234-0000-0000-0000-000000000000")
 PREFIXED_ECHO = "g_abcd1234_echo"
 
 
+@pytest.fixture(autouse=True)
+def _stub_guest_mcp_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ipaddress
+
+    from app.domain import guest_mcp as domain_guest_mcp
+
+    def fake_resolve(host: str) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]:
+        return (ipaddress.ip_address("8.8.8.8"),)
+
+    monkeypatch.setattr(domain_guest_mcp, "_default_resolve", fake_resolve)
+
+
 class _GuestToolFakeLLM(FakeLLMProvider):
     def __init__(self, text: str = "after tool") -> None:
         super().__init__(text=text, model_id="fake-model")

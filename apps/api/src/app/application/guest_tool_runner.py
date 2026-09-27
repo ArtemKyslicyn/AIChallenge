@@ -6,7 +6,15 @@ from typing import Any
 from uuid import UUID
 
 from app.domain.analytics import AnalyticsCapture
-from app.domain.guest_mcp import GuestMcpClient, GuestMcpRecord, GuestMcpRegistry, url_host
+from app.domain.guest_mcp import (
+    GuestMcpClient,
+    GuestMcpRecord,
+    GuestMcpRegistry,
+    GuestMcpUrlError,
+    assert_guest_mcp_resolved,
+    assert_guest_mcp_url,
+    url_host,
+)
 
 _MAX_OPENAI_NAME = 64
 
@@ -47,12 +55,14 @@ class GuestToolRunner:
         client: GuestMcpClient,
         analytics: AnalyticsCapture | None = None,
         distinct_id: str = "",
+        allow_loopback: bool = False,
     ) -> None:
         self._session_id = session_id
         self._registry = registry
         self._client = client
         self._analytics = analytics
         self._distinct_id = distinct_id
+        self._allow_loopback = allow_loopback
         self._records: tuple[GuestMcpRecord, ...] = ()
 
     async def _enabled_records(self) -> tuple[GuestMcpRecord, ...]:
@@ -88,8 +98,13 @@ class GuestToolRunner:
         if matched is None:
             raise ValueError(f"unknown guest tool: {name}")
         record, raw_tool = matched
+        try:
+            safe_url = assert_guest_mcp_url(record.server.url, allow_loopback=self._allow_loopback)
+            assert_guest_mcp_resolved(url_host(safe_url), allow_loopback=self._allow_loopback)
+        except GuestMcpUrlError as exc:
+            raise ValueError(str(exc)) from exc
         return await self._client.call_tool(
-            record.server.url,
+            safe_url,
             record.token,
             raw_tool,
             dict(arguments or {}),
