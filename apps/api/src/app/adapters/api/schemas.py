@@ -97,6 +97,9 @@ class SendMessageRequest(BaseModel):
     #: Pin a model for this reply; ``None`` keeps the scenario default.
     model: str | None = None
     chat_mode: Literal["single", "compare", "lab", "temp_studio"] | None = None
+    #: When ``False``, skip guest MCP tools even in single mode. ``None`` / ``True``
+    #: keep legacy clients on guest tools in single chat.
+    use_guest_mcp: bool | None = True
 
 
 class ProbeMessage(BaseModel):

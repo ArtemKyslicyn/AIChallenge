@@ -30,6 +30,7 @@ import {
   isTurn,
 } from "../types";
 import { initSessionChatPrefs, loadGlobalChatPrefs } from "../chatPrefs";
+import { isMediaSseToolName } from "../guestMcpHints";
 import { compareTemplateLabel, CompareTurnView } from "./CompareTurnView";
 import { Composer, type OutgoingMessage } from "./Composer";
 import { LiveWhoToAsk } from "./LiveWhoToAsk";
@@ -271,7 +272,7 @@ export function Chat({
 
   const sendSingle = useCallback(
     async (
-      { display, api, modelId }: OutgoingMessage,
+      { display, api, modelId, chatMode, effective }: OutgoingMessage,
       controller: AbortController,
       hadTurns: boolean,
     ) => {
@@ -303,6 +304,11 @@ export function Chat({
                 setStatus(`Отвечает ${event.model_id}.`);
                 break;
               case "tool_start": {
+                if (!isMediaSseToolName(event.name)) {
+                  setStatus(`Вызываю ${event.name} на вашем сервере…`);
+                  debug("info", `guest tool start · ${event.name}`);
+                  break;
+                }
                 const kind =
                   event.name === "generate_video"
                     ? "video"
@@ -327,6 +333,16 @@ export function Chat({
                 break;
               }
               case "tool_result":
+                if (!isMediaSseToolName(event.name)) {
+                  if (event.status === "error") {
+                    debug("error", event.error || "guest tool error");
+                    setStatus(event.error || "Не удалось вызвать инструмент.");
+                    setError(event.error || "Не удалось вызвать инструмент.");
+                  } else {
+                    setStatus(`Инструмент ${event.name} выполнен.`);
+                  }
+                  break;
+                }
                 if (event.status === "error") {
                   debug("error", event.error || "media tool error");
                   const errJob = {
@@ -495,7 +511,11 @@ export function Chat({
             }
           },
           controller.signal,
-          { model: modelId },
+          {
+            model: modelId,
+            chatMode,
+            ...(effective.guestMcpEnabled ? {} : { useGuestMcp: false }),
+          },
         );
       } catch (e) {
         if (controller.signal.aborted) {

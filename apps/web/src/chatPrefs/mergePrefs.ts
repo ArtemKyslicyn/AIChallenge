@@ -20,5 +20,6 @@ export function mergeChatPrefs(
     customRulesText: session.customRulesOverride ?? global.customRulesText,
     chatMode: session.chatMode,
     sessionContext: session.sessionContext.trim(),
+    guestMcpEnabled: session.guestMcpEnabled,
   };
 }

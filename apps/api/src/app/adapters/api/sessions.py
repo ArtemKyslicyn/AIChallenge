@@ -518,6 +518,7 @@ async def send_message(
                     max_question_chars=container.settings.cascade_max_cheap_chars,
                 ),
                 chat_mode=payload.chat_mode,
+                use_guest_mcp=payload.use_guest_mcp,
                 guest_mcp_registry=container.guest_mcp_registry,
                 guest_mcp_client=container.guest_mcp_client,
                 analytics=container.analytics,

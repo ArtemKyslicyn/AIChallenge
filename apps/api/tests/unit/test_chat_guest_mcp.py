@@ -108,6 +108,7 @@ async def _stream(
     *,
     registry: InMemoryGuestMcpRegistry,
     chat_mode: str | None = None,
+    use_guest_mcp: bool | None = True,
     guest_runner: GuestToolRunner | None = None,
 ) -> list[object]:
     sessions = InMemorySessionRepository()
@@ -136,6 +137,7 @@ async def _stream(
         max_history_messages=40,
         id_factory=IdFactory(),
         chat_mode=chat_mode,
+        use_guest_mcp=use_guest_mcp,
         guest_mcp_registry=registry,
         guest_mcp_client=_PongGuestClient(),
         guest_tool_runner=guest_runner,
@@ -186,3 +188,11 @@ async def test_omitted_chat_mode_defaults_single() -> None:
     await _seed_guest(registry)
     events = await _stream(registry=registry, chat_mode=None)
     assert any(isinstance(e, ToolStartEvent) and e.name == "echo" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_use_guest_mcp_false_skips_guest_tools() -> None:
+    registry = InMemoryGuestMcpRegistry()
+    await _seed_guest(registry)
+    events = await _stream(registry=registry, chat_mode="single", use_guest_mcp=False)
+    assert not any(isinstance(e, ToolStartEvent) for e in events)

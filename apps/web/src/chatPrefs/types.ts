@@ -48,6 +48,7 @@ export interface EffectiveChatPrefs {
   customRulesText: string;
   chatMode: ChatMode;
   sessionContext: string;
+  guestMcpEnabled: boolean;
 }
 
 export const DEFAULT_GLOBAL_CHAT_PREFS: GlobalChatPrefs = {

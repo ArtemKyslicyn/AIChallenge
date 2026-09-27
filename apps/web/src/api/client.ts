@@ -622,12 +622,18 @@ function parseFrame(raw: string): ChatEvent | null {
   }
 }
 
+export type SendMessageChatMode = "single" | "compare" | "lab" | "temp_studio";
+
 export async function sendMessageSSE(
   session: SessionCredentials,
   content: string,
   onEvent: (event: ChatEvent) => void,
   signal?: AbortSignal,
-  options: { model?: string } = {},
+  options: {
+    model?: string;
+    chatMode?: SendMessageChatMode;
+    useGuestMcp?: boolean;
+  } = {},
 ): Promise<void> {
   const store = loadStore();
   const owned = store.items[session.id];
@@ -645,6 +651,8 @@ export async function sendMessageSSE(
     body: JSON.stringify({
       content,
       ...(options.model !== undefined ? { model: options.model } : {}),
+      ...(options.chatMode !== undefined ? { chat_mode: options.chatMode } : {}),
+      ...(options.useGuestMcp !== undefined ? { use_guest_mcp: options.useGuestMcp } : {}),
     }),
     signal,
   });
