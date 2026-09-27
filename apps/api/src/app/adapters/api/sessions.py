@@ -26,6 +26,7 @@ from app.adapters.api.schemas import (
     SessionTracesResponse,
 )
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
+from app.adapters.api.guest_mcp import router as guest_mcp_router
 from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
 from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
@@ -586,3 +587,6 @@ async def replay_message(
             yield frame
 
     return StreamingResponse(replay(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
+
+
+router.include_router(guest_mcp_router)

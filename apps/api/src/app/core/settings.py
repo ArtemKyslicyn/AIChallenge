@@ -197,6 +197,8 @@ class Settings(BaseSettings):
     # Internal MCP sidecar (compose service `mcp`). Token names only in git.
     mcp_base_url: str = "http://mcp:18765"
     mcp_shared_token: str = ""
+    #: Allow http://127.0.0.1 guest MCP URLs (local dev only).
+    guest_mcp_allow_loopback: bool = False
 
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""

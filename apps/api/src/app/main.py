@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_credentials=False,
             # DELETE is here for retracting a vote: without it the browser
             # fails the preflight and the thumb can be pressed but never released.
-            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=[
                 "Content-Type",
                 SESSION_TOKEN_HEADER,
