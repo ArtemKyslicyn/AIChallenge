@@ -40,3 +40,7 @@ data/media/
 # Local scratch / data exports
 __OUT__
 exports/
+
+# Isolated worktrees and SDD scratch
+.worktrees/
+.superpowers/sdd/
