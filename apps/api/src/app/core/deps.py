@@ -33,6 +33,8 @@ from app.adapters.persistence.repositories import (
     SqlAlchemySessionRepository,
 )
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
+from app.adapters.persistence.guest_mcp_memory import InMemoryGuestMcpRegistry
+from app.adapters.guest_mcp_http import HttpGuestMcpClient
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.agent_rate_limit import AgentRunRateLimiter
 from app.application.media_tools import SessionMediaRateLimiter
@@ -55,6 +57,7 @@ from app.domain.ports import (
     UnitOfWork,
 )
 from app.domain.quality import AnswerJudge
+from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +139,8 @@ class Container:
     judge_budget: HourlyJudgeBudget
     #: Fail-open product analytics. Always present; may be a no-op sink.
     analytics: AnalyticsCapture
+    guest_mcp_registry: GuestMcpRegistry
+    guest_mcp_client: GuestMcpClient
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -323,6 +328,9 @@ def build_container(settings: Settings) -> Container:
     analytics = _build_analytics(settings)
     extra_closers.append(analytics)
 
+    guest_mcp_registry: GuestMcpRegistry = InMemoryGuestMcpRegistry()
+    guest_mcp_client: GuestMcpClient = HttpGuestMcpClient()
+
     engine = create_engine(settings.database_url)
     return Container(
         settings=settings,
@@ -344,6 +352,8 @@ def build_container(settings: Settings) -> Container:
         judge=_build_judge(settings, router),
         judge_budget=HourlyJudgeBudget(),
         analytics=analytics,
+        guest_mcp_registry=guest_mcp_registry,
+        guest_mcp_client=guest_mcp_client,
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )
