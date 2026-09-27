@@ -1649,6 +1649,95 @@ export interface McpCatalogDto {
   error?: string | null;
 }
 
+export interface GuestMcpServerDto {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  tool_names: string[];
+  status: string;
+  safe_error: string | null;
+}
+
+interface GuestMcpListResponseDto {
+  servers: GuestMcpServerDto[];
+}
+
+const GUEST_MCP_REQUEST_TIMEOUT_MS = 8_000;
+
+function guestMcpSessionHeaders(sessionId: string): Record<string, string> {
+  const store = loadStore();
+  const owned = store.items[sessionId];
+  if (!owned?.access_token) {
+    throw new ApiError("Сессия недоступна в этом браузере.", 403);
+  }
+  return { "X-Session-Token": owned.access_token };
+}
+
+export function listGuestMcp(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<GuestMcpServerDto[]> {
+  return request<GuestMcpListResponseDto>(
+    `/sessions/${encodeURIComponent(sessionId)}/guest-mcp`,
+    { headers: guestMcpSessionHeaders(sessionId), signal },
+    GUEST_MCP_REQUEST_TIMEOUT_MS,
+  ).then((body) => body.servers);
+}
+
+export function connectGuestMcp(
+  sessionId: string,
+  payload: { name: string; url: string; token: string },
+  signal?: AbortSignal,
+): Promise<GuestMcpServerDto> {
+  return request<GuestMcpServerDto>(
+    `/sessions/${encodeURIComponent(sessionId)}/guest-mcp`,
+    {
+      method: "POST",
+      headers: guestMcpSessionHeaders(sessionId),
+      body: JSON.stringify({
+        name: payload.name,
+        url: payload.url,
+        token: payload.token,
+      }),
+      signal,
+    },
+    GUEST_MCP_REQUEST_TIMEOUT_MS,
+  );
+}
+
+export function patchGuestMcp(
+  sessionId: string,
+  id: string,
+  payload: { enabled: boolean },
+  signal?: AbortSignal,
+): Promise<GuestMcpServerDto> {
+  return request<GuestMcpServerDto>(
+    `/sessions/${encodeURIComponent(sessionId)}/guest-mcp/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: guestMcpSessionHeaders(sessionId),
+      body: JSON.stringify({ enabled: payload.enabled }),
+      signal,
+    },
+  );
+}
+
+export function deleteGuestMcp(
+  sessionId: string,
+  id: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return requestNoContent(
+    `/sessions/${encodeURIComponent(sessionId)}/guest-mcp/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: guestMcpSessionHeaders(sessionId),
+      signal,
+    },
+  );
+}
+
 export interface McpPulseDto {
   jobs: Array<{
     id: string;
