@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
+import { listGuestMcp, listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
 import {
   initSessionChatPrefs,
   loadGlobalChatPrefs,
@@ -13,6 +13,7 @@ import {
   type SessionChatPrefs,
 } from "../chatPrefs";
 import { buildOutgoingMessage } from "../chatPrefs/outgoing";
+import { pickConnectedGuest } from "../guestMcpHints";
 import { activeTemplateSummary } from "../generationPrefs";
 import { hasResponseRules } from "../promptControls";
 import {
@@ -88,6 +89,9 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
   const [forceSingleHint, setForceSingleHint] = useState<string | null>(null);
+  const [guestConnected, setGuestConnected] = useState<{ name: string; count: number } | null>(
+    null,
+  );
   const box = useRef<HTMLTextAreaElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const forceHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,8 +178,23 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
 
   useEffect(() => {
     listModels().then(setModels).catch(() => setModels([]));
+  }, []);
+
+  useEffect(() => {
     listLabPresets().then(setLabPresets).catch(() => setLabPresets([]));
   }, []);
+
+  useEffect(() => {
+    if (!session.guestMcpEnabled) {
+      setGuestConnected(null);
+      return;
+    }
+    const ac = new AbortController();
+    listGuestMcp(sessionId, ac.signal)
+      .then((servers) => setGuestConnected(pickConnectedGuest(servers)))
+      .catch(() => setGuestConnected(null));
+    return () => ac.abort();
+  }, [sessionId, session.guestMcpEnabled, settingsOpen]);
 
   useEffect(() => {
     return () => {
@@ -311,6 +330,18 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
           : templateSummary
             ? `Шаблон: ${templateSummary}`
             : null;
+
+  const guestMcpHint =
+    session.guestMcpEnabled && guestConnected && guestConnected.count > 0
+      ? effective.chatMode === "single"
+        ? `MCP · ${guestConnected.name}`
+        : "Свой сервер работает в обычном чате"
+      : null;
+
+  const openGuestConnections = useCallback(() => {
+    setSettingsTab("connections");
+    setSettingsOpen(true);
+  }, []);
 
   const placeholder =
     effective.chatMode === "lab"
@@ -541,6 +572,18 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
             {effective.sessionContext && !rulesMissing && !forceSingleHint
               ? ` · контекст чата (${effective.sessionContext.length} симв.)`
               : ""}
+          </p>
+        )}
+
+        {guestMcpHint && (
+          <p className="composer-options-hint">
+            {effective.chatMode === "single" ? (
+              <button type="button" className="text-link" onClick={openGuestConnections}>
+                {guestMcpHint}
+              </button>
+            ) : (
+              guestMcpHint
+            )}
           </p>
         )}
 

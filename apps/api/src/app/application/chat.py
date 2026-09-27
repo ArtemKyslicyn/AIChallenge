@@ -339,6 +339,7 @@ async def send_user_message_and_stream(
     scorer: AnswerScorer | None = None,
     cascade: CascadeSettings | None = None,
     chat_mode: str | None = None,
+    use_guest_mcp: bool | None = True,
     guest_mcp_registry: GuestMcpRegistry | None = None,
     guest_mcp_client: GuestMcpClient | None = None,
     guest_tool_runner: GuestToolRunner | None = None,
@@ -750,6 +751,7 @@ async def send_user_message_and_stream(
     guest_turns = list(turns)
     if (
         effective_chat_mode == "single"
+        and use_guest_mcp is not False
         and guest_mcp_registry is not None
         and guest_mcp_client is not None
     ):
