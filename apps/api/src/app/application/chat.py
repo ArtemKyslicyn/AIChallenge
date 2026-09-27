@@ -11,6 +11,7 @@ frames. Three things this code is careful about:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -29,6 +30,8 @@ from app.application.comic import (
     serialize_comic_fence,
     storyboard_narration,
 )
+from app.application.guest_mcp_analytics import emit_guest_event
+from app.application.guest_tool_runner import GuestToolRunner
 from app.application.media_tools import (
     MEDIA_TOOLS,
     SessionMediaRateLimiter,
@@ -37,11 +40,14 @@ from app.application.media_tools import (
     maybe_needs_media_tools,
     tool_calls_from_completion,
 )
+from app.domain.analytics import AnalyticsCapture
+from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 from app.application.sessions import authorize_session, session_title_from_message
 from app.domain.cascade import CASCADE_OFF, AnswerScorer
 from app.domain.entities import (
     AUTO_MODEL,
     ChatMessage,
+    CompletionResult,
     Message,
     MessageRole,
     Scenario,
@@ -56,7 +62,7 @@ from app.domain.errors import (
     MessageValidationError,
     SessionClosedError,
 )
-from app.domain.media import COMIC_TOOL_NAME, IMAGE_TOOL_NAME, VIDEO_TOOL_NAME
+from app.domain.media import COMIC_TOOL_NAME, IMAGE_TOOL_NAME, VIDEO_TOOL_NAME, ToolCallRequest
 from app.domain.ports import (
     ChatRouter,
     MediaGenerator,
@@ -172,6 +178,7 @@ class ErrorEvent:
 class ToolStartEvent:
     name: str
     call_id: str
+    server: str | None = None
 
 
 @dataclass(slots=True)
@@ -182,6 +189,7 @@ class ToolResultEvent:
     media_url: str | None = None
     provider_label: str | None = None
     error: str | None = None
+    server: str | None = None
 
 
 @dataclass(slots=True)
@@ -244,6 +252,68 @@ def build_llm_turns(
     return turns
 
 
+GUEST_TOOL_TIMEOUT_S = 12.0
+
+
+async def _run_guest_round(
+    *,
+    runner: GuestToolRunner,
+    result: CompletionResult,
+    analytics: AnalyticsCapture | None,
+    distinct_id: str,
+) -> list[tuple[ToolCallRequest, str, str, str | None]]:
+    """Invoke only tool calls the model returned — no pulse intent."""
+    executed: list[tuple[ToolCallRequest, str, str, str | None]] = []
+    for call in list(result.tool_calls or [])[:3]:
+        raw_name, server_label = runner.display_name(call.name)
+        host = runner.url_host_for(call.name)
+        if analytics is not None:
+            await emit_guest_event(
+                analytics,
+                "guest_mcp_tool_started",
+                distinct_id,
+                {"tool_name": raw_name, "url_host": host},
+            )
+        started = time.monotonic()
+        try:
+            raw_result = await asyncio.wait_for(
+                runner.call_tool(call.name, dict(call.arguments or {})),
+                GUEST_TOOL_TIMEOUT_S,
+            )
+            latency_ms = max(0, int((time.monotonic() - started) * 1000))
+            if analytics is not None:
+                await emit_guest_event(
+                    analytics,
+                    "guest_mcp_tool_ok",
+                    distinct_id,
+                    {"tool_name": raw_name, "url_host": host, "latency_ms": latency_ms},
+                )
+            executed.append((call, raw_result, raw_name, server_label or None))
+        except TimeoutError:
+            if analytics is not None:
+                await emit_guest_event(
+                    analytics,
+                    "guest_mcp_tool_fail",
+                    distinct_id,
+                    {"tool_name": raw_name, "url_host": host, "reason": "timeout"},
+                )
+            executed.append((call, "", raw_name, server_label or None))
+        except Exception:
+            if analytics is not None:
+                await emit_guest_event(
+                    analytics,
+                    "guest_mcp_tool_fail",
+                    distinct_id,
+                    {
+                        "tool_name": raw_name,
+                        "url_host": host,
+                        "reason": "tool_error",
+                    },
+                )
+            executed.append((call, "", raw_name, server_label or None))
+    return executed
+
+
 async def send_user_message_and_stream(
     *,
     session_id: UUID,
@@ -268,8 +338,17 @@ async def send_user_message_and_stream(
     cost_proxy: Mapping[str, float] | None = None,
     scorer: AnswerScorer | None = None,
     cascade: CascadeSettings | None = None,
+    chat_mode: str | None = None,
+    guest_mcp_registry: GuestMcpRegistry | None = None,
+    guest_mcp_client: GuestMcpClient | None = None,
+    guest_tool_runner: GuestToolRunner | None = None,
+    analytics: AnalyticsCapture | None = None,
+    analytics_distinct_id: str | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
+    effective_chat_mode = chat_mode or "single"
+    draft.chat_mode = effective_chat_mode
+    distinct_id = (analytics_distinct_id or "").strip() or "anonymous"
     session = await authorize_session(
         sessions=sessions, session_id=session_id, access_token=access_token
     )
@@ -667,6 +746,81 @@ async def send_user_message_and_stream(
                 cascade_stage=cascade_stage,
             )
             return
+
+    guest_turns = list(turns)
+    if (
+        effective_chat_mode == "single"
+        and guest_mcp_registry is not None
+        and guest_mcp_client is not None
+    ):
+        runner = guest_tool_runner or GuestToolRunner(
+            session_id=session.id,
+            registry=guest_mcp_registry,
+            client=guest_mcp_client,
+            analytics=analytics,
+            distinct_id=distinct_id,
+        )
+        guest_tools = await runner.openai_tools()
+        if guest_tools:
+            try:
+                probe = await router.complete_chat(
+                    guest_turns, preferred_model=model, tools=guest_tools
+                )
+                if probe.model_id:
+                    resolved_model = probe.model_id
+                    draft.model_id = resolved_model
+                if probe.tool_calls:
+                    batch = await _run_guest_round(
+                        runner=runner,
+                        result=probe,
+                        analytics=analytics,
+                        distinct_id=distinct_id,
+                    )
+                    for call, raw_result, raw_name, server_label in batch:
+                        tool_rounds += 1
+                        yield ToolStartEvent(
+                            name=raw_name,
+                            call_id=call.id,
+                            server=server_label,
+                        )
+                        if raw_result:
+                            yield ToolResultEvent(
+                                name=raw_name,
+                                call_id=call.id,
+                                status="ok",
+                                server=server_label,
+                            )
+                        else:
+                            tool_failures += 1
+                            yield ToolResultEvent(
+                                name=raw_name,
+                                call_id=call.id,
+                                status="error",
+                                error="Не удалось вызвать инструмент гостевого MCP.",
+                                server=server_label,
+                            )
+                    follow_blocks = [
+                        f"Результат MCP {raw_name}:\n{raw_result}"
+                        for _call, raw_result, raw_name, _server in batch
+                        if raw_result
+                    ]
+                    if follow_blocks:
+                        guest_turns = [
+                            *guest_turns,
+                            ChatMessage(
+                                role=MessageRole.ASSISTANT,
+                                content=probe.content
+                                or f"Вызвал {', '.join(item[2] for item in batch)}",
+                            ),
+                            ChatMessage(
+                                role=MessageRole.USER,
+                                content="\n\n".join(follow_blocks)
+                                + "\n\nОтветь оператору по фактам.",
+                            ),
+                        ]
+            except (LLMExhaustedError, LLMProviderError):
+                pass
+    turns = guest_turns
 
     # The cheap stage runs after the tool round (media never cascades) and
     # before the first token, which is the only moment a model may still be

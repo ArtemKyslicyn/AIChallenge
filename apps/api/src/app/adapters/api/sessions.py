@@ -517,6 +517,11 @@ async def send_message(
                     timeout_seconds=container.settings.cascade_timeout_seconds,
                     max_question_chars=container.settings.cascade_max_cheap_chars,
                 ),
+                chat_mode=payload.chat_mode,
+                guest_mcp_registry=container.guest_mcp_registry,
+                guest_mcp_client=container.guest_mcp_client,
+                analytics=container.analytics,
+                analytics_distinct_id=(session.visitor_hash or "").strip() or "anonymous",
             )
             async for frame in to_sse_with_keepalive(events):
                 yield frame

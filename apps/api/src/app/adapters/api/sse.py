@@ -62,22 +62,22 @@ def event_to_frame(event: ChatEvent) -> str:
         case ErrorEvent():
             return format_frame("error", {"message": event.message})
         case ToolStartEvent():
-            return format_frame(
-                "tool_start",
-                {"name": event.name, "call_id": event.call_id},
-            )
+            payload: dict[str, Any] = {"name": event.name, "call_id": event.call_id}
+            if event.server:
+                payload["server"] = event.server
+            return format_frame("tool_start", payload)
         case ToolResultEvent():
-            return format_frame(
-                "tool_result",
-                {
-                    "name": event.name,
-                    "call_id": event.call_id,
-                    "status": event.status,
-                    "media_url": event.media_url,
-                    "provider_label": event.provider_label,
-                    "error": event.error,
-                },
-            )
+            payload = {
+                "name": event.name,
+                "call_id": event.call_id,
+                "status": event.status,
+                "media_url": event.media_url,
+                "provider_label": event.provider_label,
+                "error": event.error,
+            }
+            if event.server:
+                payload["server"] = event.server
+            return format_frame("tool_result", payload)
         case ComicStartEvent():
             return format_frame(
                 "comic_start",

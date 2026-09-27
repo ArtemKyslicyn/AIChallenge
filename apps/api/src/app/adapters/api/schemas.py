@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -95,6 +96,7 @@ class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_CONTENT_BYTES)
     #: Pin a model for this reply; ``None`` keeps the scenario default.
     model: str | None = None
+    chat_mode: Literal["single", "compare", "lab", "temp_studio"] | None = None
 
 
 class ProbeMessage(BaseModel):
