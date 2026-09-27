@@ -202,6 +202,7 @@ export function McpCatalog() {
               : `нет соединения${data?.error || error ? ` · ${data?.error || error}` : ""}`}
         </p>
       </header>
+      <span className="text-link">свой сервер — в Настройках</span>
 
       {error && !data ? (
         <p className="alert" role="alert">
