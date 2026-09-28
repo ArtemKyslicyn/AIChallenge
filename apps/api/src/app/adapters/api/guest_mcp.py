@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.adapters.api.auth import RequiredAuthUser
 from app.application.guest_mcp import (
     GuestMcpAuthError,
     GuestMcpUnreachableError,
@@ -16,8 +17,12 @@ from app.application.guest_mcp import (
     list_guest_mcp,
     set_guest_enabled,
 )
-from app.adapters.api.auth import RequiredAuthUser
-from app.core.deps import AuthorizedSession, get_container, resolve_visitor_identity, visitor_id_header
+from app.core.deps import (
+    AuthorizedSession,
+    get_container,
+    resolve_visitor_identity,
+    visitor_id_header,
+)
 from app.domain.guest_mcp import GuestMcpServer, GuestMcpUrlError
 
 router = APIRouter()
@@ -76,9 +81,15 @@ def _raise_connect_error(exc: BaseException) -> None:
     if isinstance(exc, GuestMcpAuthError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=_AUTH_DETAIL) from exc
     if isinstance(exc, TimeoutError):
-        raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, detail=_CONNECT_TIMEOUT_DETAIL) from exc
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=_CONNECT_TIMEOUT_DETAIL,
+        ) from exc
     if isinstance(exc, GuestMcpUnreachableError):
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=_UNREACHABLE_DETAIL) from exc
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail=_UNREACHABLE_DETAIL,
+        ) from exc
     raise exc
 
 

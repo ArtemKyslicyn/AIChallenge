@@ -100,7 +100,7 @@ class HttpGuestMcpClient:
         method: str,
         params: dict[str, object] | None,
         *,
-        timeout: float,
+        timeout_s: float,
     ) -> dict[str, Any]:
         body = {
             "jsonrpc": "2.0",
@@ -111,7 +111,7 @@ class HttpGuestMcpClient:
         try:
             async with httpx.AsyncClient(
                 transport=self._transport,
-                timeout=timeout,
+                timeout=timeout_s,
                 follow_redirects=False,
             ) as client:
                 response = await client.post(
@@ -140,7 +140,7 @@ class HttpGuestMcpClient:
                 "capabilities": {},
                 "clientInfo": _CLIENT_INFO,
             },
-            timeout=HANDSHAKE_TIMEOUT_S,
+            timeout_s=HANDSHAKE_TIMEOUT_S,
         )
         if "result" not in init:
             raise GuestMcpUnreachableError("guest MCP initialize failed")
@@ -149,7 +149,7 @@ class HttpGuestMcpClient:
             token,
             "tools/list",
             {},
-            timeout=HANDSHAKE_TIMEOUT_S,
+            timeout_s=HANDSHAKE_TIMEOUT_S,
         )
         result = listed.get("result")
         return _tool_names_from_result(result)
@@ -162,6 +162,6 @@ class HttpGuestMcpClient:
             token,
             "tools/call",
             {"name": name, "arguments": arguments},
-            timeout=CALL_TIMEOUT_S,
+            timeout_s=CALL_TIMEOUT_S,
         )
         return _format_tool_result(payload.get("result"))

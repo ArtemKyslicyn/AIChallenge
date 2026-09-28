@@ -8,6 +8,7 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 from app.application.guest_mcp_analytics import emit_guest_event
+from app.domain.analytics import AnalyticsCapture
 from app.domain.guest_mcp import (
     GuestMcpClient,
     GuestMcpRecord,
@@ -18,7 +19,6 @@ from app.domain.guest_mcp import (
     assert_guest_mcp_url,
     url_host,
 )
-from app.domain.analytics import AnalyticsCapture
 
 HANDSHAKE_TIMEOUT_S = 8
 
@@ -77,7 +77,7 @@ async def connect_guest_mcp(
             client.handshake(normalized, token),
             timeout=HANDSHAKE_TIMEOUT_S,
         )
-    except TimeoutError as exc:
+    except TimeoutError:
         await emit_guest_event(
             analytics,
             "guest_mcp_connect_fail",
@@ -85,14 +85,6 @@ async def connect_guest_mcp(
             {"url_host": host, "reason": "timeout"},
         )
         raise
-    except asyncio.TimeoutError:
-        await emit_guest_event(
-            analytics,
-            "guest_mcp_connect_fail",
-            distinct_id,
-            {"url_host": host, "reason": "timeout"},
-        )
-        raise TimeoutError("guest MCP handshake timed out")
     except GuestMcpAuthError:
         await emit_guest_event(
             analytics,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from uuid import UUID
 
 import pytest
@@ -27,7 +26,7 @@ from app.application.chat import (
     send_user_message_and_stream,
 )
 from app.application.guest_tool_runner import GuestToolRunner
-from app.domain.entities import ChatMessage, CompletionResult, MessageRole, Session, SessionStatus
+from app.domain.entities import ChatMessage, CompletionResult, Session, SessionStatus
 from app.domain.guest_mcp import GuestMcpRecord, GuestMcpServer
 from app.domain.media import ToolCallRequest
 
