@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.api.auth import OptionalAuthUser
+from app.adapters.api.guest_mcp import router as guest_mcp_router
 from app.adapters.api.schemas import (
     AttemptResponse,
     CreateSessionRequest,
@@ -25,9 +27,7 @@ from app.adapters.api.schemas import (
     SessionSummaryResponse,
     SessionTracesResponse,
 )
-from app.adapters.api.auth import OptionalAuthUser
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
-from app.adapters.api.guest_mcp import router as guest_mcp_router
 from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
 from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
