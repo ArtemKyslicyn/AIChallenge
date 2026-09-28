@@ -11,7 +11,8 @@ from app.domain.guest_mcp import (
 
 
 def test_https_public_ok() -> None:
-    assert assert_guest_mcp_url("https://kit.example.com/mcp", allow_loopback=False).endswith("/mcp")
+    out = assert_guest_mcp_url("https://kit.example.com/mcp", allow_loopback=False)
+    assert out.endswith("/mcp")
 
 
 def test_http_public_rejected() -> None:

@@ -15,6 +15,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.adapters.analytics.http_capture import HttpAnalyticsCapture, NoOpAnalyticsCapture
+from app.adapters.guest_mcp_http import HttpGuestMcpClient
 from app.adapters.lab.rubric import load_judge_rubric
 from app.adapters.llm.fake import DEFAULT_FAKE_MODEL_ID, FakeLLMProvider
 from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
@@ -28,13 +29,12 @@ from app.adapters.media.pollinations import PollinationsImageClient
 from app.adapters.media.store import CompositeMediaGenerator, DiskMediaStore
 from app.adapters.persistence.db import create_engine, create_sessionmaker
 from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
+from app.adapters.persistence.guest_mcp_memory import InMemoryGuestMcpRegistry
 from app.adapters.persistence.repositories import (
     SqlAlchemyMessageRepository,
     SqlAlchemySessionRepository,
 )
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
-from app.adapters.persistence.guest_mcp_memory import InMemoryGuestMcpRegistry
-from app.adapters.guest_mcp_http import HttpGuestMcpClient
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.agent_rate_limit import AgentRunRateLimiter
 from app.application.media_tools import SessionMediaRateLimiter
@@ -45,6 +45,7 @@ from app.domain.analytics import AnalyticsCapture
 from app.domain.cascade import AnswerScorer
 from app.domain.entities import Session
 from app.domain.errors import SessionNotFoundError
+from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 from app.domain.ports import (
     FeedbackRepository,
     LLMProvider,
@@ -57,7 +58,6 @@ from app.domain.ports import (
     UnitOfWork,
 )
 from app.domain.quality import AnswerJudge
-from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 
 logger = logging.getLogger(__name__)
 

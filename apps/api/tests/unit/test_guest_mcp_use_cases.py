@@ -1,5 +1,6 @@
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from app.adapters.persistence.guest_mcp_memory import InMemoryGuestMcpRegistry
 from app.application.guest_mcp import (
