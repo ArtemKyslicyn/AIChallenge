@@ -97,6 +97,8 @@ def _default_resolve(host: str) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6A
         if family not in {socket.AF_INET, socket.AF_INET6}:
             continue
         addr = sockaddr[0]
+        if not isinstance(addr, str):
+            continue
         if addr in seen:
             continue
         seen.add(addr)
