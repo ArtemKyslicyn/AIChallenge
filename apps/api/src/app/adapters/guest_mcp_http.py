@@ -154,9 +154,7 @@ class HttpGuestMcpClient:
         result = listed.get("result")
         return _tool_names_from_result(result)
 
-    async def call_tool(
-        self, url: str, token: str, name: str, arguments: dict[str, object]
-    ) -> str:
+    async def call_tool(self, url: str, token: str, name: str, arguments: dict[str, object]) -> str:
         payload = await self._post_rpc(
             url,
             token,
