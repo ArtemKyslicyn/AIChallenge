@@ -40,9 +40,8 @@ from app.application.media_tools import (
     maybe_needs_media_tools,
     tool_calls_from_completion,
 )
-from app.domain.analytics import AnalyticsCapture
-from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 from app.application.sessions import authorize_session, session_title_from_message
+from app.domain.analytics import AnalyticsCapture
 from app.domain.cascade import CASCADE_OFF, AnswerScorer
 from app.domain.entities import (
     AUTO_MODEL,
@@ -62,6 +61,7 @@ from app.domain.errors import (
     MessageValidationError,
     SessionClosedError,
 )
+from app.domain.guest_mcp import GuestMcpClient, GuestMcpRegistry
 from app.domain.media import COMIC_TOOL_NAME, IMAGE_TOOL_NAME, VIDEO_TOOL_NAME, ToolCallRequest
 from app.domain.ports import (
     ChatRouter,
