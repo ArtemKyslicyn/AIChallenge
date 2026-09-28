@@ -18,3 +18,24 @@ export function pickConnectedGuest(
   if (connected.length === 0) return null;
   return { name: connected[0].name, count: connected.length };
 }
+
+export function guestMcpHowToLine(args: {
+  signedIn: boolean;
+  enabled: boolean;
+  connectedName: string | null;
+  singleMode: boolean;
+}): string {
+  if (!args.signedIn) {
+    return "Свой MCP: справа Войти → кнопка «Свой MCP» → вставить адрес → писать в обычный чат.";
+  }
+  if (!args.enabled) {
+    return "Свой MCP выключен в этом чате. Вкладка «Чат» → «Свой сервер в этом чате».";
+  }
+  if (!args.connectedName) {
+    return "Подключить свой MCP: кнопка «Свой MCP» → адрес https://…/mcp → Подключить.";
+  }
+  if (!args.singleMode) {
+    return `«${args.connectedName}» подключён. Переключитесь на обычный чат — там модель вызовет умения.`;
+  }
+  return `Подключён «${args.connectedName}». Пишите в чат обычным языком — модель сама вызовет умения.`;
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { listGuestMcp, listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
+import { authMe, listGuestMcp, listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
 import {
   initSessionChatPrefs,
   loadGlobalChatPrefs,
@@ -13,7 +13,7 @@ import {
   type SessionChatPrefs,
 } from "../chatPrefs";
 import { buildOutgoingMessage } from "../chatPrefs/outgoing";
-import { pickConnectedGuest } from "../guestMcpHints";
+import { guestMcpHowToLine, pickConnectedGuest } from "../guestMcpHints";
 import { activeTemplateSummary } from "../generationPrefs";
 import { hasResponseRules } from "../promptControls";
 import {
@@ -89,6 +89,7 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
   const [forceSingleHint, setForceSingleHint] = useState<string | null>(null);
+  const [guestSignedIn, setGuestSignedIn] = useState(false);
   const [guestConnected, setGuestConnected] = useState<{ name: string; count: number } | null>(
     null,
   );
@@ -185,14 +186,23 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
   }, []);
 
   useEffect(() => {
-    if (!session.guestMcpEnabled) {
-      setGuestConnected(null);
-      return;
-    }
     const ac = new AbortController();
-    listGuestMcp(sessionId, ac.signal)
-      .then((servers) => setGuestConnected(pickConnectedGuest(servers)))
-      .catch(() => setGuestConnected(null));
+    void authMe(ac.signal)
+      .then((me) => {
+        const ok = Boolean(me && !me.anonymous && me.id);
+        setGuestSignedIn(ok);
+        if (!ok || !session.guestMcpEnabled) {
+          setGuestConnected(null);
+          return;
+        }
+        return listGuestMcp(sessionId, ac.signal).then((servers) =>
+          setGuestConnected(pickConnectedGuest(servers)),
+        );
+      })
+      .catch(() => {
+        setGuestSignedIn(false);
+        setGuestConnected(null);
+      });
     return () => ac.abort();
   }, [sessionId, session.guestMcpEnabled, settingsOpen]);
 
@@ -331,12 +341,12 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
             ? `Шаблон: ${templateSummary}`
             : null;
 
-  const guestMcpHint =
-    session.guestMcpEnabled && guestConnected && guestConnected.count > 0
-      ? effective.chatMode === "single"
-        ? `MCP · ${guestConnected.name}`
-        : "Свой сервер работает в обычном чате"
-      : null;
+  const guestMcpHint = guestMcpHowToLine({
+    signedIn: guestSignedIn,
+    enabled: session.guestMcpEnabled,
+    connectedName: guestConnected?.name ?? null,
+    singleMode: effective.chatMode === "single",
+  });
 
   const openGuestConnections = useCallback(() => {
     setSettingsTab("connections");
@@ -499,6 +509,15 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
 
           <button
             type="button"
+            className="mode-chip"
+            aria-pressed={settingsOpen && settingsTab === "connections"}
+            onClick={openGuestConnections}
+          >
+            Свой MCP
+          </button>
+
+          <button
+            type="button"
             className="ghost-button composer-more-toggle"
             aria-expanded={settingsOpen}
             aria-controls="composer-settings-panel"
@@ -575,17 +594,11 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
           </p>
         )}
 
-        {guestMcpHint && (
-          <p className="composer-options-hint">
-            {effective.chatMode === "single" ? (
-              <button type="button" className="text-link" onClick={openGuestConnections}>
-                {guestMcpHint}
-              </button>
-            ) : (
-              guestMcpHint
-            )}
-          </p>
-        )}
+        <p className="composer-options-hint composer-mcp-howto">
+          <button type="button" className="text-link" onClick={openGuestConnections}>
+            {guestMcpHint}
+          </button>
+        </p>
 
         {settingsOpen && (
           <div id="composer-settings-panel">

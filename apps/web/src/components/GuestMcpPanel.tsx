@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   ApiError,
+  authMe,
   connectGuestMcp,
   deleteGuestMcp,
   listGuestMcp,
   patchGuestMcp,
   type GuestMcpServerDto,
 } from "../api/client";
+import { parseGuestMcpPackText } from "../guestMcpPack";
 
 const KIT_REPO_URL = "https://github.com/ArtemKyslicyn/aichallenge-mcp-kit";
 const TOOL_CHIP_CAP = 6;
@@ -31,6 +33,7 @@ interface Props {
 }
 
 export function GuestMcpPanel({ sessionId }: Props) {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [servers, setServers] = useState<GuestMcpServerDto[]>([]);
   const [listBusy, setListBusy] = useState(true);
   const [formOpen, setFormOpen] = useState(true);
@@ -41,6 +44,9 @@ export function GuestMcpPanel({ sessionId }: Props) {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reconnectToken, setReconnectToken] = useState("");
+  const [packText, setPackText] = useState("");
+  const [packBusy, setPackBusy] = useState(false);
+  const [packStatus, setPackStatus] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -55,8 +61,27 @@ export function GuestMcpPanel({ sessionId }: Props) {
   }, [sessionId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void authMe()
+      .then((me) => {
+        if (!cancelled) setSignedIn(Boolean(me && !me.anonymous && me.id));
+      })
+      .catch(() => {
+        if (!cancelled) setSignedIn(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (signedIn !== true) {
+      setServers([]);
+      setListBusy(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, signedIn]);
 
   const runConnect = async (
     payload: { name: string; url: string; token: string },
@@ -95,6 +120,59 @@ export function GuestMcpPanel({ sessionId }: Props) {
     void runConnect({ name, url, token });
   };
 
+  const importPack = async (text: string) => {
+    const parsed = parseGuestMcpPackText(text);
+    if (parsed.entries.length === 0) {
+      setPackStatus(
+        parsed.skipped.length
+          ? `Нечего подключать. ${parsed.skipped.join("; ")}`
+          : "В пачке нет HTTP-серверов.",
+      );
+      return;
+    }
+    setPackBusy(true);
+    setPackStatus(null);
+    setConnectError(null);
+    const ok: string[] = [];
+    const fail: string[] = [...parsed.skipped];
+    try {
+      for (const entry of parsed.entries) {
+        try {
+          await connectGuestMcp(sessionId, entry);
+          ok.push(entry.name);
+        } catch (err) {
+          const message =
+            err instanceof ApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : "ошибка";
+          fail.push(`${entry.name}: ${message}`);
+        }
+      }
+      await refresh();
+      const parts: string[] = [];
+      if (ok.length) parts.push(`Подключено: ${ok.join(", ")}`);
+      if (fail.length) parts.push(`Пропущено: ${fail.join("; ")}`);
+      setPackStatus(parts.join(". ") || null);
+      if (ok.length) setPackText("");
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const onPackFile = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      setPackText(text);
+      void importPack(text);
+    };
+    reader.onerror = () => setPackStatus("Не удалось прочитать файл.");
+    reader.readAsText(file);
+  };
+
   const toggleEnabled = async (server: GuestMcpServerDto) => {
     try {
       const updated = await patchGuestMcp(sessionId, server.id, {
@@ -117,11 +195,38 @@ export function GuestMcpPanel({ sessionId }: Props) {
     }
   };
 
+  const howTo = (
+    <ol className="guest-mcp-steps">
+      <li>Справа в шапке нажмите Войти (если ещё не вошли).</li>
+      <li>Вставьте адрес своего MCP — обычно заканчивается на /mcp — и нажмите Подключить.</li>
+      <li>Закройте настройки и пишите в обычный чат: модель сама вызовет умения.</li>
+    </ol>
+  );
+
+  if (signedIn !== true) {
+    return (
+      <div className="guest-mcp-panel">
+        <p className="composer-more-lead">Свой MCP — не вкладка MCP. Там стенд.</p>
+        {howTo}
+        <p className="guest-mcp-muted">
+          {signedIn === null ? "Проверяем вход…" : "Сначала войдите — форма появится здесь."}
+        </p>
+      </div>
+    );
+  }
+
+  const ready = servers.some((s) => s.enabled && s.status === "connected");
+
   return (
     <div className="guest-mcp-panel">
-      <p className="composer-more-lead">
-        Адрес с вашего компьютера. Стенд на вкладке MCP не выключается.
-      </p>
+      <p className="composer-more-lead">Свой MCP — не вкладка MCP. Там стенд.</p>
+      {howTo}
+      {ready ? (
+        <p className="guest-mcp-ready" role="status">
+          Сервер на связи. Пишите в обычный чат обычным языком. Строка «Вызываю … на вашем
+          сервере» значит, что умение сработало.
+        </p>
+      ) : null}
 
       <button
         type="button"
@@ -129,13 +234,13 @@ export function GuestMcpPanel({ sessionId }: Props) {
         aria-expanded={formOpen}
         onClick={() => setFormOpen((open) => !open)}
       >
-        Добавить по URL
+        {formOpen ? "Скрыть форму" : "Вставить адрес MCP"}
       </button>
 
       {formOpen && (
         <form className="guest-mcp-connect-form" onSubmit={onSubmitNew}>
           <label className="composer-field">
-            <span>Название</span>
+            <span>Название (необязательно)</span>
             <input
               type="text"
               value={name}
@@ -145,7 +250,7 @@ export function GuestMcpPanel({ sessionId }: Props) {
             />
           </label>
           <label className="composer-field">
-            <span>Адрес</span>
+            <span>Адрес MCP</span>
             <input
               type="url"
               value={url}
@@ -156,7 +261,7 @@ export function GuestMcpPanel({ sessionId }: Props) {
             />
           </label>
           <label className="composer-field">
-            <span>Токен</span>
+            <span>Токен (если сервер его просит)</span>
             <input
               type="password"
               value={token}
@@ -175,10 +280,52 @@ export function GuestMcpPanel({ sessionId }: Props) {
         </form>
       )}
 
+      <div className="guest-mcp-pack">
+        <p className="composer-more-lead">Или пачка JSON (несколько MCP сразу)</p>
+        <p className="guest-mcp-muted">
+          Формат Cursor <code>mcpServers</code> или наш <code>servers[]</code>. Stdio
+          (command) с ноутбука сюда не лезет — нужен HTTPS-туннель на /mcp.
+        </p>
+        <label className="composer-field">
+          <span>Файл .json</span>
+          <input
+            type="file"
+            accept="application/json,.json"
+            disabled={packBusy || connectBusy}
+            onChange={(e) => onPackFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        <label className="composer-field">
+          <span>Или вставить JSON</span>
+          <textarea
+            className="composer-rules-input guest-mcp-pack-text"
+            rows={4}
+            value={packText}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder='{"servers":[{"name":"kit","url":"https://…/mcp","token":""}]}'
+            onChange={(e) => setPackText(e.target.value)}
+          />
+        </label>
+        {packStatus ? (
+          <p className="guest-mcp-muted" role="status">
+            {packStatus}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          className="ghost-button"
+          disabled={packBusy || connectBusy || !packText.trim()}
+          onClick={() => void importPack(packText)}
+        >
+          {packBusy ? "Подключаем пачку…" : "Подключить пачку"}
+        </button>
+      </div>
+
       {listBusy && servers.length === 0 ? (
         <p className="guest-mcp-muted">Загрузка…</p>
       ) : servers.length === 0 ? (
-        <p className="guest-mcp-muted">Пока нет своих серверов.</p>
+        <p className="guest-mcp-muted">Пока нет своего MCP. Вставьте адрес выше и нажмите Подключить.</p>
       ) : (
         <ul className="guest-mcp-list">
           {servers.map((server) => {

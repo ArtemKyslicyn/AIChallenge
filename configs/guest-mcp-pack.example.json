@@ -1,0 +1,9 @@
+{
+  "servers": [
+    {
+      "name": "kit-dev",
+      "url": "https://YOUR-TUNNEL.example/mcp",
+      "token": ""
+    }
+  ]
+}

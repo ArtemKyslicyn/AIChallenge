@@ -1,4 +1,4 @@
-"""Connect, list, enable, and disconnect session-scoped guest MCP servers."""
+"""Connect, list, enable, and disconnect user-owned guest MCP servers."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def _url_fail_reason(err: GuestMcpUrlError) -> str:
 
 
 async def connect_guest_mcp(
-    session_id: UUID,
+    owner_id: UUID,
     name: str,
     url: str,
     token: str,
@@ -127,7 +127,7 @@ async def connect_guest_mcp(
         tool_names=tuple(tool_names),
         status="connected",
     )
-    await registry.put(session_id, GuestMcpRecord(server=server, token=token))
+    await registry.put(owner_id, GuestMcpRecord(server=server, token=token))
     await emit_guest_event(
         analytics,
         "guest_mcp_connect_ok",
@@ -142,15 +142,15 @@ async def connect_guest_mcp(
 
 
 async def list_guest_mcp(
-    session_id: UUID,
+    owner_id: UUID,
     registry: GuestMcpRegistry,
 ) -> tuple[GuestMcpServer, ...]:
-    records = await registry.list(session_id)
+    records = await registry.list(owner_id)
     return tuple(r.server for r in records)
 
 
 async def set_guest_enabled(
-    session_id: UUID,
+    owner_id: UUID,
     server_id: UUID,
     enabled: bool,
     *,
@@ -158,11 +158,11 @@ async def set_guest_enabled(
     analytics: AnalyticsCapture,
     distinct_id: str,
 ) -> GuestMcpServer:
-    record = await registry.get(session_id, server_id)
+    record = await registry.get(owner_id, server_id)
     if record is None:
         raise KeyError(server_id)
     server = replace(record.server, enabled=enabled)
-    await registry.put(session_id, GuestMcpRecord(server=server, token=record.token))
+    await registry.put(owner_id, GuestMcpRecord(server=server, token=record.token))
     await emit_guest_event(
         analytics,
         "guest_mcp_toggled",
@@ -173,18 +173,18 @@ async def set_guest_enabled(
 
 
 async def disconnect_guest_mcp(
-    session_id: UUID,
+    owner_id: UUID,
     server_id: UUID,
     *,
     registry: GuestMcpRegistry,
     analytics: AnalyticsCapture,
     distinct_id: str,
 ) -> None:
-    record = await registry.get(session_id, server_id)
+    record = await registry.get(owner_id, server_id)
     if record is None:
         raise KeyError(server_id)
     host = url_host(record.server.url)
-    await registry.delete(session_id, server_id)
+    await registry.delete(owner_id, server_id)
     await emit_guest_event(
         analytics,
         "guest_mcp_disconnect",
