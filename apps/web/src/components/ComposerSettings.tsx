@@ -110,7 +110,7 @@ export function ComposerSettings({
           onClick={() => onTabChange("connections")}
         >
           Подключения
-          <span className="settings-tab-hint">свои серверы</span>
+          <span className="settings-tab-hint">свой MCP</span>
         </button>
       </div>
 

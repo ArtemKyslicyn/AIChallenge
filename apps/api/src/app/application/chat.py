@@ -340,6 +340,7 @@ async def send_user_message_and_stream(
     cascade: CascadeSettings | None = None,
     chat_mode: str | None = None,
     use_guest_mcp: bool | None = True,
+    guest_mcp_owner_id: UUID | None = None,
     guest_mcp_registry: GuestMcpRegistry | None = None,
     guest_mcp_client: GuestMcpClient | None = None,
     guest_mcp_allow_loopback: bool = False,
@@ -753,11 +754,12 @@ async def send_user_message_and_stream(
     if (
         effective_chat_mode == "single"
         and use_guest_mcp is not False
+        and guest_mcp_owner_id is not None
         and guest_mcp_registry is not None
         and guest_mcp_client is not None
     ):
         runner = guest_tool_runner or GuestToolRunner(
-            session_id=session.id,
+            owner_id=guest_mcp_owner_id,
             registry=guest_mcp_registry,
             client=guest_mcp_client,
             analytics=analytics,

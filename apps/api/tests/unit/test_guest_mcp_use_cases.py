@@ -73,7 +73,7 @@ async def test_connect_lists_without_token() -> None:
     analytics = _NoopAnalytics()
     registry = InMemoryGuestMcpRegistry()
     server = await connect_guest_mcp(
-        session_id=session_id,
+        owner_id=session_id,
         name="kit",
         url="https://kit.example.com/mcp",
         token="tok",
@@ -101,7 +101,7 @@ async def test_connect_ssrf_emits_fail() -> None:
     registry = InMemoryGuestMcpRegistry()
     with pytest.raises(GuestMcpUrlError):
         await connect_guest_mcp(
-            session_id=session_id,
+            owner_id=session_id,
             name="kit",
             url="https://169.254.169.254/mcp",
             token="tok",
@@ -129,7 +129,7 @@ async def test_connect_timeout_emits_fail() -> None:
     registry = InMemoryGuestMcpRegistry()
     with pytest.raises(TimeoutError):
         await connect_guest_mcp(
-            session_id=session_id,
+            owner_id=session_id,
             name="kit",
             url="https://kit.example.com/mcp",
             token="tok",
@@ -157,7 +157,7 @@ async def test_connect_unauthorized_emits_fail() -> None:
     registry = InMemoryGuestMcpRegistry()
     with pytest.raises(GuestMcpAuthError):
         await connect_guest_mcp(
-            session_id=session_id,
+            owner_id=session_id,
             name="kit",
             url="https://kit.example.com/mcp",
             token="tok",

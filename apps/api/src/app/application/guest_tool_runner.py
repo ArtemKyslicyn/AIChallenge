@@ -1,4 +1,4 @@
-"""OpenAI-shaped tools for session-scoped guest MCP servers."""
+"""OpenAI-shaped tools for user-owned guest MCP servers."""
 
 from __future__ import annotations
 
@@ -45,19 +45,19 @@ def parse_guest_tool_openai_name(
 
 
 class GuestToolRunner:
-    """Builds prefixed OpenAI tools and calls guest MCP by session record."""
+    """Builds prefixed OpenAI tools and calls guest MCP by user record."""
 
     def __init__(
         self,
         *,
-        session_id: UUID,
+        owner_id: UUID,
         registry: GuestMcpRegistry,
         client: GuestMcpClient,
         analytics: AnalyticsCapture | None = None,
         distinct_id: str = "",
         allow_loopback: bool = False,
     ) -> None:
-        self._session_id = session_id
+        self._owner_id = owner_id
         self._registry = registry
         self._client = client
         self._analytics = analytics
@@ -66,7 +66,7 @@ class GuestToolRunner:
         self._records: tuple[GuestMcpRecord, ...] = ()
 
     async def _enabled_records(self) -> tuple[GuestMcpRecord, ...]:
-        listed = await self._registry.list(self._session_id)
+        listed = await self._registry.list(self._owner_id)
         return tuple(
             r
             for r in listed

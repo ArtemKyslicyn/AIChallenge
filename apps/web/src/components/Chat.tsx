@@ -956,7 +956,8 @@ export function Chat({
               <h2>Чем помочь?</h2>
               <p>
                 Пишите как в чате — под каждым ответом видно, какая модель ответила. Для картинки —
-                кнопка <strong>Картинка</strong> внизу.
+                кнопка <strong>Картинка</strong> внизу. Свой MCP — кнопка <strong>Свой MCP</strong>{" "}
+                над полем: войти, вставить адрес, потом писать обычным языком.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map((text, index) => (

@@ -202,7 +202,10 @@ export function McpCatalog() {
               : `нет соединения${data?.error || error ? ` · ${data?.error || error}` : ""}`}
         </p>
       </header>
-      <span className="text-link">свой сервер — в Настройках</span>
+      <p className="mcp-own-hint">
+        Это стенд. Свой MCP подключается в чате: кнопка <strong>Свой MCP</strong> над полем
+        ввода — войти, вставить адрес, писать как обычно.
+      </p>
 
       {error && !data ? (
         <p className="alert" role="alert">

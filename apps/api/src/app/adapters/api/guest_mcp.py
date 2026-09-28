@@ -16,6 +16,7 @@ from app.application.guest_mcp import (
     list_guest_mcp,
     set_guest_enabled,
 )
+from app.adapters.api.auth import RequiredAuthUser
 from app.core.deps import AuthorizedSession, get_container, resolve_visitor_identity, visitor_id_header
 from app.domain.guest_mcp import GuestMcpServer, GuestMcpUrlError
 
@@ -85,9 +86,11 @@ def _raise_connect_error(exc: BaseException) -> None:
 async def list_guest_mcp_servers(
     request: Request,
     session: AuthorizedSession,
+    user: RequiredAuthUser,
 ) -> GuestMcpListResponse:
+    del session
     container = get_container(request)
-    servers = await list_guest_mcp(session.id, container.guest_mcp_registry)
+    servers = await list_guest_mcp(user.id, container.guest_mcp_registry)
     return GuestMcpListResponse(servers=[_server_response(s) for s in servers])
 
 
@@ -96,12 +99,14 @@ async def connect_guest_mcp_server(
     payload: GuestMcpConnectRequest,
     request: Request,
     session: AuthorizedSession,
+    user: RequiredAuthUser,
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> GuestMcpServerResponse:
+    del session
     container = get_container(request)
     try:
         server = await connect_guest_mcp(
-            session.id,
+            user.id,
             payload.name,
             payload.url,
             payload.token,
@@ -122,12 +127,14 @@ async def patch_guest_mcp_server(
     payload: GuestMcpPatchRequest,
     request: Request,
     session: AuthorizedSession,
+    user: RequiredAuthUser,
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> GuestMcpServerResponse:
+    del session
     container = get_container(request)
     try:
         server = await set_guest_enabled(
-            session.id,
+            user.id,
             server_id,
             payload.enabled,
             registry=container.guest_mcp_registry,
@@ -144,12 +151,14 @@ async def delete_guest_mcp_server(
     server_id: UUID,
     request: Request,
     session: AuthorizedSession,
+    user: RequiredAuthUser,
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> None:
+    del session
     container = get_container(request)
     try:
         await disconnect_guest_mcp(
-            session.id,
+            user.id,
             server_id,
             registry=container.guest_mcp_registry,
             analytics=container.analytics,

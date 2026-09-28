@@ -25,6 +25,7 @@ from app.adapters.api.schemas import (
     SessionSummaryResponse,
     SessionTracesResponse,
 )
+from app.adapters.api.auth import OptionalAuthUser
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame, to_sse_with_keepalive
 from app.adapters.api.guest_mcp import router as guest_mcp_router
 from app.adapters.persistence.feedback_repo import SqlAlchemyFeedbackRepository
@@ -473,6 +474,7 @@ async def send_message(
     request: Request,
     session: AuthorizedSession,
     token: SessionToken,
+    auth_user: OptionalAuthUser,
 ) -> StreamingResponse:
     container = get_container(request)
     _reject_before_streaming(container, session, payload.content)
@@ -519,6 +521,7 @@ async def send_message(
                 ),
                 chat_mode=payload.chat_mode,
                 use_guest_mcp=payload.use_guest_mcp,
+                guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
                 guest_mcp_registry=container.guest_mcp_registry,
                 guest_mcp_client=container.guest_mcp_client,
                 guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,

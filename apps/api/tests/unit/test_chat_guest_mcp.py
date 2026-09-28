@@ -32,6 +32,7 @@ from app.domain.guest_mcp import GuestMcpRecord, GuestMcpServer
 from app.domain.media import ToolCallRequest
 
 SESSION_ID = UUID(int=9)
+USER_ID = UUID(int=11)
 TOKEN = "guest-chat-token"
 GUEST_SERVER_ID = UUID("abcd1234-0000-0000-0000-000000000000")
 PREFIXED_ECHO = "g_abcd1234_echo"
@@ -101,7 +102,7 @@ class _SpyGuestRunner(GuestToolRunner):
 
 async def _seed_guest(registry: InMemoryGuestMcpRegistry) -> None:
     await registry.put(
-        SESSION_ID,
+        USER_ID,
         GuestMcpRecord(
             server=GuestMcpServer(
                 id=GUEST_SERVER_ID,
@@ -121,6 +122,7 @@ async def _stream(
     registry: InMemoryGuestMcpRegistry,
     chat_mode: str | None = None,
     use_guest_mcp: bool | None = True,
+    guest_mcp_owner_id: UUID | None = USER_ID,
     guest_runner: GuestToolRunner | None = None,
 ) -> list[object]:
     sessions = InMemorySessionRepository()
@@ -150,6 +152,7 @@ async def _stream(
         id_factory=IdFactory(),
         chat_mode=chat_mode,
         use_guest_mcp=use_guest_mcp,
+        guest_mcp_owner_id=guest_mcp_owner_id,
         guest_mcp_registry=registry,
         guest_mcp_client=_PongGuestClient(),
         guest_tool_runner=guest_runner,
@@ -183,7 +186,7 @@ async def test_compare_mode_skips_guest_openai_tools() -> None:
     registry = InMemoryGuestMcpRegistry()
     await _seed_guest(registry)
     spy = _SpyGuestRunner(
-        session_id=SESSION_ID,
+        owner_id=USER_ID,
         registry=registry,
         client=_PongGuestClient(),
         analytics=None,
@@ -200,6 +203,14 @@ async def test_omitted_chat_mode_defaults_single() -> None:
     await _seed_guest(registry)
     events = await _stream(registry=registry, chat_mode=None)
     assert any(isinstance(e, ToolStartEvent) and e.name == "echo" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_owner_skips_guest_tools() -> None:
+    registry = InMemoryGuestMcpRegistry()
+    await _seed_guest(registry)
+    events = await _stream(registry=registry, chat_mode="single", guest_mcp_owner_id=None)
+    assert not any(isinstance(e, ToolStartEvent) for e in events)
 
 
 @pytest.mark.asyncio

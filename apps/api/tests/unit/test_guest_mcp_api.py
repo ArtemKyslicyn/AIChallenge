@@ -10,15 +10,28 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+from app.adapters.api.auth import require_auth_user
 from app.core.deps import require_session
 from app.core.settings import Settings
+from app.domain.auth import UserAccount
 from app.domain.entities import Session, SessionStatus
 from app.main import create_app
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 SESSION_ID = UUID(int=42)
+USER_ID = UUID(int=7)
+OTHER_USER_ID = UUID(int=8)
 TOKEN = "guest-session-token"
 BASE = f"/api/v1/sessions/{SESSION_ID}/guest-mcp"
+
+
+def _user(user_id: UUID = USER_ID) -> UserAccount:
+    return UserAccount(
+        id=user_id,
+        email=f"u{user_id.int}@example.com",
+        password_hash="x",
+        display_name="U",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +82,7 @@ def api() -> Iterator[TestClient]:
         status=SessionStatus.ACTIVE,
         created_at=NOW,
     )
+    app.dependency_overrides[require_auth_user] = lambda: _user()
     with TestClient(app) as client:
         client.app.state.container.guest_mcp_client = _FakeGuestClient()
         yield client
@@ -138,6 +152,35 @@ def test_connect_unauthorized_returns_401(api: TestClient) -> None:
     assert response.status_code == 401
     assert response.json()["error"]["message"] == "Неверный токен сервера."
     assert_no_token_in_payload(response.json())
+
+
+def test_guest_mcp_without_login_returns_401() -> None:
+    app = create_app(Settings(_env_file=None, use_fake_llm=True))  # type: ignore[call-arg]
+    app.dependency_overrides[require_session] = lambda: Session(
+        id=SESSION_ID,
+        access_token=TOKEN,
+        scenario_id="default",
+        status=SessionStatus.ACTIVE,
+        created_at=NOW,
+    )
+    with TestClient(app) as client:
+        response = client.get(BASE, headers=auth())
+    assert response.status_code == 401
+    assert "вход" in response.json()["error"]["message"].lower()
+    assert_no_token_in_payload(response.json())
+
+
+def test_list_is_isolated_per_user(api: TestClient) -> None:
+    connect = api.post(
+        BASE,
+        json={"name": "kit", "url": "https://kit.example.com/mcp", "token": "secret-bearer"},
+        headers=auth(),
+    )
+    assert connect.status_code == 200
+    api.app.dependency_overrides[require_auth_user] = lambda: _user(OTHER_USER_ID)
+    listed = api.get(BASE, headers=auth())
+    assert listed.status_code == 200
+    assert listed.json()["servers"] == []
 
 
 def test_connect_timeout_returns_504(api: TestClient) -> None:
