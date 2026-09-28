@@ -23,9 +23,7 @@ def test_http_public_rejected() -> None:
 def test_loopback_requires_flag() -> None:
     with pytest.raises(GuestMcpUrlError, match="loopback"):
         assert_guest_mcp_url("http://127.0.0.1:3100/mcp", allow_loopback=False)
-    assert "127.0.0.1" in assert_guest_mcp_url(
-        "http://127.0.0.1:3100/mcp", allow_loopback=True
-    )
+    assert "127.0.0.1" in assert_guest_mcp_url("http://127.0.0.1:3100/mcp", allow_loopback=True)
 
 
 def test_metadata_blocked() -> None:

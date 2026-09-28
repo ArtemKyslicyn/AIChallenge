@@ -67,12 +67,13 @@ class _GuestToolFakeLLM(FakeLLMProvider):
             return CompletionResult(
                 content="",
                 model_id=self._resolve(model),
-                tool_calls=[
-                    ToolCallRequest(id="guest-tc-1", name=PREFIXED_ECHO, arguments={})
-                ],
+                tool_calls=[ToolCallRequest(id="guest-tc-1", name=PREFIXED_ECHO, arguments={})],
             )
         return await super().complete_chat(
-            messages, model, generation=generation, tools=tools  # type: ignore[arg-type]
+            messages,
+            model,
+            generation=generation,
+            tools=tools,  # type: ignore[arg-type]
         )
 
 
@@ -82,9 +83,7 @@ class _PongGuestClient:
     async def handshake(self, url: str, token: str) -> tuple[str, ...]:
         return ("echo",)
 
-    async def call_tool(
-        self, url: str, token: str, name: str, arguments: dict[str, object]
-    ) -> str:
+    async def call_tool(self, url: str, token: str, name: str, arguments: dict[str, object]) -> str:
         _PongGuestClient.calls.append((url, token, name, arguments))
         return "pong"
 
@@ -175,9 +174,7 @@ async def test_single_mode_runs_guest_tool_and_streams_answer() -> None:
     assert results[0].status == "ok"
     assert len(ends) == 1
     assert ends[0].model_id == "fake-model"
-    assert _PongGuestClient.calls == [
-        ("https://kit.example.com/mcp", "bearer-secret", "echo", {})
-    ]
+    assert _PongGuestClient.calls == [("https://kit.example.com/mcp", "bearer-secret", "echo", {})]
 
 
 @pytest.mark.asyncio

@@ -15,9 +15,7 @@ class InMemoryGuestMcpRegistry:
 
     async def list(self, owner_id: UUID) -> tuple[GuestMcpRecord, ...]:
         async with self._lock:
-            return tuple(
-                rec for (oid, _), rec in self._store.items() if oid == owner_id
-            )
+            return tuple(rec for (oid, _), rec in self._store.items() if oid == owner_id)
 
     async def put(self, owner_id: UUID, record: GuestMcpRecord) -> None:
         async with self._lock:
