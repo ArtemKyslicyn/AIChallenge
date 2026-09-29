@@ -84,7 +84,7 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
     initSessionChatPrefs(sessionId, loadGlobalChatPrefs().defaultChatMode),
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("global");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("session");
   const [models, setModels] = useState<ModelCatalogItemDto[]>([]);
   const [labPresets, setLabPresets] = useState<LabPresetDto[]>([]);
   const [labPresetId, setLabPresetId] = useState("");
@@ -349,8 +349,9 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
   });
 
   const openGuestConnections = useCallback(() => {
-    setSettingsTab("connections");
-    setSettingsOpen(true);
+    window.dispatchEvent(
+      new CustomEvent("aichallenge:open-profile", { detail: { section: "connections" } }),
+    );
   }, []);
 
   const placeholder =
@@ -509,11 +510,10 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
 
           <button
             type="button"
-            className="mode-chip"
-            aria-pressed={settingsOpen && settingsTab === "connections"}
+            className="text-link composer-profile-link"
             onClick={openGuestConnections}
           >
-            Свой MCP
+            Подключения и модели — в профиле
           </button>
 
           <button
@@ -613,6 +613,7 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
               chatMode={effective.chatMode}
               reasoningAllowed={reasoningAllowed}
               globalModelLabel={globalModelLabel}
+              onOpenProfile={openGuestConnections}
             />
           </div>
         )}

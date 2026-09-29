@@ -55,34 +55,34 @@ Funnel in admin: `settings_opened(tab=connections)` → `connect_started` → `c
 - Chat **never** `POST /mcp/invoke`. Stand allowlist and pulse stay on `/mcp/*`.
 - Token never in list DTO, UI live region, transcript, or analytics.
 
-## 3. Separate kit repo (local MCP)
+## 3. Separate kit repo (local MCP hub)
 
-AIChallenge only speaks **URL + Bearer**. Local stdio servers (filesystem, git, Xcode, ADB) cannot be reached from prod until they are published as Streamable HTTP.
+AIChallenge only speaks **URL + Bearer**. Local stdio servers (filesystem, git, Xcode, montage, …) cannot be reached from prod until they are published as Streamable HTTP.
 
-**New private repo** (not this monorepo): e.g. `aichallenge-mcp-kit`.
+**Public repo** (not this monorepo): [`aichallenge-mcp-kit`](https://github.com/ArtemKyslicyn/aichallenge-mcp-kit) — hierarchical **hub** + artifact HTTP + Python sandbox.
 
-Job of that repo: one compose/process that wraps well-known MCP servers and listens on `/mcp` with a visitor-chosen token. README: Cloudflare/ngrok one-liner → paste URL into Настройки.
+Full design: `docs/superpowers/specs/2026-09-28-mcp-kit-hub-design.md`.
 
-### 3.1 GitHub servers to wrap (researched)
+Job of that repo: one process listens on `/mcp` (+ `/artifacts`) with a visitor-chosen token; `kit.yaml` attaches child MCPs in **groups** (`dev`, `media`, …). README: Cloudflare/ngrok one-liner → paste URL into Свой MCP / Настройки.
+
+### 3.1 Children to wrap (researched; enabled via kit manifest)
 
 | Use | Repo / package | Why |
 |---|---|---|
 | Files | `@modelcontextprotocol/server-filesystem` | Official read/write in a sandbox dir |
 | Git | `mcp-server-git` (official) | Status, diff, commit on a local repo |
-| GitHub | `github/github-mcp-server` | PRs/issues from chat (token on the kit, not in AIChallenge `.env`) |
+| Python sandbox | **builtin** in kit | Exec under `workspace/sandboxes/` (network off by default) |
+| GitHub | `github/github-mcp-server` | PRs/issues (token on the kit, not in AIChallenge `.env`) |
 | iOS + Android UI | `mobile-next/mobile-mcp` | Sim/device; has `--listen` Streamable HTTP on `/mcp` |
 | iOS Xcode | `r-huijts/xcode-mcp-server`, `lapfelix/XcodeMCP` | Build / project on a Mac |
 | Android diagnose | ADB-oriented MCP (`us-all/android` and similar) | logcat / dumpsys; HTTP + `MCP_HTTP_TOKEN` |
 | Browser tests | `microsoft/playwright-mcp` | Web + Expo web |
 | Expo / EAS | `CaullenOmdahl/expo-mcp-server` | Optional profile |
+| Montage / media | user stdio MCP or allowlisted `ffmpeg` via `hub_run` | Edit locally; return via `/artifacts` |
 
-v1 kit profiles (compose profiles, not all at once):
+Default kit profile **dev**: filesystem + git + python sandbox. Optional groups: **media**, **mobile**, **github**.
 
-1. **dev** — filesystem + git  
-2. **mobile** — mobile-next (+ optional xcode / adb)  
-3. **github** — official GitHub MCP  
-
-AIChallenge UI: one `.text-link` «Набор для опытов на компьютере». No clone/run UI in the chat app.
+AIChallenge UI: link to the public kit README + Guest MCP connect / JSON pack. No clone/run UI inside the chat app.
 
 ## 4. Architecture (hexagonal, assignment layout)
 

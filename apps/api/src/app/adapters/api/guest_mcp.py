@@ -23,13 +23,33 @@ from app.core.deps import (
     resolve_visitor_identity,
     visitor_id_header,
 )
-from app.domain.guest_mcp import GuestMcpServer, GuestMcpUrlError
+from app.domain.guest_mcp import (
+    GuestMcpForbiddenError,
+    GuestMcpServer,
+    GuestMcpUrlError,
+    assert_guest_mcp_email_allowed,
+)
 
 router = APIRouter()
 
 _CONNECT_TIMEOUT_DETAIL = "Сервер не ответил за 8 секунд."
 _AUTH_DETAIL = "Неверный токен сервера."
 _UNREACHABLE_DETAIL = "Не удалось подключиться к серверу."
+_FORBIDDEN_DETAIL = "Свой MCP доступен только администратору."
+
+
+def _assert_guest_mcp_access(request: Request, user_email: str) -> None:
+    container = get_container(request)
+    try:
+        assert_guest_mcp_email_allowed(
+            user_email,
+            container.settings.guest_mcp_allowed_emails,
+        )
+    except GuestMcpForbiddenError as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=_FORBIDDEN_DETAIL,
+        ) from exc
 
 
 class GuestMcpConnectRequest(BaseModel):
@@ -100,6 +120,7 @@ async def list_guest_mcp_servers(
     user: RequiredAuthUser,
 ) -> GuestMcpListResponse:
     del session
+    _assert_guest_mcp_access(request, user.email)
     container = get_container(request)
     servers = await list_guest_mcp(user.id, container.guest_mcp_registry)
     return GuestMcpListResponse(servers=[_server_response(s) for s in servers])
@@ -114,6 +135,7 @@ async def connect_guest_mcp_server(
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> GuestMcpServerResponse:
     del session
+    _assert_guest_mcp_access(request, user.email)
     container = get_container(request)
     try:
         server = await connect_guest_mcp(
@@ -142,6 +164,7 @@ async def patch_guest_mcp_server(
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> GuestMcpServerResponse:
     del session
+    _assert_guest_mcp_access(request, user.email)
     container = get_container(request)
     try:
         server = await set_guest_enabled(
@@ -166,6 +189,7 @@ async def delete_guest_mcp_server(
     client_visitor_id: Annotated[str | None, Depends(visitor_id_header)] = None,
 ) -> None:
     del session
+    _assert_guest_mcp_access(request, user.email)
     container = get_container(request)
     try:
         await disconnect_guest_mcp(

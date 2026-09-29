@@ -203,8 +203,21 @@ export function McpCatalog() {
         </p>
       </header>
       <p className="mcp-own-hint">
-        Это стенд. Свой MCP подключается в чате: кнопка <strong>Свой MCP</strong> над полем
-        ввода — войти, вставить адрес, писать как обычно.
+        Это стенд. Свой MCP — в профиле:{" "}
+        <button
+          type="button"
+          className="text-link"
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("aichallenge:open-profile", {
+                detail: { section: "connections" },
+              }),
+            )
+          }
+        >
+          Подключения
+        </button>
+        . Краткий статус — в профиле.
       </p>
 
       {error && !data ? (

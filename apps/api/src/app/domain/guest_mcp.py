@@ -27,6 +27,28 @@ class GuestMcpUrlError(ValueError):
         self.message = message
 
 
+class GuestMcpForbiddenError(ValueError):
+    """Signed-in user is not on the Guest MCP allowlist."""
+
+    def __init__(self, message: str = "Guest MCP доступен только администратору.") -> None:
+        super().__init__(message)
+        self.message = message
+
+
+def assert_guest_mcp_email_allowed(email: str, allowed_emails_csv: str) -> None:
+    """If allowlist is non-empty, email must be on it (case-insensitive)."""
+    allowed = {
+        part.strip().lower()
+        for part in (allowed_emails_csv or "").split(",")
+        if part.strip()
+    }
+    if not allowed:
+        return
+    normalized = (email or "").strip().lower()
+    if normalized not in allowed:
+        raise GuestMcpForbiddenError()
+
+
 GuestMcpStatus = str  # "connected" | "error" | "off"
 
 

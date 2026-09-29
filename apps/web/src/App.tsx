@@ -249,7 +249,12 @@ export default function App() {
               </button>
             </nav>
 
-            <AuthPanel />
+            <AuthPanel
+              sessionId={session?.id ?? null}
+              onOpenMcp={() => setMode("mcp")}
+              onOpenAgents={() => setMode("agents")}
+              onSessionReset={(next) => setSession(next)}
+            />
 
             <span className="sr-only" aria-live="polite">
               Раздел: {shellLabel}

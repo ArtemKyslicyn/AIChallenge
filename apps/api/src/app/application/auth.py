@@ -152,3 +152,40 @@ async def login_user(
             preferences, memory_owner_key(visitor_id="", user_id=user.id)
         )
     return user, token
+
+
+async def update_display_name(
+    *,
+    user_id: UUID,
+    display_name: str,
+    users: UserRepository,
+) -> UserAccount:
+    name = (display_name or "").strip()
+    if len(name) > 120:
+        raise MessageValidationError("Имя слишком длинное.")
+    return await users.update_display_name(user_id, name)
+
+
+async def change_password(
+    *,
+    user_id: UUID,
+    current_password: str,
+    new_password: str,
+    current_token: str,
+    users: UserRepository,
+    tokens: AuthTokenRepository,
+) -> tuple[UserAccount, str]:
+    user = await users.get(user_id)
+    if user is None:
+        raise MessageValidationError("Требуется вход.")
+    if not verify_password(current_password, user.password_hash):
+        raise MessageValidationError("Неверный текущий пароль.")
+    validate_password(new_password)
+    if current_password == new_password:
+        raise MessageValidationError("Новый пароль должен отличаться от текущего.")
+    updated = await users.update_password_hash(user_id, hash_password(new_password))
+    if current_token:
+        await tokens.revoke_token(current_token)
+    new_token = mint_auth_token()
+    await tokens.create(user_id=user_id, plaintext_token=new_token)
+    return updated, new_token

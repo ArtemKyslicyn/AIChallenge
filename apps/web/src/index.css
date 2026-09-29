@@ -8953,3 +8953,240 @@ textarea {
   cursor: pointer;
   padding: 0;
 }
+
+/* —— Profile overlay —— */
+.profile-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+
+.profile-drawer {
+  position: relative;
+  width: min(460px, 100vw);
+  height: 100%;
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-2, 0 8px 28px rgba(15, 23, 42, 0.18));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-drawer {
+    animation: profile-slide 160ms ease-out;
+  }
+}
+
+@keyframes profile-slide {
+  from { transform: translateX(12px); opacity: 0.85; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.profile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-4, 1rem) var(--space-4, 1rem) var(--space-3, 0.75rem);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.profile-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.profile-eyebrow {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted, #6b7280);
+}
+
+.profile-close {
+  flex-shrink: 0;
+}
+
+.profile-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.profile-rail {
+  width: 148px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: var(--space-3, 0.75rem) var(--space-2, 0.5rem);
+  border-right: 1px solid var(--border, #e5e7eb);
+}
+
+.profile-rail-note {
+  margin: 0 0 0.6rem;
+  padding: 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted, #6b7280);
+  line-height: 1.35;
+}
+
+.profile-rail-group + .profile-rail-group {
+  margin-top: 0.85rem;
+}
+
+.profile-rail-group-label {
+  margin: 0 0 0.25rem;
+  padding: 0 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b7280);
+}
+
+.profile-rail ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-rail-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.profile-rail-item.is-active {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent, #3b5bdb) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent, #3b5bdb);
+}
+
+.profile-main {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-4, 1rem);
+}
+
+.profile-back {
+  display: none;
+  margin-bottom: 0.5rem;
+}
+
+.profile-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.profile-section-lead {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: var(--muted, #6b7280);
+  line-height: 1.4;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.profile-model-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.profile-about p {
+  margin: 0 0 0.75rem;
+  line-height: 1.45;
+}
+
+.profile-alertdialog {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg, #f8fafc);
+}
+
+.profile-alertdialog h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.profile-alertdialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.composer-profile-link {
+  font-size: 0.82rem;
+  align-self: center;
+}
+
+.guest-mcp-panel--compact .guest-mcp-steps,
+.guest-mcp-panel--compact .composer-more-lead {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .profile-drawer {
+    width: 100vw;
+  }
+
+  .profile-body:not(.is-detail) .profile-main {
+    display: none;
+  }
+
+  .profile-body.is-detail .profile-rail {
+    display: none;
+  }
+
+  .profile-body.is-detail .profile-back {
+    display: inline-flex;
+  }
+
+  .profile-rail {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .profile-rail-item {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+}

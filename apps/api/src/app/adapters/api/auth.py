@@ -14,7 +14,7 @@ from app.adapters.persistence.user_repo import (
     SqlAlchemyAuthTokenRepository,
     SqlAlchemyUserRepository,
 )
-from app.application.auth import login_user, register_user
+from app.application.auth import change_password, login_user, register_user, update_display_name
 from app.core.deps import ClientVisitorId, DbSession
 from app.domain.auth import UserAccount
 from app.domain.errors import MessageValidationError
@@ -29,6 +29,15 @@ class AuthCredentialsRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=8, max_length=200)
     display_name: str = Field(default="", max_length=120)
+
+
+class PatchMeRequest(BaseModel):
+    display_name: str = Field(min_length=0, max_length=120)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
 
 
 class UserMeResponse(BaseModel):
@@ -170,3 +179,54 @@ async def me(
             anonymous=True,
         )
     return _user_dto(user, visitor_id=client_visitor_id)
+
+
+@router.patch("/me", response_model=UserMeResponse)
+async def patch_me(
+    payload: PatchMeRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+    user: RequiredAuthUser,
+) -> UserMeResponse:
+    try:
+        updated = await update_display_name(
+            user_id=user.id,
+            display_name=payload.display_name,
+            users=SqlAlchemyUserRepository(db),
+        )
+    except MessageValidationError as exc:
+        raise MessageValidationError(str(exc)) from exc
+    await db.commit()
+    return _user_dto(updated, visitor_id=client_visitor_id)
+
+
+@router.post("/change-password", response_model=AuthTokenResponse)
+async def change_password_route(
+    payload: ChangePasswordRequest,
+    db: DbSession,
+    client_visitor_id: ClientVisitorId,
+    user: RequiredAuthUser,
+    authorization: Annotated[str | None, Header()] = None,
+    x_auth_token: Annotated[str | None, Header(alias=AUTH_TOKEN_HEADER)] = None,
+) -> AuthTokenResponse:
+    token = (x_auth_token or "").strip()
+    if not token and authorization:
+        parts = authorization.split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1].strip()
+    try:
+        updated, new_token = await change_password(
+            user_id=user.id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+            current_token=token,
+            users=SqlAlchemyUserRepository(db),
+            tokens=SqlAlchemyAuthTokenRepository(db),
+        )
+    except MessageValidationError as exc:
+        raise MessageValidationError(str(exc)) from exc
+    await db.commit()
+    return AuthTokenResponse(
+        access_token=new_token,
+        user=_user_dto(updated, visitor_id=client_visitor_id),
+    )

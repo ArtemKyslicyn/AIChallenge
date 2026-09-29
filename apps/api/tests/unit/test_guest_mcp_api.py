@@ -170,6 +170,29 @@ def test_guest_mcp_without_login_returns_401() -> None:
     assert_no_token_in_payload(response.json())
 
 
+def test_guest_mcp_allowlist_blocks_non_admin() -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            use_fake_llm=True,
+            guest_mcp_allowed_emails="admin@example.com",
+        )
+    )  # type: ignore[call-arg]
+    app.dependency_overrides[require_session] = lambda: Session(
+        id=SESSION_ID,
+        access_token=TOKEN,
+        scenario_id="default",
+        status=SessionStatus.ACTIVE,
+        created_at=NOW,
+    )
+    app.dependency_overrides[require_auth_user] = lambda: _user()
+    with TestClient(app) as client:
+        response = client.get(BASE, headers=auth())
+    assert response.status_code == 403
+    assert "администратору" in response.json()["error"]["message"].lower()
+    assert_no_token_in_payload(response.json())
+
+
 def test_list_is_isolated_per_user(api: TestClient) -> None:
     connect = api.post(
         BASE,

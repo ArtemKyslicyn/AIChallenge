@@ -230,6 +230,10 @@ class UserRepository(Protocol):
         display_name: str = "",
     ) -> UserAccount: ...
 
+    async def update_display_name(self, user_id: UUID, display_name: str) -> UserAccount: ...
+
+    async def update_password_hash(self, user_id: UUID, password_hash: str) -> UserAccount: ...
+
 
 class AuthTokenRepository(Protocol):
     async def create(
