@@ -38,9 +38,7 @@ class GuestMcpForbiddenError(ValueError):
 def assert_guest_mcp_email_allowed(email: str, allowed_emails_csv: str) -> None:
     """If allowlist is non-empty, email must be on it (case-insensitive)."""
     allowed = {
-        part.strip().lower()
-        for part in (allowed_emails_csv or "").split(",")
-        if part.strip()
+        part.strip().lower() for part in (allowed_emails_csv or "").split(",") if part.strip()
     }
     if not allowed:
         return
