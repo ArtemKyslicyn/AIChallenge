@@ -85,7 +85,19 @@ export function initSessionChatPrefs(
   if (sessionStorage.getItem(storageKey(sessionId))) {
     return existing;
   }
-  const initial = { ...DEFAULT_SESSION_CHAT_PREFS, chatMode: defaultMode };
+  let guestMcpEnabled = DEFAULT_SESSION_CHAT_PREFS.guestMcpEnabled;
+  try {
+    const flag = localStorage.getItem("aichallenge.guest_mcp_default");
+    if (flag === "0") guestMcpEnabled = false;
+    if (flag === "1") guestMcpEnabled = true;
+  } catch {
+    /* ignore */
+  }
+  const initial = {
+    ...DEFAULT_SESSION_CHAT_PREFS,
+    chatMode: defaultMode,
+    guestMcpEnabled,
+  };
   saveSessionChatPrefs(sessionId, initial);
   return initial;
 }

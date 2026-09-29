@@ -26,13 +26,13 @@ export function guestMcpHowToLine(args: {
   singleMode: boolean;
 }): string {
   if (!args.signedIn) {
-    return "Свой MCP: справа Войти → кнопка «Свой MCP» → вставить адрес → писать в обычный чат.";
+    return "Свой MCP: Войти в профиле → Подключения → вставить адрес.";
   }
   if (!args.enabled) {
-    return "Свой MCP выключен в этом чате. Вкладка «Чат» → «Свой сервер в этом чате».";
+    return "Свой MCP выключен в этом чате. Настройки → «Свой сервер в этом чате».";
   }
   if (!args.connectedName) {
-    return "Подключить свой MCP: кнопка «Свой MCP» → адрес https://…/mcp → Подключить.";
+    return "Подключить свой MCP: Подключения и модели — в профиле.";
   }
   if (!args.singleMode) {
     return `«${args.connectedName}» подключён. Переключитесь на обычный чат — там модель вызовет умения.`;

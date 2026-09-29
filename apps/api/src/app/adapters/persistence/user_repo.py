@@ -53,6 +53,22 @@ class SqlAlchemyUserRepository:
         await self._db.flush()
         return self._to_domain(row)
 
+    async def update_display_name(self, user_id: UUID, display_name: str) -> UserAccount:
+        row = await self._db.get(UserRow, user_id)
+        if row is None:
+            raise LookupError("user not found")
+        row.display_name = (display_name or "").strip()[:120]
+        await self._db.flush()
+        return self._to_domain(row)
+
+    async def update_password_hash(self, user_id: UUID, password_hash: str) -> UserAccount:
+        row = await self._db.get(UserRow, user_id)
+        if row is None:
+            raise LookupError("user not found")
+        row.password_hash = password_hash
+        await self._db.flush()
+        return self._to_domain(row)
+
 
 class SqlAlchemyAuthTokenRepository:
     def __init__(self, db: AsyncSession) -> None:

@@ -199,6 +199,9 @@ class Settings(BaseSettings):
     mcp_shared_token: str = ""
     #: Allow http://127.0.0.1 guest MCP URLs (local dev only).
     guest_mcp_allow_loopback: bool = False
+    #: Comma-separated emails allowed to use Guest MCP. Empty = any signed-in user.
+    #: On production set to the admin account only (e.g. admin@example.com).
+    guest_mcp_allowed_emails: str = ""
 
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""

@@ -173,6 +173,38 @@ export function authMe(signal?: AbortSignal): Promise<AuthUserDto> {
   return request<AuthUserDto>("/auth/me", { signal });
 }
 
+export function authPatchMe(displayName: string): Promise<AuthUserDto> {
+  return request<AuthUserDto>("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+export function authChangePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<AuthTokenResponseDto> {
+  return request<AuthTokenResponseDto>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  }).then((res) => {
+    setAuthToken(res.access_token);
+    return res;
+  });
+}
+
+export function clearLocalSessionCache(): void {
+  try {
+    localStorage.removeItem(STORE_KEY);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function authRegister(
   email: string,
   password: string,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useAuthUser } from "../auth/authUser";
 import {
   ApiError,
-  authMe,
   connectGuestMcp,
   deleteGuestMcp,
   listGuestMcp,
@@ -33,10 +33,13 @@ interface Props {
 }
 
 export function GuestMcpPanel({ sessionId }: Props) {
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const { user } = useAuthUser();
+  const signedIn =
+    user === null ? null : Boolean(user && !user.anonymous && user.id);
   const [servers, setServers] = useState<GuestMcpServerDto[]>([]);
   const [listBusy, setListBusy] = useState(true);
-  const [formOpen, setFormOpen] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [adminOnlyBlocked, setAdminOnlyBlocked] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
@@ -53,26 +56,16 @@ export function GuestMcpPanel({ sessionId }: Props) {
     try {
       const list = await listGuestMcp(sessionId);
       setServers(list);
-    } catch {
+      setAdminOnlyBlocked(false);
+    } catch (err) {
       setServers([]);
+      if (err instanceof ApiError && err.status === 403) {
+        setAdminOnlyBlocked(true);
+      }
     } finally {
       setListBusy(false);
     }
   }, [sessionId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void authMe()
-      .then((me) => {
-        if (!cancelled) setSignedIn(Boolean(me && !me.anonymous && me.id));
-      })
-      .catch(() => {
-        if (!cancelled) setSignedIn(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (signedIn !== true) {
@@ -210,6 +203,30 @@ export function GuestMcpPanel({ sessionId }: Props) {
         {howTo}
         <p className="guest-mcp-muted">
           {signedIn === null ? "Проверяем вход…" : "Сначала войдите — форма появится здесь."}
+        </p>
+        <p className="guest-mcp-muted">
+          Хаб для своего компьютера:{" "}
+          <a className="text-link" href={KIT_REPO_URL} target="_blank" rel="noreferrer">
+            aichallenge-mcp-kit
+          </a>
+        </p>
+      </div>
+    );
+  }
+
+  if (adminOnlyBlocked) {
+    return (
+      <div className="guest-mcp-panel">
+        <p className="composer-more-lead">Свой MCP — не вкладка MCP. Там стенд.</p>
+        <p className="guest-mcp-muted" role="status">
+          Свой MCP на этом стенде доступен только администратору. Войдите под админ-аккаунтом
+          или попросите выдать доступ.
+        </p>
+        <p className="guest-mcp-muted">
+          Локальный хаб:{" "}
+          <a className="text-link" href={KIT_REPO_URL} target="_blank" rel="noreferrer">
+            aichallenge-mcp-kit
+          </a>
         </p>
       </div>
     );

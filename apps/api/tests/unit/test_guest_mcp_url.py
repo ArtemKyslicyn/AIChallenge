@@ -35,6 +35,20 @@ def test_url_host_strips_userinfo() -> None:
     assert url_host("https://u:p@kit.example.com:8443/mcp?x=1") == "kit.example.com"
 
 
+def test_allowlist_empty_permits_anyone() -> None:
+    from app.domain.guest_mcp import assert_guest_mcp_email_allowed
+
+    assert_guest_mcp_email_allowed("anyone@example.com", "")
+
+
+def test_allowlist_blocks_other_emails() -> None:
+    from app.domain.guest_mcp import GuestMcpForbiddenError, assert_guest_mcp_email_allowed
+
+    assert_guest_mcp_email_allowed("admin@example.com", "admin@example.com, ops@example.com")
+    with pytest.raises(GuestMcpForbiddenError):
+        assert_guest_mcp_email_allowed("user@example.com", "admin@example.com")
+
+
 def test_url_strips_userinfo_query_fragment() -> None:
     canonical = assert_guest_mcp_url(
         "https://u:p@kit.example.com:8443/mcp?token=x#f",
