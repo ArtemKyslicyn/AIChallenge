@@ -25,11 +25,20 @@ class HttpRagClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def search(self, query: str, *, top_k: int = 6) -> RagSearchResult:
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 6,
+        mode: str | None = None,
+    ) -> RagSearchResult:
+        body: dict[str, object] = {"query": query, "top_k": top_k}
+        if mode:
+            body["mode"] = mode
         resp = await self._client.post(
             f"{self._base}/v1/ask",
             headers=self._headers(),
-            json={"query": query, "top_k": top_k},
+            json=body,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -46,11 +55,14 @@ class HttpRagClient:
             for h in (data.get("hits") or [])
             if isinstance(h, dict)
         )
+        retrieval = data.get("retrieval")
         return RagSearchResult(
             query=str(data.get("query") or query),
             hits=hits,
             context=str(data.get("context") or data.get("prompt_suffix") or ""),
             embed_model=str(data.get("embed_model") or "") or None,
+            query_rewritten=str(data.get("query_rewritten") or "") or None,
+            retrieval=dict(retrieval) if isinstance(retrieval, dict) else None,
         )
 
     async def add_document_text(

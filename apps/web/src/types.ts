@@ -50,6 +50,13 @@ export interface Turn {
     strategy: string;
     score: number;
   }[];
+  ragQueryRewritten?: string | null;
+  ragRetrieval?: {
+    mode?: string;
+    hits_pre?: number;
+    hits_post?: number;
+    dropped?: number;
+  } | null;
 }
 
 export interface ProbeSlotState {

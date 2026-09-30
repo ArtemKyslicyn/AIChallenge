@@ -1094,6 +1094,20 @@ textarea {
   color: var(--text-muted);
 }
 
+.composer-rag-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.rag-sources-rewrite {
+  margin: 0.35rem 0;
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
 .rag-sources {
   margin-top: 0.5rem;
   font-size: 0.8rem;

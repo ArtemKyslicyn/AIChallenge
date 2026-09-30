@@ -101,6 +101,16 @@ export type ChatEvent =
         score: number;
       }[];
       embed_model?: string | null;
+      query_rewritten?: string | null;
+      retrieval?: {
+        mode?: string;
+        hits_pre?: number;
+        hits_post?: number;
+        dropped?: number;
+        min_score?: number;
+        top_k_post?: number;
+        rerank?: string;
+      } | null;
     };
 
 const BASE = import.meta.env.VITE_API_URL || "/api/v1";
@@ -678,6 +688,7 @@ export async function sendMessageSSE(
     chatMode?: SendMessageChatMode;
     useGuestMcp?: boolean;
     useRag?: boolean;
+    ragMode?: "raw" | "filtered" | "full";
   } = {},
 ): Promise<void> {
   const store = loadStore();
@@ -699,6 +710,7 @@ export async function sendMessageSSE(
       ...(options.chatMode !== undefined ? { chat_mode: options.chatMode } : {}),
       ...(options.useGuestMcp !== undefined ? { use_guest_mcp: options.useGuestMcp } : {}),
       ...(options.useRag !== undefined ? { use_rag: options.useRag } : {}),
+      ...(options.ragMode !== undefined ? { rag_mode: options.ragMode } : {}),
     }),
     signal,
   });

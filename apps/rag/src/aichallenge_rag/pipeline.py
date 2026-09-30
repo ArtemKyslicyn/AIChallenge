@@ -9,6 +9,7 @@ import numpy as np
 
 from aichallenge_rag.chunking import Chunk, chunk_document
 from aichallenge_rag.embeddings import Embedder
+from aichallenge_rag.rerank import apply_pipeline, rewrite_query
 from aichallenge_rag.settings import Settings
 from aichallenge_rag.store import SearchHit, VectorStore, chunk_to_dict
 
@@ -198,17 +199,79 @@ class RagPipeline:
             embed_model=self.embedder.model_id,
         )
 
-    async def search(self, query: str, *, top_k: int | None = None) -> list[SearchHit]:
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int | None = None,
+        mode: str | None = None,
+        top_k_pre: int | None = None,
+        top_k_post: int | None = None,
+        min_score: float | None = None,
+    ) -> list[SearchHit]:
         q = query.strip()
         if not q:
             return []
-        vectors = await self.embedder.embed([q])
-        return self.store.search(vectors[0], top_k=top_k or self.settings.rag_top_k)
+        mode_eff = (mode or self.settings.rag_mode or "full").strip().lower()
+        if mode_eff not in {"raw", "filtered", "full"}:
+            mode_eff = "full"
+        rewritten = rewrite_query(q) if mode_eff == "full" else q
+        pre = top_k_pre or self.settings.rag_top_k_pre
+        post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
+        threshold = self.settings.rag_min_score if min_score is None else min_score
+        vectors = await self.embedder.embed([rewritten])
+        raw_hits = self.store.search(vectors[0], top_k=pre)
+        final_hits, _meta = apply_pipeline(
+            rewritten,
+            raw_hits,
+            mode=mode_eff,
+            min_score=threshold,
+            top_k_post=post,
+        )
+        return final_hits
 
-    async def search_payload(self, query: str, *, top_k: int | None = None) -> dict[str, object]:
-        hits = await self.search(query, top_k=top_k)
+    async def search_payload(
+        self,
+        query: str,
+        *,
+        top_k: int | None = None,
+        mode: str | None = None,
+        top_k_pre: int | None = None,
+        top_k_post: int | None = None,
+        min_score: float | None = None,
+    ) -> dict[str, object]:
+        q = query.strip()
+        if not q:
+            return {
+                "query": query,
+                "query_rewritten": query,
+                "hits": [],
+                "embed_model": self.embedder.model_id,
+                "retrieval": {"mode": mode or self.settings.rag_mode, "hits_pre": 0, "hits_post": 0},
+            }
+
+        mode_eff = (mode or self.settings.rag_mode or "full").strip().lower()
+        if mode_eff not in {"raw", "filtered", "full"}:
+            mode_eff = "full"
+
+        rewritten = rewrite_query(q) if mode_eff == "full" else q
+        pre = top_k_pre or self.settings.rag_top_k_pre
+        post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
+        threshold = self.settings.rag_min_score if min_score is None else min_score
+
+        vectors = await self.embedder.embed([rewritten])
+        raw_hits = self.store.search(vectors[0], top_k=pre)
+        final_hits, retrieval_meta = apply_pipeline(
+            rewritten,
+            raw_hits,
+            mode=mode_eff,
+            min_score=threshold,
+            top_k_post=post,
+        )
         return {
-            "query": query,
-            "hits": [chunk_to_dict(h.chunk, h.score) for h in hits],
+            "query": q,
+            "query_rewritten": rewritten,
+            "hits": [chunk_to_dict(h.chunk, h.score) for h in final_hits],
             "embed_model": self.embedder.model_id,
+            "retrieval": retrieval_meta,
         }

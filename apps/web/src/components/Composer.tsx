@@ -506,9 +506,9 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
               disabled={busy}
               onClick={() => fileInputRef.current?.click()}
               aria-label="Добавить документ в базу знаний"
-              title="Файл в базу (.md / .txt / .pdf)"
+              title="Документ в базу (.md / .txt / .pdf)"
             >
-              Файл
+              В базу
             </button>
             <input
               ref={fileInputRef}

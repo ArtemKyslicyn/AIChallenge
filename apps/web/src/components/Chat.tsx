@@ -504,6 +504,8 @@ export function Chat({
               case "rag_sources":
                 patch({
                   ragSources: event.sources ?? [],
+                  ragQueryRewritten: event.query_rewritten ?? null,
+                  ragRetrieval: event.retrieval ?? null,
                 });
                 break;
               case "error":
@@ -520,7 +522,7 @@ export function Chat({
             model: modelId,
             chatMode,
             ...(effective.guestMcpEnabled ? {} : { useGuestMcp: false }),
-            ...(effective.useRag ? { useRag: true } : {}),
+            ...(effective.useRag ? { useRag: true, ragMode: effective.ragMode } : {}),
           },
         );
       } catch (e) {

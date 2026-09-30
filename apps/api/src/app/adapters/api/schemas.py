@@ -102,6 +102,8 @@ class SendMessageRequest(BaseModel):
     use_guest_mcp: bool | None = True
     #: When ``True``, retrieve stand RAG chunks and inject them into the prompt.
     use_rag: bool | None = False
+    #: Retrieval mode: raw | filtered | full (rewrite+filter+rerank).
+    rag_mode: Literal["raw", "filtered", "full"] | None = None
 
 
 class ProbeMessage(BaseModel):

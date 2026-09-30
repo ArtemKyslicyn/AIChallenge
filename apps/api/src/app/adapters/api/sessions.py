@@ -524,6 +524,7 @@ async def send_message(
                 use_rag=payload.use_rag,
                 rag_client=container.rag_client,
                 rag_top_k=container.settings.rag_top_k,
+                rag_mode=payload.rag_mode,
                 guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
                 guest_mcp_registry=container.guest_mcp_registry,
                 guest_mcp_client=container.guest_mcp_client,

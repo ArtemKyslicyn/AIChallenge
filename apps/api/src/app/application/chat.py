@@ -226,6 +226,8 @@ class ComicEndEvent:
 class RagSourcesEvent:
     sources: list[dict[str, object]]
     embed_model: str | None = None
+    query_rewritten: str | None = None
+    retrieval: dict[str, object] | None = None
 
 
 ChatEvent = (
@@ -358,6 +360,7 @@ async def send_user_message_and_stream(
     use_rag: bool | None = False,
     rag_client: RagClient | None = None,
     rag_top_k: int = 6,
+    rag_mode: str | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     effective_chat_mode = chat_mode or "single"
@@ -410,7 +413,7 @@ async def send_user_message_and_stream(
 
     if use_rag and rag_client is not None:
         try:
-            rag_result = await rag_client.search(text, top_k=rag_top_k)
+            rag_result = await rag_client.search(text, top_k=rag_top_k, mode=rag_mode)
             rag_system = format_rag_system_context(rag_result)
             turns = [
                 ChatMessage(role=MessageRole.SYSTEM, content=rag_system),
@@ -429,6 +432,8 @@ async def send_user_message_and_stream(
                     for h in rag_result.hits
                 ],
                 embed_model=rag_result.embed_model,
+                query_rewritten=rag_result.query_rewritten,
+                retrieval=rag_result.retrieval,
             )
         except Exception:
             logger.warning("rag search failed session_id=%s", session.id, exc_info=True)

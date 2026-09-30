@@ -8,6 +8,8 @@ import {
   type PromptControlId,
   type ResponseTemplateId,
 } from "../promptControls";
+import { useRef, useState } from "react";
+import { uploadRagDocumentForSession } from "../api/client";
 
 export type SettingsTab = "session";
 
@@ -36,17 +38,34 @@ export function ComposerSettings({
   reasoningAllowed,
   globalModelLabel,
   onOpenProfile,
+  sessionId,
 }: Props) {
   const activeTemplateId =
     session.responseTemplateIdOverride ?? global.responseTemplateId;
   const activeControls = session.promptControlsOverride ?? global.promptControls;
   const activeCustomRules = session.customRulesOverride ?? global.customRulesText;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadHint, setUploadHint] = useState<string | null>(null);
 
   const rulesPreview = previewResponseRules(
     activeTemplateId,
     activeControls,
     activeCustomRules,
   );
+
+  const onUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadHint("Добавляем в базу…");
+    try {
+      const result = await uploadRagDocumentForSession(sessionId, file);
+      const n = result.added_chunks ?? 0;
+      setUploadHint(`В базе · +${n} чанков (${file.name})`);
+      if (!session.useRag) onPatchSession({ useRag: true });
+    } catch (err) {
+      setUploadHint(err instanceof Error ? err.message : "Не удалось добавить файл");
+    }
+  };
 
   const toggleSessionControl = (id: PromptControlId) => {
     const base = session.promptControlsOverride ?? global.promptControls;
@@ -97,6 +116,45 @@ export function ComposerSettings({
           />
           <span>Использовать базу</span>
         </label>
+
+        {session.useRag && (
+          <label className="composer-field">
+            <span>Режим базы</span>
+            <select
+              value={session.ragMode}
+              onChange={(e) =>
+                onPatchSession({
+                  ragMode: e.target.value as SessionChatPrefs["ragMode"],
+                })
+              }
+            >
+              <option value="raw">Без фильтра (raw)</option>
+              <option value="filtered">Порог similarity</option>
+              <option value="full">Rewrite + фильтр + rerank</option>
+            </select>
+          </label>
+        )}
+
+        <div className="composer-rag-upload-row">
+          <button
+            type="button"
+            className="composer-media-btn"
+            onClick={() => fileRef.current?.click()}
+          >
+            Добавить в базу
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".md,.txt,.pdf,.rst,.py,.ts,.tsx,.yml,.yaml"
+            hidden
+            onChange={(e) => {
+              void onUpload(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          {uploadHint && <span className="composer-rag-hint">{uploadHint}</span>}
+        </div>
 
         <label className="composer-field">
           <span>Режим</span>
