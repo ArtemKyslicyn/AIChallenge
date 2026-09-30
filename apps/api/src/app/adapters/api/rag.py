@@ -22,9 +22,10 @@ class RagSettingsPatch(BaseModel):
 
 
 def _admin_emails(container: Any) -> str:
-    return (
-        container.settings.rag_admin_emails.strip() or container.settings.guest_mcp_allowed_emails
-    )
+    admin = str(container.settings.rag_admin_emails or "").strip()
+    if admin:
+        return admin
+    return str(container.settings.guest_mcp_allowed_emails or "").strip()
 
 
 @router.get("/rag/stats")
