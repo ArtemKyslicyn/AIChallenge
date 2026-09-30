@@ -120,6 +120,8 @@ def event_to_frame(event: ChatEvent) -> str:
                 {
                     "sources": event.sources,
                     "embed_model": event.embed_model,
+                    "query_rewritten": event.query_rewritten,
+                    "retrieval": event.retrieval,
                 },
             )
 

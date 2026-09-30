@@ -65,6 +65,10 @@ export function loadSessionChatPrefs(sessionId: string): SessionChatPrefs {
           : DEFAULT_SESSION_CHAT_PREFS.guestMcpEnabled,
       useRag:
         typeof parsed.useRag === "boolean" ? parsed.useRag : DEFAULT_SESSION_CHAT_PREFS.useRag,
+      ragMode:
+        parsed.ragMode === "raw" || parsed.ragMode === "filtered" || parsed.ragMode === "full"
+          ? parsed.ragMode
+          : DEFAULT_SESSION_CHAT_PREFS.ragMode,
     };
   } catch {
     return { ...DEFAULT_SESSION_CHAT_PREFS, promptControlsOverride: null };

@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     rag_fixed_size: int = 800
     rag_fixed_overlap: int = 120
     rag_top_k: int = 6
+    #: Retrieve this many candidates before filter/rerank.
+    rag_top_k_pre: int = 20
+    #: Keep at most this many after filter/rerank.
+    rag_top_k_post: int = 6
+    #: Drop hits with cosine score below this (filtered/full modes).
+    rag_min_score: float = 0.18
+    #: Default retrieval mode: raw | filtered | full
+    rag_mode: str = "full"
 
     embedding_provider: str = "api"  # api | local | fake
     embedding_model: str = "text-embedding-3-small"

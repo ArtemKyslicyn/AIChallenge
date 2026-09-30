@@ -104,7 +104,18 @@ export function TurnView({ turn, streaming, session }: Props) {
 
       {isAssistant && turn.ragSources && turn.ragSources.length > 0 && (
         <details className="rag-sources">
-          <summary>Источники базы · {turn.ragSources.length}</summary>
+          <summary>
+            Источники базы · {turn.ragSources.length}
+            {turn.ragRetrieval?.hits_pre != null
+              ? ` (было ${turn.ragRetrieval.hits_pre} → ${turn.ragRetrieval.hits_post ?? turn.ragSources.length})`
+              : ""}
+            {turn.ragRetrieval?.mode ? ` · ${turn.ragRetrieval.mode}` : ""}
+          </summary>
+          {turn.ragQueryRewritten && turn.ragQueryRewritten !== "" && (
+            <p className="rag-sources-rewrite">
+              Запрос после rewrite: {turn.ragQueryRewritten}
+            </p>
+          )}
           <ul>
             {turn.ragSources.map((s) => (
               <li key={s.chunk_id}>

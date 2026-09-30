@@ -23,10 +23,18 @@ class RagSearchResult:
     hits: tuple[RagChunkHit, ...]
     context: str
     embed_model: str | None = None
+    query_rewritten: str | None = None
+    retrieval: dict[str, object] | None = None
 
 
 class RagClient(Protocol):
-    async def search(self, query: str, *, top_k: int = 6) -> RagSearchResult: ...
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 6,
+        mode: str | None = None,
+    ) -> RagSearchResult: ...
 
     async def add_document_text(
         self,
@@ -57,8 +65,21 @@ class RagClient(Protocol):
 class NullRagClient:
     """No-op when RAG_BASE_URL is unset."""
 
-    async def search(self, query: str, *, top_k: int = 6) -> RagSearchResult:
-        return RagSearchResult(query=query, hits=(), context="", embed_model=None)
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 6,
+        mode: str | None = None,
+    ) -> RagSearchResult:
+        return RagSearchResult(
+            query=query,
+            hits=(),
+            context="",
+            embed_model=None,
+            query_rewritten=query,
+            retrieval={"mode": mode or "raw", "hits_pre": 0, "hits_post": 0},
+        )
 
     async def add_document_text(
         self,

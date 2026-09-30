@@ -23,6 +23,7 @@ import {
   listModels,
   patchRagSettings,
   setAuthToken,
+  uploadRagDocumentForSession,
   type AuthUserDto,
   type ModelCatalogItemDto,
   type RagStatsDto,
@@ -373,7 +374,7 @@ function SectionBody(props: {
     case "connections":
       return (
         <div className="profile-connections guest-mcp-panel--compact">
-          <RagStandSection />
+          <RagStandSection sessionId={props.sessionId} />
           {props.sessionId ? (
             <GuestMcpPanel sessionId={props.sessionId} />
           ) : (
@@ -434,22 +435,28 @@ function SectionBody(props: {
   }
 }
 
-function RagStandSection() {
+function RagStandSection({ sessionId }: { sessionId: string | null }) {
   const [stats, setStats] = useState<RagStatsDto | null>(null);
   const [eligible, setEligible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [uploadHint, setUploadHint] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const refreshStats = useCallback((signal?: AbortSignal) => {
+    void fetchRagStats(signal)
+      .then(setStats)
+      .catch(() => setStats({ disabled: true, total_chunks: 0 }));
+  }, []);
 
   useEffect(() => {
     const ac = new AbortController();
-    void fetchRagStats(ac.signal)
-      .then(setStats)
-      .catch(() => setStats({ disabled: true, total_chunks: 0 }));
+    refreshStats(ac.signal);
     void fetchRagAdminEligible(ac.signal)
       .then((r) => setEligible(r.eligible))
       .catch(() => setEligible(false));
     return () => ac.abort();
-  }, []);
+  }, [refreshStats]);
 
   const toggleLocal = async (on: boolean) => {
     setBusy(true);
@@ -464,6 +471,19 @@ function RagStandSection() {
     }
   };
 
+  const onUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !sessionId) return;
+    setUploadHint("Добавляем…");
+    try {
+      const result = await uploadRagDocumentForSession(sessionId, file);
+      setUploadHint(`Добавлено · +${result.added_chunks ?? 0} чанков`);
+      refreshStats();
+    } catch (err) {
+      setUploadHint(err instanceof Error ? err.message : "Ошибка загрузки");
+    }
+  };
+
   return (
     <section className="profile-rag-stand" aria-label="База знаний стенда">
       <h3 className="profile-subsection-title">База знаний стенда</h3>
@@ -475,6 +495,30 @@ function RagStandSection() {
           {stats?.chunk_strategy ? ` · стратегия ${stats.chunk_strategy}` : ""}
           {stats?.embedding_provider ? ` · embed ${stats.embedding_provider}` : ""}
         </p>
+      )}
+      <div className="composer-rag-upload-row">
+        <button
+          type="button"
+          className="composer-media-btn"
+          disabled={!sessionId || busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          Добавить документ
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".md,.txt,.pdf,.rst,.py,.ts,.tsx,.yml,.yaml"
+          hidden
+          onChange={(e) => {
+            void onUpload(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        {uploadHint && <span className="composer-rag-hint">{uploadHint}</span>}
+      </div>
+      {!sessionId && (
+        <p className="guest-mcp-muted">Откройте чат, чтобы загрузить файл в базу.</p>
       )}
       {eligible && (
         <label className="composer-toggle">

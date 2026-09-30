@@ -33,6 +33,10 @@ class DocumentTextRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
     top_k: int | None = Field(default=None, ge=1, le=32)
+    mode: str | None = Field(default=None, pattern="^(raw|filtered|full)$")
+    top_k_pre: int | None = Field(default=None, ge=1, le=64)
+    top_k_post: int | None = Field(default=None, ge=1, le=32)
+    min_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class SettingsPatch(BaseModel):
@@ -132,12 +136,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/v1/search")
     async def search(body: SearchRequest) -> dict[str, Any]:
-        return await pipeline().search_payload(body.query, top_k=body.top_k)
+        return await pipeline().search_payload(
+            body.query,
+            top_k=body.top_k,
+            mode=body.mode,
+            top_k_pre=body.top_k_pre,
+            top_k_post=body.top_k_post or body.top_k,
+            min_score=body.min_score,
+        )
 
     @app.post("/v1/ask")
     async def ask(body: SearchRequest) -> dict[str, Any]:
         """Return retrieved context block for the caller LLM (no LLM here)."""
-        payload = await pipeline().search_payload(body.query, top_k=body.top_k)
+        payload = await pipeline().search_payload(
+            body.query,
+            top_k=body.top_k,
+            mode=body.mode,
+            top_k_pre=body.top_k_pre,
+            top_k_post=body.top_k_post or body.top_k,
+            min_score=body.min_score,
+        )
         hits = payload["hits"]
         assert isinstance(hits, list)
         lines = []

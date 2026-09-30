@@ -38,6 +38,8 @@ export interface SessionChatPrefs {
   guestMcpEnabled: boolean;
   /** When true, retrieve stand RAG chunks into the prompt. */
   useRag: boolean;
+  /** raw | filtered | full — second-stage retrieval. */
+  ragMode: "raw" | "filtered" | "full";
 }
 
 /** Merged view used by Composer and outgoing message builder. */
@@ -52,6 +54,7 @@ export interface EffectiveChatPrefs {
   sessionContext: string;
   guestMcpEnabled: boolean;
   useRag: boolean;
+  ragMode: "raw" | "filtered" | "full";
 }
 
 export const DEFAULT_GLOBAL_CHAT_PREFS: GlobalChatPrefs = {
@@ -77,4 +80,5 @@ export const DEFAULT_SESSION_CHAT_PREFS: SessionChatPrefs = {
   tempStudioTemps: [0, 0.7, 1.2],
   guestMcpEnabled: true,
   useRag: false,
+  ragMode: "full",
 };

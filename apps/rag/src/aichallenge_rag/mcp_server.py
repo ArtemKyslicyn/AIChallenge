@@ -36,11 +36,14 @@ async def rag_stats() -> str:
 
 
 @mcp.tool()
-async def rag_search(query: str, top_k: int = 6) -> str:
-    """Search the document index; returns chunks with metadata and scores."""
+async def rag_search(query: str, top_k: int = 6, mode: str = "full") -> str:
+    """Search the document index; returns chunks with metadata and scores.
+
+    mode: raw | filtered | full (rewrite + threshold + heuristic rerank).
+    """
     if _pipeline is None:
         return json.dumps({"error": "rag not ready"})
-    result = await _pipeline.search_payload(query, top_k=top_k)
+    result = await _pipeline.search_payload(query, top_k=top_k, mode=mode)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 

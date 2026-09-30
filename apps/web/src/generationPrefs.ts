@@ -52,6 +52,7 @@ export function loadGenerationPrefs(): GenerationPrefs {
     tempStudioTemps: [0, 0.7, 1.2],
     guestMcpEnabled: true,
     useRag: false,
+    ragMode: "full",
   });
   return toLegacyPrefs(effective, global.responseTemplateId, global.promptControls, global.customRulesText);
 }
