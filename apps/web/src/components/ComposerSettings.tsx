@@ -89,6 +89,15 @@ export function ComposerSettings({
           <span>Свой сервер в этом чате</span>
         </label>
 
+        <label className="composer-toggle">
+          <input
+            type="checkbox"
+            checked={session.useRag}
+            onChange={(e) => onPatchSession({ useRag: e.target.checked })}
+          />
+          <span>Использовать базу</span>
+        </label>
+
         <label className="composer-field">
           <span>Режим</span>
           <select

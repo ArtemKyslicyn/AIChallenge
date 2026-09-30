@@ -1082,6 +1082,49 @@ textarea {
   border-color: var(--border);
 }
 
+.mode-chip-rag {
+  pointer-events: none;
+  border-style: dashed;
+  opacity: 0.95;
+}
+
+.composer-rag-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.rag-sources {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.rag-sources summary {
+  cursor: pointer;
+}
+
+.rag-sources ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.rag-sources-meta {
+  opacity: 0.75;
+}
+
+.profile-rag-stand {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-subsection-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .composer-live-pulse {
   display: flex;
   flex-wrap: wrap;

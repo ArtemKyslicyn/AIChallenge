@@ -203,6 +203,13 @@ class Settings(BaseSettings):
     #: On production set to the admin account only (e.g. admin@example.com).
     guest_mcp_allowed_emails: str = ""
 
+    # RAG sidecar (compose service `rag`, loopback :18766).
+    rag_base_url: str = "http://rag:18766"
+    rag_shared_token: str = ""
+    #: Admin allowlist for local embeddings / reindex. Empty → reuse guest allowlist.
+    rag_admin_emails: str = ""
+    rag_top_k: int = 6
+
     media_tools_enabled: bool = False
     pollinations_api_key: str = ""
     pixazo_api_key: str = ""

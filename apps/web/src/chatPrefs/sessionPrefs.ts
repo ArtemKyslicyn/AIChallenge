@@ -63,6 +63,8 @@ export function loadSessionChatPrefs(sessionId: string): SessionChatPrefs {
         typeof parsed.guestMcpEnabled === "boolean"
           ? parsed.guestMcpEnabled
           : DEFAULT_SESSION_CHAT_PREFS.guestMcpEnabled,
+      useRag:
+        typeof parsed.useRag === "boolean" ? parsed.useRag : DEFAULT_SESSION_CHAT_PREFS.useRag,
     };
   } catch {
     return { ...DEFAULT_SESSION_CHAT_PREFS, promptControlsOverride: null };

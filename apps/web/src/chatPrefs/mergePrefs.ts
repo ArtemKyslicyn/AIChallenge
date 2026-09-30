@@ -21,5 +21,6 @@ export function mergeChatPrefs(
     chatMode: session.chatMode,
     sessionContext: session.sessionContext.trim(),
     guestMcpEnabled: session.guestMcpEnabled,
+    useRag: session.useRag,
   };
 }

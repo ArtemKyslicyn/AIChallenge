@@ -73,6 +73,7 @@ from app.domain.ports import (
     SessionRepository,
     UnitOfWork,
 )
+from app.domain.rag import RagClient, format_rag_system_context
 from app.domain.tracing import (
     STATUS_ABORTED,
     STATUS_ERROR,
@@ -221,6 +222,12 @@ class ComicEndEvent:
     fail_count: int
 
 
+@dataclass(slots=True)
+class RagSourcesEvent:
+    sources: list[dict[str, object]]
+    embed_model: str | None = None
+
+
 ChatEvent = (
     ModelEvent
     | TokenEvent
@@ -231,6 +238,7 @@ ChatEvent = (
     | ComicStartEvent
     | ComicPanelEvent
     | ComicEndEvent
+    | RagSourcesEvent
 )
 
 
@@ -347,6 +355,9 @@ async def send_user_message_and_stream(
     guest_tool_runner: GuestToolRunner | None = None,
     analytics: AnalyticsCapture | None = None,
     analytics_distinct_id: str | None = None,
+    use_rag: bool | None = False,
+    rag_client: RagClient | None = None,
+    rag_top_k: int = 6,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     effective_chat_mode = chat_mode or "single"
@@ -396,6 +407,32 @@ async def send_user_message_and_stream(
     draft.prompt = text
 
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
+
+    if use_rag and rag_client is not None:
+        try:
+            rag_result = await rag_client.search(text, top_k=rag_top_k)
+            rag_system = format_rag_system_context(rag_result)
+            turns = [
+                ChatMessage(role=MessageRole.SYSTEM, content=rag_system),
+                *turns,
+            ]
+            yield RagSourcesEvent(
+                sources=[
+                    {
+                        "chunk_id": h.chunk_id,
+                        "source": h.source,
+                        "title": h.title,
+                        "section": h.section,
+                        "strategy": h.strategy,
+                        "score": h.score,
+                    }
+                    for h in rag_result.hits
+                ],
+                embed_model=rag_result.embed_model,
+            )
+        except Exception:
+            logger.warning("rag search failed session_id=%s", session.id, exc_info=True)
+            yield RagSourcesEvent(sources=[], embed_model=None)
 
     model = preferred_model if preferred_model is not None else scenario.preferred_model
 
