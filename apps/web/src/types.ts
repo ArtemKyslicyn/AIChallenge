@@ -41,6 +41,15 @@ export interface Turn {
    * halfway through it.
    */
   cascadeStage?: CascadeStage;
+  /** RAG hits shown under the answer when «Использовать базу» was on. */
+  ragSources?: {
+    chunk_id: string;
+    source: string;
+    title: string;
+    section: string;
+    strategy: string;
+    score: number;
+  }[];
 }
 
 export interface ProbeSlotState {

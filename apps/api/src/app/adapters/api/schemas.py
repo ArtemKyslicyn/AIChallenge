@@ -100,6 +100,8 @@ class SendMessageRequest(BaseModel):
     #: When ``False``, skip guest MCP tools even in single mode. ``None`` / ``True``
     #: keep legacy clients on guest tools in single chat.
     use_guest_mcp: bool | None = True
+    #: When ``True``, retrieve stand RAG chunks and inject them into the prompt.
+    use_rag: bool | None = False
 
 
 class ProbeMessage(BaseModel):

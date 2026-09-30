@@ -35,6 +35,7 @@ from app.adapters.persistence.repositories import (
     SqlAlchemySessionRepository,
 )
 from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
+from app.adapters.rag_http import HttpRagClient
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.agent_rate_limit import AgentRunRateLimiter
 from app.application.media_tools import SessionMediaRateLimiter
@@ -58,6 +59,7 @@ from app.domain.ports import (
     UnitOfWork,
 )
 from app.domain.quality import AnswerJudge
+from app.domain.rag import NullRagClient, RagClient
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,7 @@ class Container:
     analytics: AnalyticsCapture
     guest_mcp_registry: GuestMcpRegistry
     guest_mcp_client: GuestMcpClient
+    rag_client: RagClient
     _extra_providers: list[LLMProvider]
     _extra_closers: list[object]
 
@@ -331,6 +334,13 @@ def build_container(settings: Settings) -> Container:
     guest_mcp_registry: GuestMcpRegistry = InMemoryGuestMcpRegistry()
     guest_mcp_client: GuestMcpClient = HttpGuestMcpClient()
 
+    rag_base = settings.rag_base_url.strip()
+    if rag_base:
+        rag_client: RagClient = HttpRagClient(rag_base, settings.rag_shared_token)
+        extra_closers.append(rag_client)
+    else:
+        rag_client = NullRagClient()
+
     engine = create_engine(settings.database_url)
     return Container(
         settings=settings,
@@ -354,6 +364,7 @@ def build_container(settings: Settings) -> Container:
         analytics=analytics,
         guest_mcp_registry=guest_mcp_registry,
         guest_mcp_client=guest_mcp_client,
+        rag_client=rag_client,
         _extra_providers=extra_providers,
         _extra_closers=extra_closers,
     )

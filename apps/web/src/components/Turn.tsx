@@ -101,6 +101,24 @@ export function TurnView({ turn, streaming, session }: Props) {
           )}
         </div>
       )}
+
+      {isAssistant && turn.ragSources && turn.ragSources.length > 0 && (
+        <details className="rag-sources">
+          <summary>Источники базы · {turn.ragSources.length}</summary>
+          <ul>
+            {turn.ragSources.map((s) => (
+              <li key={s.chunk_id}>
+                <strong>{s.title || s.source}</strong>
+                {s.section ? ` · ${s.section}` : ""}
+                <span className="rag-sources-meta">
+                  {" "}
+                  ({s.source} · {s.chunk_id} · {s.score.toFixed(2)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </article>
   );
 }

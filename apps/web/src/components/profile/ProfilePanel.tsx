@@ -18,10 +18,14 @@ import {
   clearLocalSessionCache,
   createNewSession,
   fetchLiveModelPulse,
+  fetchRagAdminEligible,
+  fetchRagStats,
   listModels,
+  patchRagSettings,
   setAuthToken,
   type AuthUserDto,
   type ModelCatalogItemDto,
+  type RagStatsDto,
 } from "../../api/client";
 import { useAuthUser } from "../../auth/authUser";
 import {
@@ -92,7 +96,7 @@ const LEADS: Record<ProfileSectionId, string> = {
   models: "Избранные и модель по умолчанию для новых чатов.",
   answers: "Язык, тон и правила ответа по умолчанию.",
   chat: "Режим нового чата и свой сервер для новых диалогов.",
-  connections: "Адрес своего MCP. Вкладка MCP на стенде — отдельно.",
+  connections: "Стендовая база знаний, свой MCP и внешний RAG через туннель.",
   stand: "Краткий статус сервиса. Полный пульс — во вкладке MCP.",
   personalization: "Активный стиль ответа. Полная настройка — в Агентах.",
   device: "Локальная история на этом браузере — не то же самое, что аккаунт.",
@@ -367,12 +371,20 @@ function SectionBody(props: {
     case "chat":
       return <ChatDefaultsSection />;
     case "connections":
-      return props.sessionId ? (
+      return (
         <div className="profile-connections guest-mcp-panel--compact">
-          <GuestMcpPanel sessionId={props.sessionId} />
+          <RagStandSection />
+          {props.sessionId ? (
+            <GuestMcpPanel sessionId={props.sessionId} />
+          ) : (
+            <p className="guest-mcp-muted">Нет активной сессии чата для своего MCP.</p>
+          )}
+          <p className="guest-mcp-muted">
+            Внешняя база: поднимите RAG MCP (туннель на{" "}
+            <code>/mcp</code>) и вставьте URL сюда как свой сервер — tools{" "}
+            <code>rag_search</code> / <code>rag_stats</code>.
+          </p>
         </div>
-      ) : (
-        <p className="guest-mcp-muted">Нет активной сессии чата.</p>
       );
     case "stand":
       return <StandSection onOpenMcp={props.onOpenMcp} />;
@@ -420,6 +432,64 @@ function SectionBody(props: {
     default:
       return null;
   }
+}
+
+function RagStandSection() {
+  const [stats, setStats] = useState<RagStatsDto | null>(null);
+  const [eligible, setEligible] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const ac = new AbortController();
+    void fetchRagStats(ac.signal)
+      .then(setStats)
+      .catch(() => setStats({ disabled: true, total_chunks: 0 }));
+    void fetchRagAdminEligible(ac.signal)
+      .then((r) => setEligible(r.eligible))
+      .catch(() => setEligible(false));
+    return () => ac.abort();
+  }, []);
+
+  const toggleLocal = async (on: boolean) => {
+    setBusy(true);
+    setError("");
+    try {
+      const next = await patchRagSettings({ local_embeddings: on });
+      setStats(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сохранить");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="profile-rag-stand" aria-label="База знаний стенда">
+      <h3 className="profile-subsection-title">База знаний стенда</h3>
+      {stats?.disabled ? (
+        <p className="guest-mcp-muted">Сервис базы сейчас недоступен.</p>
+      ) : (
+        <p className="guest-mcp-muted">
+          Чанков: {stats?.total_chunks ?? "…"}
+          {stats?.chunk_strategy ? ` · стратегия ${stats.chunk_strategy}` : ""}
+          {stats?.embedding_provider ? ` · embed ${stats.embedding_provider}` : ""}
+        </p>
+      )}
+      {eligible && (
+        <label className="composer-toggle">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={Boolean(stats?.local_embeddings_enabled)}
+            onChange={(e) => void toggleLocal(e.target.checked)}
+          />
+          <span>Локальные эмбеддинги на сервере</span>
+        </label>
+      )}
+      {error && <p className="alert">{error}</p>}
+    </section>
+  );
 }
 
 function AccountSection({

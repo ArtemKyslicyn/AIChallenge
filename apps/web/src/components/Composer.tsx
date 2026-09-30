@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { authMe, listGuestMcp, listLabPresets, listModels, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
+import { authMe, listGuestMcp, listLabPresets, listModels, uploadRagDocumentForSession, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
 import {
   initSessionChatPrefs,
   loadGlobalChatPrefs,
@@ -348,11 +348,33 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
     singleMode: effective.chatMode === "single",
   });
 
+  const [ragUploadHint, setRagUploadHint] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const openGuestConnections = useCallback(() => {
     window.dispatchEvent(
       new CustomEvent("aichallenge:open-profile", { detail: { section: "connections" } }),
     );
   }, []);
+
+  const onPickRagFile = useCallback(
+    async (fileList: FileList | null) => {
+      const file = fileList?.[0];
+      if (!file) return;
+      setRagUploadHint("Добавляем в базу…");
+      try {
+        const result = await uploadRagDocumentForSession(sessionId, file);
+        const n = result.added_chunks ?? 0;
+        setRagUploadHint(`В базе · +${n} чанков (${file.name})`);
+        if (!session.useRag) {
+          patchSession({ useRag: true });
+        }
+      } catch (err) {
+        setRagUploadHint(err instanceof Error ? err.message : "Не удалось добавить файл");
+      }
+    },
+    [sessionId, session.useRag, patchSession],
+  );
 
   const placeholder =
     effective.chatMode === "lab"
@@ -449,6 +471,12 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
               <span className="mode-chip-kicker">Лаб</span>
               <span className="mode-chip-label">×4</span>
             </button>
+            {session.useRag && (
+              <span className="mode-chip mode-chip-stack mode-chip-rag" title="База знаний включена">
+                <span className="mode-chip-kicker">Знания</span>
+                <span className="mode-chip-label">База</span>
+              </span>
+            )}
           </div>
 
           <div className="composer-media-actions" role="group" aria-label="Медиа">
@@ -472,7 +500,32 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
             >
               Видео
             </button>
+            <button
+              type="button"
+              className="composer-media-btn"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Добавить документ в базу знаний"
+              title="Файл в базу (.md / .txt / .pdf)"
+            >
+              Файл
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.txt,.pdf,.rst,.py,.ts,.tsx,.yml,.yaml"
+              hidden
+              onChange={(e) => {
+                void onPickRagFile(e.target.files);
+                e.target.value = "";
+              }}
+            />
           </div>
+          {ragUploadHint && (
+            <p className="composer-rag-hint" role="status">
+              {ragUploadHint}
+            </p>
+          )}
 
           {effective.chatMode === "lab" && labPresets.length > 0 && (
             <label className="composer-model-picker composer-lab-preset">

@@ -15,6 +15,7 @@ from app.application.chat import (
     ErrorEvent,
     MessageEndEvent,
     ModelEvent,
+    RagSourcesEvent,
     TokenEvent,
     ToolResultEvent,
     ToolStartEvent,
@@ -111,6 +112,14 @@ def event_to_frame(event: ChatEvent) -> str:
                     "comic_id": event.comic_id,
                     "ok_count": event.ok_count,
                     "fail_count": event.fail_count,
+                },
+            )
+        case RagSourcesEvent():
+            return format_frame(
+                "rag_sources",
+                {
+                    "sources": event.sources,
+                    "embed_model": event.embed_model,
                 },
             )
 

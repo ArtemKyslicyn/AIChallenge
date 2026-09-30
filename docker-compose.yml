@@ -38,6 +38,8 @@ services:
       MEDIA_DIR: /app/data/media
       MCP_BASE_URL: ${MCP_BASE_URL:-http://mcp:18765}
       MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
+      RAG_BASE_URL: ${RAG_BASE_URL:-http://rag:18766}
+      RAG_SHARED_TOKEN: ${RAG_SHARED_TOKEN:-${MCP_SHARED_TOKEN:-}}
     volumes:
       # Scenarios are configuration, not code: editable without a rebuild.
       - ./configs/scenarios:/app/configs/scenarios:ro
@@ -47,6 +49,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rag:
+        condition: service_started
     ports:
       - "8000:8000"
     healthcheck:
@@ -78,6 +82,33 @@ services:
       - "127.0.0.1:18765:18765"
     restart: unless-stopped
 
+  rag:
+    build:
+      context: ./apps/rag
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RAG_SHARED_TOKEN: ${RAG_SHARED_TOKEN:-${MCP_SHARED_TOKEN:-}}
+      RAG_DATA_DIR: /app/data
+      RAG_CORPUS_DIR: /app/corpus
+      RAG_CHUNK_STRATEGY: ${RAG_CHUNK_STRATEGY:-structural}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://routerai.ru/api/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      ROUTERAI_KEY: ${ROUTERAI_KEY:-}
+      LOCAL_EMBEDDINGS_ENABLED: ${LOCAL_EMBEDDINGS_ENABLED:-false}
+    volumes:
+      - rag_data:/app/data
+      - ./docs:/app/corpus/docs:ro
+      - ./README.md:/app/corpus/README.md:ro
+      - ./AGENTS.md:/app/corpus/AGENTS.md:ro
+      - ./CLAUDE.md:/app/corpus/CLAUDE.md:ro
+    ports:
+      # Loopback only — tunnel or Guest MCP for external access.
+      - "127.0.0.1:18766:18766"
+    restart: unless-stopped
+
   web:
     build:
       context: ./apps/web
@@ -91,3 +122,4 @@ volumes:
   pgdata:
   media_data:
   mcp_data:
+  rag_data:

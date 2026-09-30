@@ -501,6 +501,11 @@ export function Chat({
                 debug("info", `SSE готово · ${event.model_id}`);
                 setStatus(`Ответ готов, модель ${event.model_id}.`);
                 break;
+              case "rag_sources":
+                patch({
+                  ragSources: event.sources ?? [],
+                });
+                break;
               case "error":
                 patch({ failed: true });
                 setActiveMediaJob(null);
@@ -515,6 +520,7 @@ export function Chat({
             model: modelId,
             chatMode,
             ...(effective.guestMcpEnabled ? {} : { useGuestMcp: false }),
+            ...(effective.useRag ? { useRag: true } : {}),
           },
         );
       } catch (e) {

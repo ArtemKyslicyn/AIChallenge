@@ -89,7 +89,19 @@ export type ChatEvent =
       caption?: string | null;
       error?: string | null;
     }
-  | { type: "comic_end"; comic_id: string; ok_count: number; fail_count: number };
+  | { type: "comic_end"; comic_id: string; ok_count: number; fail_count: number }
+  | {
+      type: "rag_sources";
+      sources: {
+        chunk_id: string;
+        source: string;
+        title: string;
+        section: string;
+        strategy: string;
+        score: number;
+      }[];
+      embed_model?: string | null;
+    };
 
 const BASE = import.meta.env.VITE_API_URL || "/api/v1";
 const STORE_KEY = "aichallenge.session_store";
@@ -665,6 +677,7 @@ export async function sendMessageSSE(
     model?: string;
     chatMode?: SendMessageChatMode;
     useGuestMcp?: boolean;
+    useRag?: boolean;
   } = {},
 ): Promise<void> {
   const store = loadStore();
@@ -685,6 +698,7 @@ export async function sendMessageSSE(
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.chatMode !== undefined ? { chat_mode: options.chatMode } : {}),
       ...(options.useGuestMcp !== undefined ? { use_guest_mcp: options.useGuestMcp } : {}),
+      ...(options.useRag !== undefined ? { use_rag: options.useRag } : {}),
     }),
     signal,
   });
@@ -1968,5 +1982,82 @@ export function invokeMcpTool(
       signal,
     },
     12_000,
+  );
+}
+
+export interface RagStatsDto {
+  total_chunks?: number;
+  by_strategy?: Record<string, { count: number; avg_chars: number }>;
+  embedding_provider?: string;
+  local_embeddings_enabled?: boolean;
+  chunk_strategy?: string;
+  embed_model_runtime?: string;
+  disabled?: boolean;
+}
+
+export function fetchRagStats(signal?: AbortSignal): Promise<RagStatsDto> {
+  return request<RagStatsDto>("/rag/stats", { signal });
+}
+
+export function fetchRagAdminEligible(signal?: AbortSignal): Promise<{ eligible: boolean }> {
+  return request<{ eligible: boolean }>("/rag/admin-eligible", { signal });
+}
+
+export function patchRagSettings(
+  payload: { local_embeddings?: boolean; chunk_strategy?: string },
+  signal?: AbortSignal,
+): Promise<RagStatsDto> {
+  return request<RagStatsDto>("/rag/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+export async function uploadRagDocument(
+  session: SessionCredentials,
+  file: File,
+  signal?: AbortSignal,
+): Promise<{ added_chunks?: number; strategy?: string }> {
+  const store = loadStore();
+  const owned = store.items[session.id];
+  if (!owned || owned.access_token !== session.access_token) {
+    throw new ApiError("Сессия недоступна в этом браузере.", 403);
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(
+    `${BASE}/sessions/${encodeURIComponent(session.id)}/rag/documents`,
+    {
+      method: "POST",
+      headers: {
+        "X-Session-Token": session.access_token,
+        ...visitorHeaders(),
+      },
+      body: form,
+      signal,
+    },
+  );
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  return (await response.json()) as { added_chunks?: number; strategy?: string };
+}
+
+/** Upload using the browser's owned session token for ``sessionId``. */
+export async function uploadRagDocumentForSession(
+  sessionId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<{ added_chunks?: number; strategy?: string }> {
+  const store = loadStore();
+  const owned = store.items[sessionId];
+  if (!owned?.access_token) {
+    throw new ApiError("Сессия недоступна в этом браузере.", 403);
+  }
+  return uploadRagDocument(
+    { id: sessionId, access_token: owned.access_token },
+    file,
+    signal,
   );
 }
