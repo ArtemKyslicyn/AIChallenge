@@ -10,12 +10,18 @@ from app.domain.rag import RagChunkHit, RagSearchResult
 
 logger = logging.getLogger(__name__)
 
+#: Split timeouts so a stuck RAG sidecar cannot freeze chat / profile forever.
+_RAG_TIMEOUT = httpx.Timeout(connect=3.0, read=45.0, write=30.0, pool=5.0)
+_RAG_STATS_TIMEOUT = httpx.Timeout(connect=2.0, read=8.0, write=8.0, pool=2.0)
+
 
 class HttpRagClient:
-    def __init__(self, base_url: str, token: str = "", *, timeout: float = 60.0) -> None:
+    def __init__(self, base_url: str, token: str = "", *, timeout: float | None = None) -> None:
         self._base = base_url.rstrip("/")
         self._token = token.strip()
-        self._client = httpx.AsyncClient(timeout=timeout)
+        # ``timeout`` kept for callers/tests that pass a float; prefer structured default.
+        resolved = httpx.Timeout(timeout) if timeout is not None else _RAG_TIMEOUT
+        self._client = httpx.AsyncClient(timeout=resolved)
 
     def _headers(self) -> dict[str, str]:
         if not self._token:
@@ -35,12 +41,16 @@ class HttpRagClient:
         body: dict[str, object] = {"query": query, "top_k": top_k}
         if mode:
             body["mode"] = mode
-        resp = await self._client.post(
-            f"{self._base}/v1/ask",
-            headers=self._headers(),
-            json=body,
-        )
-        resp.raise_for_status()
+        try:
+            resp = await self._client.post(
+                f"{self._base}/v1/ask",
+                headers=self._headers(),
+                json=body,
+            )
+            resp.raise_for_status()
+        except httpx.TimeoutException:
+            logger.warning("rag search timeout")
+            return RagSearchResult(query=query, hits=(), context="", embed_model=None)
         data = resp.json()
         hits = tuple(
             RagChunkHit(
@@ -106,8 +116,16 @@ class HttpRagClient:
         return dict(resp.json())
 
     async def stats(self) -> dict[str, object]:
-        resp = await self._client.get(f"{self._base}/v1/stats", headers=self._headers())
-        resp.raise_for_status()
+        try:
+            resp = await self._client.get(
+                f"{self._base}/v1/stats",
+                headers=self._headers(),
+                timeout=_RAG_STATS_TIMEOUT,
+            )
+            resp.raise_for_status()
+        except httpx.TimeoutException:
+            logger.warning("rag stats timeout")
+            return {"disabled": True, "total_chunks": 0, "error": "timeout"}
         return dict(resp.json())
 
     async def patch_settings(self, payload: dict[str, object]) -> dict[str, object]:
@@ -127,6 +145,14 @@ class HttpRagClient:
             f"{self._base}/v1/index",
             headers=self._headers(),
             json=body,
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
+    async def heal(self) -> dict[str, object]:
+        resp = await self._client.post(
+            f"{self._base}/v1/heal",
+            headers=self._headers(),
         )
         resp.raise_for_status()
         return dict(resp.json())

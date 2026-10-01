@@ -2008,11 +2008,11 @@ export interface RagStatsDto {
 }
 
 export function fetchRagStats(signal?: AbortSignal): Promise<RagStatsDto> {
-  return request<RagStatsDto>("/rag/stats", { signal });
+  return request<RagStatsDto>("/rag/stats", { signal }, 8_000);
 }
 
 export function fetchRagAdminEligible(signal?: AbortSignal): Promise<{ eligible: boolean }> {
-  return request<{ eligible: boolean }>("/rag/admin-eligible", { signal });
+  return request<{ eligible: boolean }>("/rag/admin-eligible", { signal }, 8_000);
 }
 
 export function patchRagSettings(
@@ -2026,6 +2026,9 @@ export function patchRagSettings(
   });
 }
 
+/** Upload can embed many chunks — longer than default JSON timeout, still hard-capped. */
+const RAG_UPLOAD_TIMEOUT_MS = 90_000;
+
 export async function uploadRagDocument(
   session: SessionCredentials,
   file: File,
@@ -2038,6 +2041,10 @@ export async function uploadRagDocument(
   }
   const form = new FormData();
   form.append("file", file);
+  const timeoutSignal = requestTimeoutSignal(RAG_UPLOAD_TIMEOUT_MS);
+  const merged = mergeAbortSignals(
+    [signal, timeoutSignal].filter(Boolean) as AbortSignal[],
+  );
   const response = await fetch(
     `${BASE}/sessions/${encodeURIComponent(session.id)}/rag/documents`,
     {
@@ -2047,7 +2054,7 @@ export async function uploadRagDocument(
         ...visitorHeaders(),
       },
       body: form,
-      signal,
+      signal: merged,
     },
   );
   if (!response.ok) {

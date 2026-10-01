@@ -84,11 +84,14 @@ class VectorStore:
         else:
             self._conn.execute("DELETE FROM chunks")
         self._conn.commit()
-        self._vectors = None
-        self._ids = []
-        for path in (self.vectors_path, self.meta_path):
-            if path.exists():
-                path.unlink()
+        # Do not unlink vectors.npy here — rebuild overwrites after embeds succeed.
+        # Wiping early left prod with chunks but vector_count=0 when embed failed.
+        if strategy is None and scope is None:
+            self._vectors = None
+            self._ids = []
+            for path in (self.vectors_path, self.meta_path):
+                if path.exists():
+                    path.unlink()
 
     def replace_all(
         self,
@@ -187,6 +190,45 @@ class VectorStore:
             ),
             encoding="utf-8",
         )
+
+    def can_append(self, *, embed_model: str, dims: int) -> bool:
+        """True when existing matrix can take new rows without a full re-embed."""
+        if self._vectors is None or not self._ids:
+            return False
+        if int(self._vectors.shape[1]) != dims:
+            return False
+        meta: dict[str, object] = {}
+        if self.meta_path.exists():
+            meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        return str(meta.get("embed_model") or "") == embed_model
+
+    def upsert_matrix_rows(
+        self,
+        ids: list[str],
+        matrix: np.ndarray,
+        *,
+        embed_model: str,
+    ) -> None:
+        """Replace rows for known ids or append new ones. Requires matching dims."""
+        if len(ids) != matrix.shape[0]:
+            raise ValueError("ids/matrix mismatch")
+        matrix = matrix.astype(np.float32)
+        if self._vectors is None or not self._ids:
+            self.set_matrix(ids, matrix, embed_model=embed_model)
+            return
+        if matrix.shape[1] != self._vectors.shape[1]:
+            raise ValueError("dim mismatch")
+        id_to_row = {cid: i for i, cid in enumerate(self._ids)}
+        rows = [self._vectors[i] for i in range(len(self._ids))]
+        out_ids = list(self._ids)
+        for cid, vec in zip(ids, matrix, strict=True):
+            if cid in id_to_row:
+                rows[id_to_row[cid]] = vec
+            else:
+                id_to_row[cid] = len(out_ids)
+                out_ids.append(cid)
+                rows.append(vec)
+        self.set_matrix(out_ids, np.vstack(rows), embed_model=embed_model)
 
     def get_chunk(self, chunk_id: str) -> StoredChunk | None:
         row = self._conn.execute(

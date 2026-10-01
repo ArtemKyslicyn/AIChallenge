@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -10,11 +11,14 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from aichallenge_rag.embeddings import build_embedder
-from aichallenge_rag.pipeline import RagPipeline, extract_text
+from aichallenge_rag.pipeline import REBUILD_BUDGET_S, RagPipeline, extract_text
 from aichallenge_rag.settings import Settings, get_settings
 from aichallenge_rag.store import VectorStore
 
 logger = logging.getLogger(__name__)
+
+#: Startup heal must not block /health (compose healthcheck).
+STARTUP_HEAL_BUDGET_S = REBUILD_BUDGET_S + 30.0
 
 
 class IndexRequest(BaseModel):
@@ -58,15 +62,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         state["embedder"] = embedder
         state["pipeline"] = pipeline
         state["settings"] = settings
-        # Auto-index stand corpus if empty.
-        if store.stats()["total_chunks"] == 0:
+        state["heal_task"] = None
+
+        async def _startup_heal() -> None:
+            stats0 = store.stats()
             try:
-                result = await pipeline.reindex()
-                logger.info("auto-index %s", result)
+                async with asyncio.timeout(STARTUP_HEAL_BUDGET_S):
+                    if int(stats0.get("total_chunks") or 0) == 0:
+                        structural = await pipeline.reindex(strategy="structural")
+                        fixed = await pipeline.reindex(strategy="fixed")
+                        logger.info("auto-index structural=%s fixed=%s", structural, fixed)
+                    elif int(stats0.get("vector_count") or 0) == 0:
+                        healed = await pipeline.ensure_vectors()
+                        logger.info("auto-heal vectors %s", healed)
+                    state["embedder"] = pipeline.embedder
+                    state["pipeline"] = pipeline
+            except TimeoutError:
+                logger.error("auto-index/heal exceeded %ss — serving without wait", STARTUP_HEAL_BUDGET_S)
             except Exception:
-                logger.exception("auto-index failed")
+                logger.exception("auto-index/heal failed")
+
+        # Background: do not block uvicorn ready / Docker HEALTHCHECK.
+        state["heal_task"] = asyncio.create_task(_startup_heal())
         yield
-        close = getattr(embedder, "aclose", None)
+        heal_task = state.get("heal_task")
+        if heal_task is not None and not heal_task.done():
+            heal_task.cancel()
+            try:
+                await heal_task
+            except asyncio.CancelledError:
+                pass
+        close = getattr(state.get("embedder"), "aclose", None)
         if close is not None:
             await close()
         store.close()
@@ -97,6 +123,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/v1/index")
     async def index(body: IndexRequest) -> dict[str, Any]:
         return await pipeline().reindex(strategy=body.strategy)
+
+    @app.post("/v1/heal")
+    async def heal() -> dict[str, Any]:
+        """Rebuild embeddings if chunks exist without a vector matrix."""
+        result = await pipeline().ensure_vectors()
+        state["embedder"] = state["pipeline"].embedder
+        return {**result, **(await stats())}
 
     @app.post("/v1/documents")
     async def add_document_json(body: DocumentTextRequest) -> dict[str, Any]:

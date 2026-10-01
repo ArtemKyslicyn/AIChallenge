@@ -6450,6 +6450,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  flex-shrink: 0;
+  z-index: 3;
 }
 
 .auth-panel-user {
@@ -6469,6 +6471,11 @@ textarea {
 
 .auth-panel-btn {
   font-size: 12px;
+  min-height: 36px;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface, #fff) 88%, transparent);
 }
 
 .auth-panel-form {
@@ -9015,7 +9022,8 @@ textarea {
 .profile-root {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  /* Above battle/civ menus (4000) and studio sheets so «Войти» always opens. */
+  z-index: 5000;
   display: flex;
   justify-content: flex-end;
 }

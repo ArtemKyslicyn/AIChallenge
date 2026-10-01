@@ -87,6 +87,26 @@ async def rag_reindex(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Индексация не удалась.") from exc
 
 
+@router.post("/rag/heal")
+async def rag_heal(
+    request: Request,
+    user: Annotated[UserAccount, Depends(require_auth_user)],
+) -> dict[str, Any]:
+    """Rebuild embeddings when chunks exist without a vector matrix."""
+    container = get_container(request)
+    try:
+        assert_guest_mcp_email_allowed(user.email, _admin_emails(container))
+    except GuestMcpForbiddenError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    heal = getattr(container.rag_client, "heal", None)
+    if heal is None:
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Heal недоступен.")
+    try:
+        return await heal()
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Heal не удался.") from exc
+
+
 @router.patch("/rag/settings")
 async def rag_settings_patch(
     payload: RagSettingsPatch,

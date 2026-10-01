@@ -13,6 +13,12 @@ from aichallenge_rag.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+#: Hard ceilings so a dead upstream cannot hang heal / upload / search.
+EMBED_CONNECT_S = 5.0
+EMBED_READ_S = 30.0
+EMBED_WRITE_S = 30.0
+EMBED_POOL_S = 5.0
+
 
 class Embedder(Protocol):
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
@@ -55,7 +61,14 @@ class ApiEmbedder:
         self._key = api_key
         self._model = model
         self._dims: int | None = None
-        self._client = httpx.AsyncClient(timeout=60.0)
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=EMBED_CONNECT_S,
+                read=EMBED_READ_S,
+                write=EMBED_WRITE_S,
+                pool=EMBED_POOL_S,
+            )
+        )
 
     @property
     def dims(self) -> int:

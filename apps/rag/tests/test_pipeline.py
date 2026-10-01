@@ -1,0 +1,107 @@
+"""Pipeline heal + append-only document indexing."""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from aichallenge_rag.embeddings import FakeEmbedder
+from aichallenge_rag.pipeline import EMBED_BATCH_TIMEOUT_S, RagPipeline
+from aichallenge_rag.settings import Settings
+from aichallenge_rag.store import VectorStore
+
+
+class _HangingEmbedder:
+    """Never returns — used to assert wait_for / Fake fallback."""
+
+    model_id = "hang"
+    dims = 8
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        await asyncio.sleep(3600)
+        return [[0.0] * self.dims for _ in texts]
+
+
+@pytest.mark.asyncio
+async def test_ensure_vectors_heals_empty_matrix(tmp_path: Path) -> None:
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=16,
+    )
+    store = VectorStore(tmp_path)
+    # Simulate prod: chunks without vectors.npy
+    store._conn.execute(
+        """
+        INSERT INTO chunks
+        (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
+        VALUES ('c1', 'hello guest mcp', 'a.md', 'a', 's', 'structural', 0, 'stand', '')
+        """
+    )
+    store._conn.commit()
+    assert store.stats()["vector_count"] == 0
+
+    pipe = RagPipeline(settings, store, FakeEmbedder(16))
+    result = await pipe.ensure_vectors()
+    assert result["healed"] is True
+    assert int(result["vector_count"] or 0) == 1
+    hits = await pipe.search("guest mcp", top_k=3, mode="raw")
+    assert hits
+
+
+@pytest.mark.asyncio
+async def test_add_document_appends_without_full_rebuild(tmp_path: Path) -> None:
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=16,
+    )
+    store = VectorStore(tmp_path)
+    pipe = RagPipeline(settings, store, FakeEmbedder(16))
+    first = await pipe.add_document(
+        text="# One\n\nAlpha content about models.",
+        source="one.md",
+        title="one",
+        strategy="structural",
+    )
+    assert int(first["added_chunks"] or 0) >= 1
+    n1 = int(store.stats()["vector_count"] or 0)
+    second = await pipe.add_document(
+        text="# Two\n\nBeta content about sessions.",
+        source="two.md",
+        title="two",
+        strategy="structural",
+    )
+    assert int(second["added_chunks"] or 0) >= 1
+    n2 = int(store.stats()["vector_count"] or 0)
+    assert n2 > n1
+
+
+@pytest.mark.asyncio
+async def test_rebuild_falls_back_when_embedder_hangs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Shrink batch timeout so the test finishes quickly.
+    monkeypatch.setattr("aichallenge_rag.pipeline.EMBED_BATCH_TIMEOUT_S", 0.05)
+    monkeypatch.setattr("aichallenge_rag.pipeline.REBUILD_BUDGET_S", 0.15)
+
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=8,
+    )
+    store = VectorStore(tmp_path)
+    store._conn.execute(
+        """
+        INSERT INTO chunks
+        (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
+        VALUES ('c1', 'hang probe', 'a.md', 'a', 's', 'structural', 0, 'stand', '')
+        """
+    )
+    store._conn.commit()
+    pipe = RagPipeline(settings, store, _HangingEmbedder())  # type: ignore[arg-type]
+    result = await pipe.ensure_vectors()
+    assert result["healed"] is True
+    assert pipe.embedder.model_id == "fake-hash"
+    assert int(result["vector_count"] or 0) == 1
+    assert EMBED_BATCH_TIMEOUT_S > 0
