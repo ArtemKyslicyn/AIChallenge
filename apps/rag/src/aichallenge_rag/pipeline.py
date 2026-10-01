@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
 import numpy as np
 
 from aichallenge_rag.chunking import Chunk, chunk_document
-from aichallenge_rag.embeddings import Embedder
+from aichallenge_rag.embeddings import Embedder, FakeEmbedder
 from aichallenge_rag.rerank import apply_pipeline, rewrite_query
 from aichallenge_rag.settings import Settings
 from aichallenge_rag.store import SearchHit, VectorStore, chunk_to_dict
@@ -16,6 +17,11 @@ from aichallenge_rag.store import SearchHit, VectorStore, chunk_to_dict
 logger = logging.getLogger(__name__)
 
 TEXT_SUFFIXES = {".md", ".txt", ".rst", ".py", ".ts", ".tsx", ".yml", ".yaml", ".toml", ".json"}
+
+#: Per-batch ceiling for upstream embeddings (API hang fuse).
+EMBED_BATCH_TIMEOUT_S = 35.0
+#: Whole rebuild/heal budget — then fall back to FakeEmbedder.
+REBUILD_BUDGET_S = 90.0
 
 
 def extract_text(path: Path, raw: bytes | None = None) -> str:
@@ -46,6 +52,13 @@ def iter_corpus_files(corpus_dir: Path) -> list[Path]:
                 continue
             files.append(path)
     return files
+
+
+def _normalize_matrix(vectors: list[list[float]]) -> np.ndarray:
+    matrix = np.asarray(vectors, dtype=np.float32)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return matrix / norms
 
 
 class RagPipeline:
@@ -106,9 +119,7 @@ class RagPipeline:
         )
         if not chunks:
             return {"added_chunks": 0, "strategy": strategy}
-        vectors = await self.embedder.embed([c.text for c in chunks])
-        # Merge with existing rows then rebuild matrix for all ids.
-        for chunk, vec in zip(chunks, vectors, strict=True):
+        for chunk in chunks:
             self.store._conn.execute(
                 """
                 INSERT OR REPLACE INTO chunks
@@ -128,7 +139,27 @@ class RagPipeline:
                 ),
             )
         self.store._conn.commit()
-        await self._rebuild_all_vectors()
+
+        # Prefer embedding only the new rows — full rebuild hangs for hundreds of chunks.
+        try:
+            vectors = await asyncio.wait_for(
+                self.embedder.embed([c.text for c in chunks]),
+                timeout=EMBED_BATCH_TIMEOUT_S,
+            )
+            matrix = _normalize_matrix(vectors)
+            dims = int(matrix.shape[1])
+            if self.store.can_append(embed_model=self.embedder.model_id, dims=dims):
+                self.store.upsert_matrix_rows(
+                    [c.chunk_id for c in chunks],
+                    matrix,
+                    embed_model=self.embedder.model_id,
+                )
+            else:
+                await self._rebuild_all_vectors()
+        except Exception:
+            logger.exception("add_document embed failed; rebuilding with fallback")
+            await self._rebuild_all_vectors()
+
         return {
             "added_chunks": len(chunks),
             "strategy": strategy,
@@ -147,7 +178,6 @@ class RagPipeline:
         if not chunks:
             await self._rebuild_all_vectors()
             return {"indexed_files": 0, "chunks": 0, "strategy": strategy}
-        # Clear only this strategy+scope then insert; keep other strategies for comparison.
         for chunk in chunks:
             self.store._conn.execute(
                 """
@@ -177,27 +207,64 @@ class RagPipeline:
             "avg_chars": round(sum(len(c.text) for c in chunks) / len(chunks), 1),
         }
 
+    async def _embed_texts(self, texts: list[str], *, batch: int = 32) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for i in range(0, len(texts), batch):
+            part = texts[i : i + batch]
+            vectors.extend(
+                await asyncio.wait_for(self.embedder.embed(part), timeout=EMBED_BATCH_TIMEOUT_S)
+            )
+        return vectors
+
     async def _rebuild_all_vectors(self) -> None:
         rows = self.store.list_chunks()
         if not rows:
-            self.store.set_matrix([], np.zeros((0, 1), dtype=np.float32), embed_model=self.embedder.model_id)
+            self.store.set_matrix(
+                [], np.zeros((0, 1), dtype=np.float32), embed_model=self.embedder.model_id
+            )
             return
         texts = [r.text for r in rows]
-        # Batch to avoid huge payloads.
-        vectors: list[list[float]] = []
-        batch = 32
-        for i in range(0, len(texts), batch):
-            vectors.extend(await self.embedder.embed(texts[i : i + batch]))
-        matrix = np.asarray(vectors, dtype=np.float32)
-        # L2-normalize rows for cosine via dot.
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        matrix = matrix / norms
+
+        async def _run() -> list[list[float]]:
+            return await self._embed_texts(texts)
+
+        try:
+            vectors = await asyncio.wait_for(_run(), timeout=REBUILD_BUDGET_S)
+        except Exception:
+            logger.exception(
+                "embed rebuild failed/timed out; falling back to FakeEmbedder (%s chunks)",
+                len(texts),
+            )
+            fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
+            self.embedder = fake
+            vectors = await self._embed_texts(texts)
+
+        matrix = _normalize_matrix(vectors)
         self.store.set_matrix(
             [r.chunk_id for r in rows],
             matrix,
             embed_model=self.embedder.model_id,
         )
+
+    async def ensure_vectors(self) -> dict[str, object]:
+        """Rebuild matrix when chunks exist but vectors are missing (prod heal)."""
+        stats = self.store.stats()
+        total = int(stats.get("total_chunks") or 0)
+        vectors = int(stats.get("vector_count") or 0)
+        if total == 0:
+            result = await self.reindex(strategy="structural")
+            await self.reindex(strategy="fixed")
+            return {"healed": "indexed_both", **result}
+        if vectors > 0 and vectors == total:
+            return {"healed": False, "total_chunks": total, "vector_count": vectors}
+        await self._rebuild_all_vectors()
+        after = self.store.stats()
+        return {
+            "healed": True,
+            "total_chunks": after.get("total_chunks"),
+            "vector_count": after.get("vector_count"),
+            "embed_model": after.get("embed_model"),
+        }
 
     async def search(
         self,
@@ -219,7 +286,14 @@ class RagPipeline:
         pre = top_k_pre or self.settings.rag_top_k_pre
         post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
         threshold = self.settings.rag_min_score if min_score is None else min_score
-        vectors = await self.embedder.embed([rewritten])
+        try:
+            vectors = await asyncio.wait_for(
+                self.embedder.embed([rewritten]),
+                timeout=EMBED_BATCH_TIMEOUT_S,
+            )
+        except Exception:
+            logger.exception("query embed failed")
+            return []
         raw_hits = self.store.search(vectors[0], top_k=pre)
         final_hits, _meta = apply_pipeline(
             rewritten,
@@ -259,7 +333,20 @@ class RagPipeline:
         post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
         threshold = self.settings.rag_min_score if min_score is None else min_score
 
-        vectors = await self.embedder.embed([rewritten])
+        try:
+            vectors = await asyncio.wait_for(
+                self.embedder.embed([rewritten]),
+                timeout=EMBED_BATCH_TIMEOUT_S,
+            )
+        except Exception:
+            logger.exception("query embed failed")
+            return {
+                "query": q,
+                "query_rewritten": rewritten,
+                "hits": [],
+                "embed_model": self.embedder.model_id,
+                "retrieval": {"mode": mode_eff, "hits_pre": 0, "hits_post": 0, "error": "embed_timeout"},
+            }
         raw_hits = self.store.search(vectors[0], top_k=pre)
         final_hits, retrieval_meta = apply_pipeline(
             rewritten,

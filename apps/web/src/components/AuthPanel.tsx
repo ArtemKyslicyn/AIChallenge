@@ -50,7 +50,7 @@ export function AuthPanel({
     ? "…"
     : loggedIn
       ? user!.display_name || user!.email
-      : "Войти";
+      : "Профиль";
 
   return (
     <div className="auth-panel">
@@ -59,13 +59,13 @@ export function AuthPanel({
         className="ghost-button auth-panel-btn"
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={loggedIn ? "Открыть профиль" : "Войти"}
+        aria-label={loggedIn ? "Открыть профиль" : "Открыть профиль и вход"}
         onClick={() => {
           setSection("account");
           setOpen(true);
         }}
       >
-        <span className="auth-panel-email" title={loggedIn ? user!.email : undefined}>
+        <span className="auth-panel-email" title={loggedIn ? user!.email : "Профиль"}>
           {label}
         </span>
       </button>
