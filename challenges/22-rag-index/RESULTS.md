@@ -25,7 +25,8 @@ Indexed files: **58** (text/md under those mounts, ≤2 MB each).
 | indexed_files | 58 | 58 |
 | metadata (`source`, `title`, `section`, `chunk_id`, `strategy`) | yes | yes |
 
-Prod after Day-22 deploy had `structural` only: `total_chunks=761`, `avg_chars≈547.6` (matches table). Heal commit restores `vector_count` when matrix was wiped.
+Prod after Day-22 deploy had `structural` only: `total_chunks=761`, `avg_chars≈547.6` (matches table).
+After heal (`vector_count=761`, embed runtime may be `fake-hash` if API embed budget trips — search still works).
 
 ## Hit@k smoke (top-3, mode=raw, FakeEmbedder)
 
