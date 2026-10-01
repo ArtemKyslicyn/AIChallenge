@@ -98,11 +98,8 @@ async def rag_heal(
         assert_guest_mcp_email_allowed(user.email, _admin_emails(container))
     except GuestMcpForbiddenError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
-    heal = getattr(container.rag_client, "heal", None)
-    if heal is None:
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Heal недоступен.")
     try:
-        return await heal()
+        return dict(await container.rag_client.heal())
     except Exception as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Heal не удался.") from exc
 

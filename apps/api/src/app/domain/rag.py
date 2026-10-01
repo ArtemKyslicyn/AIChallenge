@@ -61,6 +61,8 @@ class RagClient(Protocol):
 
     async def reindex(self, strategy: str | None = None) -> dict[str, object]: ...
 
+    async def heal(self) -> dict[str, object]: ...
+
 
 class NullRagClient:
     """No-op when RAG_BASE_URL is unset."""
