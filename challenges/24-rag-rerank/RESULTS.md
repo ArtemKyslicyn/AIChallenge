@@ -12,13 +12,13 @@ Defaults: `top_k_pre=20`, `top_k_post=6`, `min_score=0.18`.
 
 «пожалуйста расскажи что такое Guest MCP»
 
+Measured on compose-equivalent corpus (FakeEmbedder; API embeds shift absolute scores):
+
 | Mode | hits_pre → hits_post | notes |
 |---|---|---|
-| raw | 20 → 6 | may include weak scores |
-| filtered | 20 → ≤6 | drops below min_score |
-| full | rewrite expands Guest MCP; rerank prefers title/section hits |
-
-Fill live numbers after `POST /v1/search` with each mode on prod/local.
+| raw | 20 → 6 | top scores ≈ 0.58…0.45; filler query kept as-is |
+| filtered | 20 → 6 | all 20 ≥ 0.18 on fake vectors → same truncate; drops noise when API scores are wider |
+| full | 20 → 6 | rewrite → `Guest MCP … Streamable HTTP`; rerank boosts title/section overlap (top ≈ 0.65) |
 
 ## Demo path
 
