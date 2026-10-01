@@ -92,12 +92,12 @@ const RAIL: { group: string; items: { id: ProfileSectionId; label: string }[] }[
 ];
 
 const LEADS: Record<ProfileSectionId, string> = {
-  account: "Имя и почта. Выход из аккаунта.",
+  account: "Имя, почта и база знаний стенда (добавить документ).",
   security: "Смена пароля. Выход только с этого устройства.",
   models: "Избранные и модель по умолчанию для новых чатов.",
   answers: "Язык, тон и правила ответа по умолчанию.",
   chat: "Режим нового чата и свой сервер для новых диалогов.",
-  connections: "Стендовая база знаний, свой MCP и внешний RAG через туннель.",
+  connections: "Свой MCP и внешний RAG через туннель.",
   stand: "Краткий статус сервиса. Полный пульс — во вкладке MCP.",
   personalization: "Активный стиль ответа. Полная настройка — в Агентах.",
   device: "Локальная история на этом браузере — не то же самое, что аккаунт.",
@@ -357,11 +357,14 @@ function SectionBody(props: {
   switch (props.section) {
     case "account":
       return (
-        <AccountSection
-          user={props.user}
-          loggedIn={props.loggedIn}
-          setUser={props.setUser}
-        />
+        <>
+          <AccountSection
+            user={props.user}
+            loggedIn={props.loggedIn}
+            setUser={props.setUser}
+          />
+          <RagStandSection sessionId={props.sessionId} />
+        </>
       );
     case "security":
       return <SecuritySection setUser={props.setUser} />;

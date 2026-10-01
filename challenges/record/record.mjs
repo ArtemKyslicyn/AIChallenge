@@ -1902,6 +1902,147 @@ async function challenge21(page) {
   await hideRecordCard(page);
 }
 
+async function openChatFresh(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=chat", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.08);
+  await page.addStyleTag({
+    content: `
+      .empty-more, .empty-stand-links, .empty-more-toggle, .float-dock { display: none !important; }
+      .composer-more-toggle, .auth-panel-btn, .profile-rag-stand, .rag-sources {
+        outline: 2px solid rgba(234, 88, 12, 0.55) !important;
+        outline-offset: 2px;
+      }
+    `,
+  });
+  const fresh = page.getByRole("button", { name: /новый чат/i });
+  if ((await fresh.count()) > 0) await fresh.click().catch(() => {});
+  await settle(page, 1000);
+}
+
+async function openComposerSettings(page) {
+  const toggle = page.getByRole("button", { name: /Настройки|Скрыть/i }).first();
+  await toggle.waitFor({ timeout: 15_000 });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+  await page.locator(".composer-settings").waitFor({ timeout: 10_000 });
+}
+
+async function enableRag(page, mode = "full") {
+  await openComposerSettings(page);
+  const box = page.locator(".composer-settings label.composer-toggle").filter({
+    hasText: "Использовать базу",
+  });
+  const input = box.locator('input[type="checkbox"]');
+  if (!(await input.isChecked())) await input.check();
+  const modeSelect = page.locator(".composer-settings select").filter({
+    has: page.locator("option[value='raw']"),
+  });
+  if ((await modeSelect.count()) > 0) await modeSelect.selectOption(mode);
+  await settle(page, 600);
+}
+
+async function sendChat(page, text) {
+  const box = page.locator("textarea").last();
+  await box.fill(text);
+  await settle(page, 400);
+  await page.getByRole("button", { name: /Отправить|Send/i }).click();
+  await page.locator(".turn.assistant .badge").last().waitFor({ timeout: 180_000 });
+  await settle(page, 800);
+}
+
+async function challenge22(page) {
+  await openChatFresh(page);
+  await showRecordCard(page, {
+    day: "День 22 · индекс",
+    title: "База знаний стенда",
+    beat: "Профиль → чанки / стратегия. fixed 620 · structural 761.",
+    hold: 7000,
+  });
+  await page.getByRole("button", { name: /Открыть профиль|Профиль/i }).first().click();
+  await page.locator(".profile-drawer").waitFor({ timeout: 15_000 });
+  await pauseOn(page.locator(".profile-rag-stand, .profile-drawer"), 8000);
+  await page.getByRole("button", { name: /Закрыть/i }).first().click().catch(() => {});
+  await settle(page, 600);
+  await openComposerSettings(page);
+  await showRecordCard(page, {
+    day: "День 22",
+    title: "Две стратегии чанкинга",
+    beat: "fixed 800/120 → 620 чанков · structural → 761 · метаданные source/title/section.",
+    hold: 9000,
+  });
+  await pauseOn(page.locator(".composer-settings"), 7000);
+  await hideRecordCard(page);
+}
+
+async function challenge23(page) {
+  await openChatFresh(page);
+  await showRecordCard(page, {
+    day: "День 23 · запрос",
+    title: "Без базы",
+    beat: "Тот же вопрос про :443 — без источников.",
+    hold: 5000,
+  });
+  await openComposerSettings(page);
+  const box = page.locator(".composer-settings label.composer-toggle").filter({
+    hasText: "Использовать базу",
+  });
+  const input = box.locator('input[type="checkbox"]');
+  if (await input.isChecked()) await input.uncheck();
+  await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
+  await hideRecordCard(page);
+  await sendChat(page, "Куда ходит публичный :443 на этом стенде? Коротко.");
+  await pauseOn(page.locator(".turn.assistant").last(), 8000);
+
+  await showRecordCard(page, {
+    day: "День 23",
+    title: "С базой + источники",
+    beat: "Галочка «Использовать базу» → ответ с фрагментами и model_id.",
+    hold: 5000,
+  });
+  await enableRag(page, "full");
+  await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
+  await hideRecordCard(page);
+  await sendChat(page, "Куда ходит публичный :443 на этом стенде? Коротко по базе.");
+  const sources = page.locator(".rag-sources").last();
+  if ((await sources.count()) > 0) {
+    await sources.locator("summary").click().catch(() => {});
+    await pauseOn(sources, 9000);
+  }
+  await pauseOn(page.locator(".turn.assistant").last(), 7000);
+}
+
+async function challenge24(page) {
+  await openChatFresh(page);
+  const q = "пожалуйста расскажи что такое Guest MCP";
+  for (const [mode, label] of [
+    ["raw", "raw — без фильтра"],
+    ["filtered", "filtered — порог similarity"],
+    ["full", "full — rewrite + rerank"],
+  ]) {
+    await showRecordCard(page, {
+      day: "День 24 · rerank",
+      title: label,
+      beat: "Один вопрос, три режима базы. Смотри pre→post и rewrite.",
+      hold: 4500,
+    });
+    await enableRag(page, mode);
+    await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
+    await hideRecordCard(page);
+    await sendChat(page, q);
+    const sources = page.locator(".rag-sources").last();
+    if ((await sources.count()) > 0) {
+      await sources.locator("summary").click().catch(() => {});
+      await pauseOn(sources, 7000);
+    } else {
+      await pauseOn(page.locator(".turn.assistant").last(), 6000);
+    }
+  }
+  await openComposerSettings(page);
+  await pauseOn(page.getByRole("button", { name: /Добавить в базу/i }), 5000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -1920,13 +2061,16 @@ const out18 = path.join(__dirname, "../18-mcp-scheduler/challenge-18.webm");
 const out19 = path.join(__dirname, "../19-mcp-compose/challenge-19.webm");
 const out20 = path.join(__dirname, "../20-mcp-orchestration/challenge-20.webm");
 const out21 = path.join(__dirname, "../21-live-models/challenge-21.webm");
+const out22 = path.join(__dirname, "../22-rag-index/challenge-22.webm");
+const out23 = path.join(__dirname, "../23-rag-query/challenge-23.webm");
+const out24 = path.join(__dirname, "../24-rag-rerank/challenge-24.webm");
 const out16v2 = path.join(__dirname, "../16-mcp-connect/версия 2.webm");
 const out17v2 = path.join(__dirname, "../17-mcp-tool/версия 2.webm");
 const out18v2 = path.join(__dirname, "../18-mcp-scheduler/версия 2.webm");
 const out19v2 = path.join(__dirname, "../19-mcp-compose/версия 2.webm");
 const out20v2 = path.join(__dirname, "../20-mcp-orchestration/версия 2.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -2019,6 +2163,18 @@ if (ONLY.includes("20")) {
 if (ONLY.includes("21")) {
   console.log("Recording challenge 21 against", BASE);
   await recordChallenge("21", out21, (page) => challenge21(page));
+}
+if (ONLY.includes("22")) {
+  console.log("Recording challenge 22 against", BASE);
+  await recordChallenge("22", out22, (page) => challenge22(page));
+}
+if (ONLY.includes("23")) {
+  console.log("Recording challenge 23 against", BASE);
+  await recordChallenge("23", out23, (page) => challenge23(page));
+}
+if (ONLY.includes("24")) {
+  console.log("Recording challenge 24 against", BASE);
+  await recordChallenge("24", out24, (page) => challenge24(page));
 }
 if (ONLY.includes("16v2") || ONLY.includes("v2")) {
   console.log("Recording day 16 version 2 against", BASE);
