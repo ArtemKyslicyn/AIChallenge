@@ -201,6 +201,19 @@ def _owner_key(visitor_id: str, auth_user: object | None) -> str:
     return memory_owner_key(visitor_id=visitor_id, user_id=user_id)
 
 
+def _rag_source_dto(row: dict[str, object]) -> AgentRagSourceResponse:
+    raw_score = row.get("score")
+    score = float(raw_score) if isinstance(raw_score, (int, float)) else 0.0
+    return AgentRagSourceResponse(
+        chunk_id=str(row.get("chunk_id") or ""),
+        source=str(row.get("source") or ""),
+        title=str(row.get("title") or ""),
+        section=str(row.get("section") or ""),
+        strategy=str(row.get("strategy") or ""),
+        score=score,
+    )
+
+
 @router.post("/run", response_model=AgentWorkshopRunResponse)
 async def run_workshop_agent(
     payload: AgentWorkshopRunRequest,
@@ -451,17 +464,7 @@ async def run_workshop_agent(
                 task_skip_conflict=bool(outcome.task_skip_conflict),
                 invariants=list(dialog.invariants or []),
                 mcp_calls=_mcp_calls_dto(outcome),
-                rag_sources=[
-                    AgentRagSourceResponse(
-                        chunk_id=str(s.get("chunk_id") or ""),
-                        source=str(s.get("source") or ""),
-                        title=str(s.get("title") or ""),
-                        section=str(s.get("section") or ""),
-                        strategy=str(s.get("strategy") or ""),
-                        score=float(s["score"]) if isinstance(s.get("score"), (int, float)) else 0.0,
-                    )
-                    for s in outcome.rag_sources
-                ],
+                rag_sources=[_rag_source_dto(dict(s)) for s in outcome.rag_sources],
                 rag_embed_model=outcome.rag_embed_model,
                 rag_query_rewritten=outcome.rag_query_rewritten,
                 rag_retrieval=outcome.rag_retrieval,
