@@ -302,7 +302,14 @@ class RagPipeline:
         return final_hits
 
     async def _embed_query(self, texts: list[str]) -> list[list[float]]:
-        """Embed query; on API hang fall back to Fake so healed indexes stay searchable."""
+        """Embed query; keep the same space as the on-disk matrix when possible."""
+        stats = self.store.stats()
+        matrix_model = str(stats.get("embed_model") or "")
+        # Healed indexes often sit on fake-hash while runtime provider is still API.
+        if matrix_model == "fake-hash" and self.embedder.model_id != "fake-hash":
+            fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
+            self.embedder = fake
+            return await fake.embed(texts)
         try:
             return await asyncio.wait_for(
                 self.embedder.embed(texts),
@@ -311,10 +318,7 @@ class RagPipeline:
         except Exception:
             logger.warning("query embed failed/timed out; using FakeEmbedder for search")
             fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
-            # Prefer fake when the on-disk matrix was built by fake-hash heal.
-            stats = self.store.stats()
-            if str(stats.get("embed_model") or "") == "fake-hash":
-                self.embedder = fake
+            self.embedder = fake
             return await fake.embed(texts)
 
     async def search_payload(
