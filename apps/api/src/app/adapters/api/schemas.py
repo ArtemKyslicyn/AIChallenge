@@ -159,6 +159,10 @@ class AgentWorkshopRunRequest(BaseModel):
     include_long_term_memory: bool = True
     #: Day 12 — expert lens id (chemist|psychologist|economist|neutral).
     expert_lens_id: str | None = Field(default=None, max_length=32)
+    #: Day 25 — always-on RAG for mini-chat with task memory.
+    use_rag: bool = False
+    rag_mode: str | None = Field(default="full", pattern="^(raw|filtered|full)$")
+    rag_top_k: int | None = Field(default=6, ge=1, le=32)
 
 
 class AgentDialogMessageResponse(BaseModel):
@@ -219,6 +223,15 @@ class AgentMcpCallResponse(BaseModel):
     server: str = ""
 
 
+class AgentRagSourceResponse(BaseModel):
+    chunk_id: str = ""
+    source: str = ""
+    title: str = ""
+    section: str = ""
+    strategy: str = ""
+    score: float = 0.0
+
+
 class AgentWorkshopRunResponse(BaseModel):
     content: str
     model_id: str
@@ -231,6 +244,10 @@ class AgentWorkshopRunResponse(BaseModel):
     task_skip_conflict: bool = False
     invariants: list[dict[str, object]] = Field(default_factory=list)
     mcp_calls: list[AgentMcpCallResponse] = Field(default_factory=list)
+    rag_sources: list[AgentRagSourceResponse] = Field(default_factory=list)
+    rag_embed_model: str | None = None
+    rag_query_rewritten: str | None = None
+    rag_retrieval: dict[str, object] | None = None
 
 
 class AgentDialogResponse(BaseModel):

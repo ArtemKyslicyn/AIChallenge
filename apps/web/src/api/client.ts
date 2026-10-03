@@ -924,6 +924,17 @@ export interface AgentWorkshopRunResultDto {
   task_skip_conflict?: boolean;
   invariants?: AgentInvariantDto[];
   mcp_calls?: AgentMcpCallDto[];
+  rag_sources?: Array<{
+    chunk_id: string;
+    source: string;
+    title: string;
+    section: string;
+    strategy: string;
+    score: number;
+  }>;
+  rag_embed_model?: string | null;
+  rag_query_rewritten?: string | null;
+  rag_retrieval?: Record<string, unknown> | null;
 }
 
 export interface AgentMcpCallDto {
@@ -1019,6 +1030,10 @@ export interface AgentWorkshopRunOptions {
   includeWorkingMemory?: boolean;
   includeLongTermMemory?: boolean;
   expertLensId?: string | null;
+  /** Day 25 — RAG + sources on workshop turns. */
+  useRag?: boolean;
+  ragMode?: "raw" | "filtered" | "full";
+  ragTopK?: number;
   signal?: AbortSignal;
 }
 
@@ -1059,6 +1074,11 @@ export function runAgentWorkshop(
   }
   if (opts.expertLensId) {
     body.expert_lens_id = opts.expertLensId;
+  }
+  if (opts.useRag) {
+    body.use_rag = true;
+    if (opts.ragMode) body.rag_mode = opts.ragMode;
+    if (opts.ragTopK != null) body.rag_top_k = opts.ragTopK;
   }
   return request<AgentWorkshopRunResultDto>(
     "/agent-workshop/run",

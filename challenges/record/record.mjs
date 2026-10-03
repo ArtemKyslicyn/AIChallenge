@@ -2043,6 +2043,51 @@ async function challenge24(page) {
   await pauseOn(page.getByRole("button", { name: /Добавить в базу/i }), 5000);
 }
 
+async function challenge25(page) {
+  acceptDialogs(page);
+  await page.goto(BASE + "/?shell=rag", { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page, 1.08);
+  await page.addStyleTag({
+    content: `
+      .float-dock { display: none !important; }
+      .rag-memory-side, .rag-sources, .rag-memory-turn--assistant .badge {
+        outline: 2px solid rgba(234, 88, 12, 0.55) !important;
+        outline-offset: 2px;
+      }
+    `,
+  });
+  await page.locator(".rag-memory-board").waitFor({ timeout: 20_000 });
+  await showRecordCard(page, {
+    day: "День 25",
+    title: "База + память задачи",
+    beat: "История, always-on RAG со источниками, цель и ограничения.",
+    hold: 7000,
+  });
+  await pauseOn(page.locator(".rag-memory-side"), 6000);
+  await hideRecordCard(page);
+
+  const questions = [
+    "Куда ходит публичный :443 на этом стенде?",
+    "Что такое model_id в ответах ассистента?",
+    "Напомни цель нашего диалога одной фразой.",
+    "Что такое Guest MCP и чем он не является?",
+  ];
+  for (const q of questions) {
+    const box = page.locator("#rag-memory-input");
+    await box.fill(q);
+    await settle(page, 400);
+    await page.getByRole("button", { name: /^Отправить$/i }).click();
+    await page.locator(".rag-memory-turn--assistant .badge").last().waitFor({ timeout: 180_000 });
+    const sources = page.locator(".rag-memory-turn--assistant .rag-sources").last();
+    if ((await sources.count()) > 0) {
+      await sources.locator("summary").click().catch(() => {});
+      await pauseOn(sources, 5500);
+    }
+    await pauseOn(page.locator(".rag-memory-turn--assistant").last(), 4500);
+  }
+  await pauseOn(page.locator(".rag-memory-side"), 5000);
+}
+
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
 const out05 = path.join(__dirname, "../05-model-tiers/challenge-05.webm");
 const out06 = path.join(__dirname, "../06-first-agent/challenge-06.webm");
@@ -2064,13 +2109,14 @@ const out21 = path.join(__dirname, "../21-live-models/challenge-21.webm");
 const out22 = path.join(__dirname, "../22-rag-index/challenge-22.webm");
 const out23 = path.join(__dirname, "../23-rag-query/challenge-23.webm");
 const out24 = path.join(__dirname, "../24-rag-rerank/challenge-24.webm");
+const out25 = path.join(__dirname, "../25-rag-memory/challenge-25.webm");
 const out16v2 = path.join(__dirname, "../16-mcp-connect/версия 2.webm");
 const out17v2 = path.join(__dirname, "../17-mcp-tool/версия 2.webm");
 const out18v2 = path.join(__dirname, "../18-mcp-scheduler/версия 2.webm");
 const out19v2 = path.join(__dirname, "../19-mcp-compose/версия 2.webm");
 const out20v2 = path.join(__dirname, "../20-mcp-orchestration/версия 2.webm");
 
-const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24")
+const ONLY = (process.env.RECORD_ONLY || "04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -2175,6 +2221,10 @@ if (ONLY.includes("23")) {
 if (ONLY.includes("24")) {
   console.log("Recording challenge 24 against", BASE);
   await recordChallenge("24", out24, (page) => challenge24(page));
+}
+if (ONLY.includes("25")) {
+  console.log("Recording challenge 25 against", BASE);
+  await recordChallenge("25", out25, (page) => challenge25(page));
 }
 if (ONLY.includes("16v2") || ONLY.includes("v2")) {
   console.log("Recording day 16 version 2 against", BASE);

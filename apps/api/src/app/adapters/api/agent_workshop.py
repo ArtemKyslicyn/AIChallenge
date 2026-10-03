@@ -19,6 +19,7 @@ from app.adapters.api.schemas import (
     AgentInvariantEventRequest,
     AgentInvariantEventResponse,
     AgentMcpCallResponse,
+    AgentRagSourceResponse,
     AgentMemorySnapshotResponse,
     AgentMemoryWriteRequest,
     AgentMemoryWriteResponse,
@@ -423,6 +424,10 @@ async def run_workshop_agent(
                 expert_lens_id=lens_id,
                 task_just_resumed=task_just_resumed,
                 mcp_runner=_mcp_runner(settings),
+                use_rag=bool(payload.use_rag),
+                rag_client=container.rag_client,
+                rag_mode=payload.rag_mode,
+                rag_top_k=int(payload.rag_top_k or 6),
             )
             await db.commit()
             content = outcome.result.content
@@ -446,6 +451,20 @@ async def run_workshop_agent(
                 task_skip_conflict=bool(outcome.task_skip_conflict),
                 invariants=list(dialog.invariants or []),
                 mcp_calls=_mcp_calls_dto(outcome),
+                rag_sources=[
+                    AgentRagSourceResponse(
+                        chunk_id=str(s.get("chunk_id") or ""),
+                        source=str(s.get("source") or ""),
+                        title=str(s.get("title") or ""),
+                        section=str(s.get("section") or ""),
+                        strategy=str(s.get("strategy") or ""),
+                        score=float(s.get("score") or 0.0),
+                    )
+                    for s in outcome.rag_sources
+                ],
+                rag_embed_model=outcome.rag_embed_model,
+                rag_query_rewritten=outcome.rag_query_rewritten,
+                rag_retrieval=outcome.rag_retrieval,
             )
 
         outcome = await run_agent(
