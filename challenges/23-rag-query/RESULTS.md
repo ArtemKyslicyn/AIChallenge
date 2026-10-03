@@ -1,30 +1,34 @@
-# Challenge 23 — RAG ask results
+# День 23 — RESULTS (чеклист)
 
-## Modes
+Видео: `challenge-23.mp4`  
+Контрольные вопросы: `QUESTIONS.md` (10 шт.)  
+Прод индекс: ~761–766 structural chunks, `vector_count` > 0.
 
-| Mode | How | Result |
-|---|---|---|
-| Without RAG | checkbox off | general answer, no sources footer |
-| With RAG | «Использовать базу» | context injected + `rag_sources` SSE |
+## Главное сравнение (задание)
 
-## Corpus / index (prod baseline)
+**Вопрос:** Куда ходит публичный `:443`?
 
-- `structural` chunks: **761**, avg ≈ **547.6** chars (matches challenge 22)
-- Embed provider: API (`text-embedding-3-small`); heal restores `vector_count` if matrix missing
+| Режим | Ожидание | Что видно | Статус |
+|---|---|---|---|
+| База **выкл** | общий ответ, **нет** блока источников | видео: ответ без «Источники базы» | **PASS** |
+| База **вкл** | опора на docs + источники | видео: «Источники базы» + `model_id` | **PASS** |
 
-## Sample pair
+Типичный grounded ответ с базой: `:443 → xray Reality → nginx :8443 → web :18080` (AGENTS / deploy docs).
 
-**Q:** Куда ходит публичный :443?
+## Чеклист задания
 
-- Without RAG: model often invents ports / omits xray→nginx→web chain  
-- With RAG: should cite deploy/VLESS docs; sources show `title` / `section` / `source` / `chunk_id`; `model_id` still on the turn
+| # | Требование | Доказательство | Статус |
+|---|---|---|---|
+| 1 | Ask без RAG | видео кадр 1 | **PASS** |
+| 2 | Ask с RAG | видео кадр 2 | **PASS** |
+| 3 | Источники видны (title/section/source/chunk_id) | UI details «Источники базы» | **PASS** |
+| 4 | `model_id` на ответе | badge | **PASS** |
+| 5 | 10 контрольных вопросов подготовлены | `QUESTIONS.md` | **PASS** |
+| 6 | Upload файла в базу | UI: «Добавить в базу» / Профиль; код `POST …/rag/documents` | **PASS** (UI path; в ролике акцент на off/on) |
+| 7 | Внешний RAG ≠ stand `/mcp/*` | Guest MCP docs; Профиль → Подключения | documented |
 
-**Q:** Что такое Guest MCP?
+## Как повторить
 
-- Without: generic MCP blurb  
-- With: Streamable HTTP visitor MCP ≠ stand `/mcp/*`; sources from guest-mcp specs
-
-## Load / capacity
-
-API embeddings default — `rag-load-smoke` on VPS. Local embeddings stay admin-off unless explicitly enabled.
-Upload path embeds **only new chunks** (append); full rebuild only when matrix missing/mismatched, with hard timeouts + FakeEmbedder fallback.
+1. Новый чат → Настройки → снять «Использовать базу» → вопрос про `:443`.  
+2. Включить базу → тот же вопрос → раскрыть источники.  
+3. (Полный набор) пройти `QUESTIONS.md` 1–10 с базой вкл.

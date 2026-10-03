@@ -1,21 +1,22 @@
-# День 23 — реранкинг и фильтрация
+# День 24 — rewrite / filter / rerank
 
-Папка: `24-rag-rerank` (22/23 заняты индексацией и первым RAG).
+**Папка:** `24-rag-rerank` (22=индекс, 23=ask).  
+**Артефакты:** `challenge-24.mp4` · `RESULTS.md` · `VIDEO.md`
 
-## Что сделано
+## Требование задания
 
-После vector search:
+После vector search: retrieve шире → фильтр по similarity → (опц.) rerank → top_k. Режимы сравнимы. Query rewrite в «умном» режиме. Источники показывают pre→post.
 
-1. `top_k_pre` (по умолчанию 20)
-2. порог `min_score` (filtered/full)
-3. heuristic rerank: cosine + token overlap (full)
-4. `top_k_post` (по умолчанию 6)
-5. query rewrite в режиме `full` (filler strip + aliases)
+## Режимы (чат → Настройки → «Использовать базу»)
 
-Режимы в чате (**Ещё** при «Использовать базу»): `raw` | `filtered` | `full`.
+| Mode | Rewrite | min_score | Rerank |
+|---|---|---|---|
+| `raw` | нет | нет | truncate |
+| `filtered` | нет | да | нет |
+| `full` | да | да | heuristic overlap |
 
-Загрузка документов: **Ещё → Добавить в базу**, **В базу** у медиа-ряда, **Профиль → Подключения → Добавить документ**.
+Defaults: `top_k_pre=20`, `top_k_post=6`, `min_score=0.18`.
 
-## Сравнение
+## Чеклист
 
-См. `RESULTS.md`. Видео: `VIDEO.md`.
+См. `RESULTS.md`.
