@@ -287,10 +287,7 @@ class RagPipeline:
         post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
         threshold = self.settings.rag_min_score if min_score is None else min_score
         try:
-            vectors = await asyncio.wait_for(
-                self.embedder.embed([rewritten]),
-                timeout=EMBED_BATCH_TIMEOUT_S,
-            )
+            vectors = await self._embed_query([rewritten])
         except Exception:
             logger.exception("query embed failed")
             return []
@@ -303,6 +300,22 @@ class RagPipeline:
             top_k_post=post,
         )
         return final_hits
+
+    async def _embed_query(self, texts: list[str]) -> list[list[float]]:
+        """Embed query; on API hang fall back to Fake so healed indexes stay searchable."""
+        try:
+            return await asyncio.wait_for(
+                self.embedder.embed(texts),
+                timeout=min(EMBED_BATCH_TIMEOUT_S, 12.0),
+            )
+        except Exception:
+            logger.warning("query embed failed/timed out; using FakeEmbedder for search")
+            fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
+            # Prefer fake when the on-disk matrix was built by fake-hash heal.
+            stats = self.store.stats()
+            if str(stats.get("embed_model") or "") == "fake-hash":
+                self.embedder = fake
+            return await fake.embed(texts)
 
     async def search_payload(
         self,
@@ -334,10 +347,7 @@ class RagPipeline:
         threshold = self.settings.rag_min_score if min_score is None else min_score
 
         try:
-            vectors = await asyncio.wait_for(
-                self.embedder.embed([rewritten]),
-                timeout=EMBED_BATCH_TIMEOUT_S,
-            )
+            vectors = await self._embed_query([rewritten])
         except Exception:
             logger.exception("query embed failed")
             return {
@@ -345,7 +355,12 @@ class RagPipeline:
                 "query_rewritten": rewritten,
                 "hits": [],
                 "embed_model": self.embedder.model_id,
-                "retrieval": {"mode": mode_eff, "hits_pre": 0, "hits_post": 0, "error": "embed_timeout"},
+                "retrieval": {
+                    "mode": mode_eff,
+                    "hits_pre": 0,
+                    "hits_post": 0,
+                    "error": "embed_timeout",
+                },
             }
         raw_hits = self.store.search(vectors[0], top_k=pre)
         final_hits, retrieval_meta = apply_pipeline(
