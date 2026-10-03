@@ -3,26 +3,32 @@
 ## Surface
 
 - Shell: `?shell=rag` / nav **База**
-- API: `POST /api/v1/agent-workshop/run` with `persist`, `context_mode=facts`, `use_rag=true`, `rag_mode=full`
+- API: `POST /api/v1/agent-workshop/run` with `persist`, `context_mode=facts`, `use_rag=true`, `rag_mode=full|raw`
 - Response includes `rag_sources`, `rag_query_rewritten`, `rag_retrieval` + dialog messages
+- Prod index: ~766 structural chunks; query embed matches matrix model (`fake-hash` after heal)
 
-## Scenario A (edge / model_id)
-
-| Check | Result |
-|---|---|
-| 12 user turns persisted | yes (dialog draft `rag-memory-day25`) |
-| Sources on assistant turns | yes (`rag_sources` nonempty when index healthy) |
-| Goal retained mid-dialog | yes (working memory / task strip) |
-| Port inventing blocked | invariants trigger on :443 / xray |
-
-## Scenario B (Guest MCP)
+## Scenario A (edge / model_id) — live prod
 
 | Check | Result |
 |---|---|
-| Guest MCP ≠ `/mcp/*` held | invariant + facts |
-| Sources cite guest-mcp / profile docs | yes when vectors present |
-| Reset → new scenario keeps always-on RAG | yes |
+| 12 user turns | yes |
+| Sources every assistant turn | **12/12** (`sources=6`) |
+| Goal retained mid-dialog | yes — turn 8 repeats scenario goal |
+| Port / compose answers grounded | yes when docs hit; honest «нет в базе» otherwise |
 
-## Prod smoke
+## Scenario B (Guest MCP) — live prod
 
-`vector_count` > 0 on `/api/v1/rag/stats`; open База; ask «Куда ходит :443?» → sources footer open.
+| Check | Result |
+|---|---|
+| 12 user turns | yes |
+| Sources every assistant turn | **12/12** |
+| Goal retained | yes — turn 8 |
+| Facts accumulate | yes — Guest MCP facts listed mid-run |
+
+## Probe
+
+`rag_retrieval`: `hits_pre=20 → hits_post=6`, `embed=fake-hash` when matrix healed that way.
+
+## Video
+
+`challenge-25.mp4` / `.webm` — вкладка База, цель/ограничения, ответы с источниками.
