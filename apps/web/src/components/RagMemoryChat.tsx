@@ -126,34 +126,46 @@ export function RagMemoryChat() {
     (async () => {
       try {
         setBootHint("Ставим цель задачи…");
-        await postAgentTaskEvent({
-          event: "start",
-          clientDraftId: DRAFT_ID,
-          goal: DEFAULT_GOAL,
-          step: "собрать факты из базы",
-          expectedAction: "отвечать с источниками RAG",
-          dialogName: DEFINITION.name,
-          dialogSystemPrompt: DEFINITION.system_prompt,
-        });
+        try {
+          await postAgentTaskEvent({
+            event: "start",
+            clientDraftId: DRAFT_ID,
+            goal: DEFAULT_GOAL,
+            step: "собрать факты из базы",
+            expectedAction: "отвечать с источниками RAG",
+            dialogName: DEFINITION.name,
+            dialogSystemPrompt: DEFINITION.system_prompt,
+          });
+        } catch {
+          /* already started on this draft — continue */
+        }
         setBootHint("Фиксируем ограничения…");
-        await postAgentInvariants({
-          event: "add",
-          clientDraftId: DRAFT_ID,
-          kind: "architecture",
-          statement: "Не выдумывать порты и путь :443 — только из базы / deploy docs.",
-          triggers: [":443", "порт", "xray", "nginx"],
-          dialogName: DEFINITION.name,
-          dialogSystemPrompt: DEFINITION.system_prompt,
-        });
-        await postAgentInvariants({
-          event: "add",
-          clientDraftId: DRAFT_ID,
-          kind: "decision",
-          statement: "Guest MCP ≠ стендовый /mcp/*.",
-          triggers: ["Guest MCP", "guest mcp", "/mcp"],
-          dialogName: DEFINITION.name,
-          dialogSystemPrompt: DEFINITION.system_prompt,
-        });
+        for (const inv of [
+          {
+            kind: "architecture",
+            statement: "Не выдумывать порты и путь :443 — только из базы / deploy docs.",
+            triggers: [":443", "порт", "xray", "nginx"],
+          },
+          {
+            kind: "decision",
+            statement: "Guest MCP ≠ стендовый /mcp/*.",
+            triggers: ["Guest MCP", "guest mcp", "/mcp"],
+          },
+        ] as const) {
+          try {
+            await postAgentInvariants({
+              event: "add",
+              clientDraftId: DRAFT_ID,
+              kind: inv.kind,
+              statement: inv.statement,
+              triggers: [...inv.triggers],
+              dialogName: DEFINITION.name,
+              dialogSystemPrompt: DEFINITION.system_prompt,
+            });
+          } catch {
+            /* duplicate invariant ok */
+          }
+        }
         if (!cancelled) {
           await refreshMemory();
           setBootHint("");
