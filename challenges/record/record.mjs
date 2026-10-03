@@ -1906,6 +1906,16 @@ async function challenge21(page) {
   await page.getByRole("button", { name: /Отправить|Send/i }).click();
   await page.locator(".turn.assistant .badge").last().waitFor({ timeout: 180_000 });
   await pauseOn(page.locator(".turn.assistant").last(), 9000);
+  await showRecordCard(page, {
+    day: "День 21",
+    title: "MCP не трогаем",
+    beat: "Вкладка MCP и дни 16–20 остаются. Этот день — только живой выбор в чате.",
+    hold: 5000,
+  });
+  await page.getByRole("button", { name: /^MCP$/i }).click().catch(() => {});
+  await settle(page, 2500);
+  await page.getByRole("button", { name: /^Чат$/i }).click().catch(() => {});
+  await hideRecordCard(page);
 }
 
 async function openChatFresh(page) {
@@ -1963,22 +1973,24 @@ async function challenge22(page) {
   await showRecordCard(page, {
     day: "День 22 · индекс",
     title: "База знаний стенда",
-    beat: "Профиль → чанки / стратегия. fixed 620 · structural 761.",
+    beat: "Профиль → чанки / стратегия. Сравнение: fixed 620 · structural 761.",
     hold: 7000,
   });
   await page.getByRole("button", { name: /Открыть профиль|Профиль/i }).first().click();
   await page.locator(".profile-drawer").waitFor({ timeout: 15_000 });
-  await pauseOn(page.locator(".profile-rag-stand, .profile-drawer"), 8000);
+  await pauseOn(page.locator(".profile-rag-stand, .profile-drawer"), 9000);
   await page.getByRole("button", { name: /Закрыть/i }).first().click().catch(() => {});
   await settle(page, 600);
   await openComposerSettings(page);
   await showRecordCard(page, {
     day: "День 22",
-    title: "Две стратегии чанкинга",
-    beat: "fixed 800/120 → 620 чанков · structural → 761 · метаданные source/title/section.",
-    hold: 9000,
+    title: "Две стратегии + meta",
+    beat: "fixed 800/120 → 620 · structural → 761 · meta: source / title / section / chunk_id.",
+    hold: 10000,
   });
   await pauseOn(page.locator(".composer-settings"), 7000);
+  const upload = page.getByRole("button", { name: /Добавить в базу/i });
+  if ((await upload.count()) > 0) await pauseOn(upload.first(), 4000);
   await hideRecordCard(page);
 }
 
@@ -2017,6 +2029,17 @@ async function challenge23(page) {
     await pauseOn(sources, 9000);
   }
   await pauseOn(page.locator(".turn.assistant").last(), 7000);
+  await openComposerSettings(page);
+  await showRecordCard(page, {
+    day: "День 23",
+    title: "Upload в базу",
+    beat: "«Добавить в базу» — свой файл рядом с галочкой RAG.",
+    hold: 5000,
+  });
+  const upload23 = page.getByRole("button", { name: /Добавить в базу/i });
+  if ((await upload23.count()) > 0) await pauseOn(upload23.first(), 5000);
+  else await pauseOn(page.locator(".composer-settings"), 4000);
+  await hideRecordCard(page);
 }
 
 async function challenge24(page) {

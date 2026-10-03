@@ -2,7 +2,7 @@
 
 Корпус (compose): `docs/` + `README.md` + `AGENTS.md` + `CLAUDE.md` → **58** файлов.  
 Прод stats: `GET /api/v1/rag/stats` → structural **761** чанков (совпадает с таблицей).  
-Видео: `challenge-22.mp4` (UI: Профиль / настройки + оверлей цифр из этой таблицы).
+Видео: `challenge-22.mp4` (Профиль → stats · оверлей fixed/structural · «Добавить в базу»).
 
 ## Сравнение стратегий
 
