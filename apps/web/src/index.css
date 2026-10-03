@@ -9255,3 +9255,149 @@ textarea {
     font-size: 1rem;
   }
 }
+
+/* —— Day 25: RAG + task memory mini-chat —— */
+.app--rag .app-main {
+  overflow: auto;
+}
+
+.rag-memory-board {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.25rem 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.rag-memory-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.rag-memory-top h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.rag-memory-sub {
+  margin: 0;
+  max-width: 40rem;
+  color: var(--muted, #6b7280);
+  line-height: 1.45;
+}
+
+.rag-memory-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 1rem;
+  min-height: 0;
+}
+
+@media (max-width: 820px) {
+  .rag-memory-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rag-memory-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+}
+
+.rag-memory-side h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b7280);
+}
+
+.rag-memory-side p,
+.rag-memory-side li {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.rag-memory-side ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.rag-memory-meta {
+  color: var(--muted, #6b7280);
+  font-size: 0.85rem;
+}
+
+.rag-memory-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 420px;
+}
+
+.rag-memory-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  min-height: 320px;
+  max-height: min(62vh, 640px);
+}
+
+.rag-memory-turn {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border, #e5e7eb) 80%, transparent);
+  background: var(--surface, #fff);
+}
+
+.rag-memory-turn--user {
+  background: color-mix(in srgb, #1a4a5c 8%, transparent);
+}
+
+.rag-memory-turn header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted, #6b7280);
+}
+
+.rag-memory-body {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.rag-memory-compose {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.rag-memory-compose textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+}

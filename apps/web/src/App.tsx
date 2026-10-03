@@ -15,6 +15,7 @@ import { McpCatalog } from "./components/McpCatalog";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
 import { AuthPanel } from "./components/AuthPanel";
+import { RagMemoryChat } from "./components/RagMemoryChat";
 import { BenchmarksBoard } from "./components/BenchmarksBoard";
 import { Chat } from "./components/Chat";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -38,7 +39,8 @@ export default function App() {
       mode === "graph" ||
       mode === "benchmarks" ||
       mode === "battle" ||
-      mode === "mcp"
+      mode === "mcp" ||
+      mode === "rag"
     ) {
       setSidebarOpen(false);
     }
@@ -128,6 +130,7 @@ export default function App() {
   const inBenchmarks = shellMode === "benchmarks";
   const inBattle = shellMode === "battle";
   const inMcp = shellMode === "mcp";
+  const inRag = shellMode === "rag";
   const showChatChrome = shellMode === "chat";
   const shellLabel =
     shellMode === "agents"
@@ -140,12 +143,14 @@ export default function App() {
             ? "Битва"
             : shellMode === "mcp"
               ? "MCP"
-              : "Чат";
+              : shellMode === "rag"
+                ? "База"
+                : "Чат";
 
   return (
     <DebugProvider>
       <div
-        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}${inMcp ? " app--mcp" : ""}`}
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}${inMcp ? " app--mcp" : ""}${inRag ? " app--rag" : ""}`}
       >
         {showChatChrome ? (
           <SessionSidebar
@@ -176,7 +181,7 @@ export default function App() {
               <span
                 className="dot"
                 data-state={
-                  inAgents || inGraph || inBenchmarks || inBattle || inMcp || session
+                  inAgents || inGraph || inBenchmarks || inBattle || inMcp || inRag || session
                     ? "online"
                     : "offline"
                 }
@@ -247,6 +252,15 @@ export default function App() {
               >
                 MCP
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "rag"}
+                title="Мини-чат: база знаний + источники + память задачи"
+                onClick={() => setMode("rag")}
+              >
+                База
+              </button>
             </nav>
 
             <AuthPanel
@@ -277,6 +291,8 @@ export default function App() {
             <AgentBattle />
           ) : inMcp ? (
             <McpCatalog />
+          ) : inRag ? (
+            <RagMemoryChat />
           ) : (
             <>
               {(booting || (!session && !error)) && (

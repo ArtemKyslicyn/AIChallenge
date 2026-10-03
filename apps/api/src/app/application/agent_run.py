@@ -50,6 +50,7 @@ from app.domain.personalization import (
     get_expert_lens,
 )
 from app.domain.ports import AgentDialogRepository, ChatRouter
+from app.domain.rag import RagClient, format_rag_system_context
 from app.domain.task_state import (
     build_skip_refusal,
     find_task_skip_conflicts,
@@ -85,6 +86,11 @@ class AgentRunOutcome:
     invariant_conflict: bool = False
     task_skip_conflict: bool = False
     mcp_calls: tuple[McpToolCall, ...] = ()
+    #: Day 25 — RAG hits for the UI (always filled when use_rag was requested).
+    rag_sources: tuple[dict[str, object], ...] = ()
+    rag_embed_model: str | None = None
+    rag_query_rewritten: str | None = None
+    rag_retrieval: dict[str, object] | None = None
 
 
 def merge_system_extra(system_prompt: str, system_extra: str) -> str:
@@ -411,6 +417,10 @@ async def run_agent_with_dialog(
     expert_lens_id: str | None = None,
     task_just_resumed: bool = False,
     mcp_runner: McpToolRunner | None = None,
+    use_rag: bool = False,
+    rag_client: RagClient | None = None,
+    rag_mode: str | None = "full",
+    rag_top_k: int = 6,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -683,6 +693,37 @@ async def run_agent_with_dialog(
     if memory_extra:
         system_extra = f"{system_extra}\n\n{memory_extra}".strip() if system_extra else memory_extra
 
+    rag_sources: tuple[dict[str, object], ...] = ()
+    rag_embed_model: str | None = None
+    rag_query_rewritten: str | None = None
+    rag_retrieval: dict[str, object] | None = None
+    if use_rag and rag_client is not None:
+        try:
+            rag_result = await rag_client.search(
+                message.strip(), top_k=rag_top_k, mode=rag_mode
+            )
+            rag_block = format_rag_system_context(rag_result)
+            system_extra = (
+                f"{system_extra}\n\n{rag_block}".strip() if system_extra else rag_block
+            )
+            rag_sources = tuple(
+                {
+                    "chunk_id": h.chunk_id,
+                    "source": h.source,
+                    "title": h.title,
+                    "section": h.section,
+                    "strategy": h.strategy,
+                    "score": h.score,
+                }
+                for h in rag_result.hits
+            )
+            rag_embed_model = rag_result.embed_model
+            rag_query_rewritten = rag_result.query_rewritten
+            rag_retrieval = rag_result.retrieval
+        except Exception:
+            # Keep the turn alive; UI still shows an empty sources block.
+            rag_retrieval = {"mode": rag_mode or "full", "error": "search_failed"}
+
     if expert_lens_id:
         dialog.active_lens_id = lens.id
     elif dialog.active_lens_id is None and lens.id != "neutral":
@@ -706,6 +747,10 @@ async def run_agent_with_dialog(
         compression=compression,
         strategy=meta if mode != ContextMode.NONE else meta,
         mcp_calls=outcome.mcp_calls,
+        rag_sources=rag_sources,
+        rag_embed_model=rag_embed_model,
+        rag_query_rewritten=rag_query_rewritten,
+        rag_retrieval=rag_retrieval,
     )
 
     user_msg = AgentDialogMessage(
