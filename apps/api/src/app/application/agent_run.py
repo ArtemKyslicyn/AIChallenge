@@ -699,13 +699,9 @@ async def run_agent_with_dialog(
     rag_retrieval: dict[str, object] | None = None
     if use_rag and rag_client is not None:
         try:
-            rag_result = await rag_client.search(
-                message.strip(), top_k=rag_top_k, mode=rag_mode
-            )
+            rag_result = await rag_client.search(message.strip(), top_k=rag_top_k, mode=rag_mode)
             rag_block = format_rag_system_context(rag_result)
-            system_extra = (
-                f"{system_extra}\n\n{rag_block}".strip() if system_extra else rag_block
-            )
+            system_extra = f"{system_extra}\n\n{rag_block}".strip() if system_extra else rag_block
             rag_sources = tuple(
                 {
                     "chunk_id": h.chunk_id,

@@ -51,7 +51,9 @@ class _FakeRouter:
 
 
 class _StubRag:
-    async def search(self, query: str, *, top_k: int = 6, mode: str | None = None) -> RagSearchResult:
+    async def search(
+        self, query: str, *, top_k: int = 6, mode: str | None = None
+    ) -> RagSearchResult:
         hit = RagChunkHit(
             chunk_id="c1",
             text="Публичный :443 → xray Reality → nginx :8443 → web :18080.",
