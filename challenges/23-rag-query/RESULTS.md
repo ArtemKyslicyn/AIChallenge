@@ -24,7 +24,7 @@
 | 3 | Источники видны (title/section/source/chunk_id) | UI details «Источники базы» | **PASS** |
 | 4 | `model_id` на ответе | badge | **PASS** |
 | 5 | 10 контрольных вопросов подготовлены | `QUESTIONS.md` | **PASS** |
-| 6 | Upload файла в базу | UI: «Добавить в базу» / Профиль; код `POST …/rag/documents` | **PASS** (UI path; в ролике акцент на off/on) |
+| 6 | Upload файла в базу | видео: кнопка «Добавить в базу»; код `POST …/rag/documents` | **PASS** |
 | 7 | Внешний RAG ≠ stand `/mcp/*` | Guest MCP docs; Профиль → Подключения | documented |
 
 ## Как повторить
