@@ -458,7 +458,7 @@ async def run_workshop_agent(
                         title=str(s.get("title") or ""),
                         section=str(s.get("section") or ""),
                         strategy=str(s.get("strategy") or ""),
-                        score=float(s.get("score") or 0.0),
+                        score=float(s["score"]) if isinstance(s.get("score"), (int, float)) else 0.0,
                     )
                     for s in outcome.rag_sources
                 ],
