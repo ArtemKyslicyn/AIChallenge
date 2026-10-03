@@ -1,27 +1,30 @@
-# Challenge 24 — filter / rewrite comparison
+# День 24 — RESULTS (чеклист)
 
-Defaults: `top_k_pre=20`, `top_k_post=6`, `min_score=0.18`.
+Видео: `challenge-24.mp4` (три режима подряд на одном вопросе).  
+Код: `apps/rag` `rerank.py` + pipeline modes; UI select «Режим базы».
 
-| Mode | Rewrite | Threshold | Rerank |
-|---|---|---|---|
-| raw | no | no | no (truncate) |
-| filtered | no | yes | no |
-| full | yes | yes | heuristic overlap |
-
-## Example query
+## Пример запроса
 
 «пожалуйста расскажи что такое Guest MCP»
 
-Measured on compose-equivalent corpus (FakeEmbedder; API embeds shift absolute scores):
+| Mode | hits_pre → hits_post | Rewrite | Что видно в UI | Статус |
+|---|---|---|---|---|
+| raw | 20 → 6 | как есть | источники, mode=raw | **PASS** |
+| filtered | 20 → ≤6 | как есть | порог; на fake-векторах часто = truncate | **PASS*** |
+| full | 20 → 6 | `Guest MCP … Streamable HTTP` | строка «Запрос после rewrite» + rerank | **PASS** |
 
-| Mode | hits_pre → hits_post | notes |
-|---|---|---|
-| raw | 20 → 6 | top scores ≈ 0.58…0.45; filler query kept as-is |
-| filtered | 20 → 6 | all 20 ≥ 0.18 on fake vectors → same truncate; drops noise when API scores are wider |
-| full | 20 → 6 | rewrite → `Guest MCP … Streamable HTTP`; rerank boosts title/section overlap (top ≈ 0.65) |
+\* Filter заметен сильнее на API-эмбеддингах (шире разброс scores). На `fake-hash` heal все top-20 часто ≥ 0.18 — тогда filtered ≈ raw; факт зафиксирован.
 
-## Demo path
+## Чеклист задания
 
-1. Ещё → Использовать базу → режим raw → вопрос → источники (pre→post).
-2. Тот же вопрос в filtered, затем full — сравнить dropped / rewrite строку.
-3. Добавить документ через «Добавить в базу» в Ещё.
+| # | Требование | Доказательство | Статус |
+|---|---|---|---|
+| 1 | Режим raw | видео + таблица | **PASS** |
+| 2 | Режим filtered (порог) | код `min_score` + UI option | **PASS** |
+| 3 | Режим full = rewrite + filter + rerank | rewrite string в sources UI | **PASS** |
+| 4 | pre→post в источниках | «было N → K» в details | **PASS** |
+| 5 | Upload в базу рядом с режимами | UI «Добавить в базу» (Ещё / Профиль) | **PASS** (path) |
+
+## Как повторить
+
+Настройки → Использовать базу → сменить Режим базы → один и тот же вопрос → сравнить блок источников.

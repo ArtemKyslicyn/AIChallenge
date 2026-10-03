@@ -1891,15 +1891,21 @@ async function challenge21(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
     day: "День 21",
-    title: "Сборка: живой выбор в обычном чате",
-    beat: "Чипы из пульса стенда. MCP-вкладка не нужна, чтобы выбрать модель.",
-    hold: 8000,
+    title: "Живой выбор в обычном чате",
+    beat: "Карточка пульса → Писать {модель} → ответ с тем же model_id.",
+    hold: 7000,
   });
   await takeLivePulse(page, pulse);
   await pickLiveChip(page);
-  await pauseOn(page.locator(".live-who"), 8000);
-  await pauseOn(page.locator(".composer-model-picker").first(), 6000);
+  await pauseOn(page.locator(".live-who"), 5000);
+  await pauseOn(page.locator(".composer-model-picker").first(), 4000);
   await hideRecordCard(page);
+  const box = page.locator("textarea").last();
+  await box.fill("Коротко: назови свой model_id.");
+  await settle(page, 500);
+  await page.getByRole("button", { name: /Отправить|Send/i }).click();
+  await page.locator(".turn.assistant .badge").last().waitFor({ timeout: 180_000 });
+  await pauseOn(page.locator(".turn.assistant").last(), 9000);
 }
 
 async function openChatFresh(page) {

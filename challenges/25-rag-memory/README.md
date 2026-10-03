@@ -1,23 +1,30 @@
-# Challenge 25 — мини-чат: RAG + источники + память задачи
+# День 25 — мини-чат: RAG + источники + память задачи
 
-Production-like shell: `?shell=rag` / вкладка **База**.
+**Артефакты:** `challenge-25.mp4` · `SCENARIOS.md` · `RESULTS.md` · `VIDEO.md` · `run.py`
 
-## Что внутри
+## Требование задания
 
-| Слой | Откуда |
+Мини-чат (веб), который:
+
+1. хранит **историю** диалога  
+2. на каждый вопрос ищет контекст в **RAG**  
+3. отвечает с учётом найденного  
+4. **всегда** показывает источники  
+5. держит **память задачи**: цель · уточнения (facts) · ограничения (invariants)
+
+Проверка: **2** длинных сценария по **10–15** сообщений без потери цели.
+
+## Где смотреть
+
+| Что | Где |
 |---|---|
-| История диалога | `agent_dialogs` (workshop persist) |
-| Always-on RAG | `use_rag` на `/agent-workshop/run` → sidecar `apps/rag` |
-| Источники | `rag_sources` в ответе run; UI блок под каждым ответом |
-| Цель / этап | `WorkingMemory.goal` + `TaskState` |
-| Уточнения | sticky `facts` (`context_mode=facts`) |
-| Ограничения | `invariants` |
+| UI | https://aichallenge.arcilite.ru/?shell=rag · вкладка **База** |
+| История | `agent_dialogs` (workshop persist, draft `rag-memory-day25`) |
+| Always-on RAG | `use_rag=true` на `/agent-workshop/run` |
+| Источники | блок под каждым ответом |
+| Цель / facts / ограничения | левая колонка UI |
+| Полный прогон 12+12 | `python3 challenges/25-rag-memory/run.py --scenario a\|b` |
 
-## Сценарии
+## Чеклист
 
-Два длинных прогона (10–15 ходов): `SCENARIOS.md`.  
-Проверка: цель не теряется, у ответов есть источники.
-
-## Видео
-
-Скрипт: `VIDEO.md`. Запись: `RECORD_ONLY=25 node challenges/record/record.mjs`.
+См. `RESULTS.md`.

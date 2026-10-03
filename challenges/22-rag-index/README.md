@@ -1,15 +1,23 @@
-# День 21 (сдача) — индексация документов
+# День 22 — индексация документов (chunking ×2 + meta)
 
-Папка: `22-rag-index` (номер 21 занят live-models).
+**Папка:** `22-rag-index` (номер 21 занят live-models).  
+**Артефакты:** `challenge-22.mp4` · `RESULTS.md` · `VIDEO.md`
 
-## Что сделано
+## Требование задания
 
-- Сервис [`apps/rag`](../../apps/rag): chunking **fixed** + **structural**, эмбеддинги API/fake (+ local optional), SQLite + numpy vectors, метаданные `source/title/section/chunk_id/strategy`.
-- Compose service `rag` на `127.0.0.1:18766`, corpus: `docs/`, README, AGENTS, CLAUDE.
-- Сравнение стратегий: `RESULTS.md`.
-- Load smoke: `scripts/rag-load-smoke.sh`.
+Индексация корпуса с **двумя** стратегиями чанкинга, метаданные чанков, сравнение чисел. Сервис в Docker, эмбеддинги через API (local — admin-off).
 
-## Видео
+## Где смотреть
 
-Снять: индекс → stats → два strategy reindex → сравнение в RESULTS → (опционально) load smoke.
-Не затирать чужие `challenge-*.mp4`.
+| Что | Где |
+|---|---|
+| Сервис | `apps/rag` · compose `rag` · loopback `:18766` |
+| Стратегии | `fixed` (800/120) · `structural` (заголовки/файлы) |
+| Метаданные | `source`, `title`, `section`, `chunk_id`, `strategy` |
+| Цифры сравнения | `RESULTS.md` |
+| UI stats | Профиль → «База знаний стенда» / вкладка База |
+| Load | `./scripts/rag-load-smoke.sh` |
+
+## Чеклист
+
+См. `RESULTS.md`.
