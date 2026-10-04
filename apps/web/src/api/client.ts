@@ -2049,11 +2049,37 @@ export function patchRagSettings(
 /** Upload can embed many chunks — longer than default JSON timeout, still hard-capped. */
 const RAG_UPLOAD_TIMEOUT_MS = 90_000;
 
+export interface RagUploadResultDto {
+  added_chunks?: number;
+  strategy?: string;
+  filename?: string;
+  title?: string;
+  preview?: string;
+  chunk_ids?: string[];
+  scope?: string;
+  owner_id?: string;
+}
+
+export interface RagDocumentListItemDto {
+  source: string;
+  title: string;
+  scope: string;
+  owner_id: string;
+  strategy: string;
+  chunk_count: number;
+  preview: string;
+}
+
+export interface RagDocumentListDto {
+  documents: RagDocumentListItemDto[];
+  count: number;
+}
+
 export async function uploadRagDocument(
   session: SessionCredentials,
   file: File,
   signal?: AbortSignal,
-): Promise<{ added_chunks?: number; strategy?: string }> {
+): Promise<RagUploadResultDto> {
   const store = loadStore();
   const owned = store.items[session.id];
   if (!owned || owned.access_token !== session.access_token) {
@@ -2080,7 +2106,7 @@ export async function uploadRagDocument(
   if (!response.ok) {
     throw new ApiError(await readError(response), response.status);
   }
-  return (await response.json()) as { added_chunks?: number; strategy?: string };
+  return (await response.json()) as RagUploadResultDto;
 }
 
 /** Upload using the browser's owned session token for ``sessionId``. */
@@ -2088,7 +2114,7 @@ export async function uploadRagDocumentForSession(
   sessionId: string,
   file: File,
   signal?: AbortSignal,
-): Promise<{ added_chunks?: number; strategy?: string }> {
+): Promise<RagUploadResultDto> {
   const store = loadStore();
   const owned = store.items[sessionId];
   if (!owned?.access_token) {
@@ -2099,4 +2125,44 @@ export async function uploadRagDocumentForSession(
     file,
     signal,
   );
+}
+
+export async function listSessionRagDocuments(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<RagDocumentListDto> {
+  const store = loadStore();
+  const owned = store.items[sessionId];
+  if (!owned?.access_token) {
+    throw new ApiError("Сессия недоступна в этом браузере.", 403);
+  }
+  return request<RagDocumentListDto>(
+    `/sessions/${encodeURIComponent(sessionId)}/rag/documents`,
+    {
+      headers: {
+        "X-Session-Token": owned.access_token,
+        ...visitorHeaders(),
+      },
+      signal,
+    },
+  );
+}
+
+/** Admin: all stand + session documents (requires allowlisted account). */
+export async function listAllRagDocuments(
+  signal?: AbortSignal,
+): Promise<RagDocumentListDto> {
+  return request<RagDocumentListDto>("/rag/documents", { signal });
+}
+
+/** Browser events so Profile / Composer can push tool cards into Chat. */
+export type RagIngestedDetail = RagUploadResultDto & { filename: string };
+export type RagListDocsDetail = { all?: boolean };
+
+export function emitRagIngested(detail: RagIngestedDetail): void {
+  window.dispatchEvent(new CustomEvent("aichallenge:rag-ingested", { detail }));
+}
+
+export function emitRagListDocs(detail: RagListDocsDetail = {}): void {
+  window.dispatchEvent(new CustomEvent("aichallenge:rag-list-docs", { detail }));
 }

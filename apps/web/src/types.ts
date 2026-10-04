@@ -103,7 +103,29 @@ export interface TempStudioTurn {
   judgeLoading?: boolean;
 }
 
-export type ThreadItem = Turn | CompareTurn | LabTurn | TempStudioTurn;
+/** Expandable RAG tool card in the chat thread (upload / list docs). */
+export interface RagDocumentDto {
+  source: string;
+  title: string;
+  scope: string;
+  owner_id: string;
+  strategy: string;
+  chunk_count: number;
+  preview: string;
+}
+
+export interface RagToolTurn {
+  kind: "rag_tool";
+  id: string;
+  tool: "rag_ingest" | "rag_list_documents";
+  title: string;
+  summary: string;
+  preview?: string;
+  documents?: RagDocumentDto[];
+  open?: boolean;
+}
+
+export type ThreadItem = Turn | CompareTurn | LabTurn | TempStudioTurn | RagToolTurn;
 
 export function isCompareTurn(item: ThreadItem): item is CompareTurn {
   return "kind" in item && item.kind === "compare";
@@ -117,8 +139,17 @@ export function isTempStudioTurn(item: ThreadItem): item is TempStudioTurn {
   return "kind" in item && item.kind === "temp_studio";
 }
 
+export function isRagToolTurn(item: ThreadItem): item is RagToolTurn {
+  return "kind" in item && item.kind === "rag_tool";
+}
+
 export function isTurn(item: ThreadItem): item is Turn {
-  return !isCompareTurn(item) && !isLabTurn(item) && !isTempStudioTurn(item);
+  return (
+    !isCompareTurn(item) &&
+    !isLabTurn(item) &&
+    !isTempStudioTurn(item) &&
+    !isRagToolTurn(item)
+  );
 }
 
 export const EMPTY_PROBE_SLOT: ProbeSlotState = {

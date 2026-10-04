@@ -25,16 +25,13 @@
 | [`24-rag-rerank/`](24-rag-rerank/) | raw / filtered / full | **Чат · Режим базы** | **RESULTS** · video |
 | [`25-rag-memory/`](25-rag-memory/) | Мини-чат RAG + память задачи | **База** `?shell=rag` | **RESULTS** · SCENARIOS · run · video |
 
-## Как принимать дни 21–25
+## Неделя 21–25 (живой выбор + RAG)
 
-В каждой папке `RESULTS.md` — таблица **Требование → доказательство → PASS**.  
-Видео = короткий UI-демо; длинные прогоны (день 25) — `run.py`.
+Текст домашек одной таблицей: [`WEEK-RAG.md`](WEEK-RAG.md).  
+В папке дня: **README** = что сделать · **RESULTS** = PASS · **VIDEO** = кадры.
 
 ```bash
-# видео
 cd challenges/record && RECORD_ONLY=21,22,23,24,25 npm run record
-
-# день 25 — два сценария по 12 ходов
 python3 challenges/25-rag-memory/run.py --scenario a --limit 12
 python3 challenges/25-rag-memory/run.py --scenario b --limit 12
 ```

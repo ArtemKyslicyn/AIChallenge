@@ -361,6 +361,7 @@ async def send_user_message_and_stream(
     rag_client: RagClient | None = None,
     rag_top_k: int = 6,
     rag_mode: str | None = None,
+    rag_owner_id: str | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     effective_chat_mode = chat_mode or "single"
@@ -413,7 +414,12 @@ async def send_user_message_and_stream(
 
     if use_rag and rag_client is not None:
         try:
-            rag_result = await rag_client.search(text, top_k=rag_top_k, mode=rag_mode)
+            rag_result = await rag_client.search(
+                text,
+                top_k=rag_top_k,
+                mode=rag_mode,
+                owner_id=rag_owner_id,
+            )
             rag_system = format_rag_system_context(rag_result)
             turns = [
                 ChatMessage(role=MessageRole.SYSTEM, content=rag_system),

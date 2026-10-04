@@ -80,6 +80,52 @@ async def test_add_document_appends_without_full_rebuild(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_list_documents_and_search_owner_filter(tmp_path: Path) -> None:
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=16,
+    )
+    store = VectorStore(tmp_path)
+    pipe = RagPipeline(settings, store, FakeEmbedder(16))
+    await pipe.add_document(
+        text="# Stand\n\nPublic stand corpus about Reality ports.",
+        source="stand.md",
+        title="stand",
+        strategy="structural",
+        scope="stand",
+        owner_id="",
+    )
+    await pipe.add_document(
+        text="# Mine\n\nPrivate notes about my orange widget.",
+        source="mine.md",
+        title="mine",
+        strategy="structural",
+        scope="session",
+        owner_id="user-a",
+    )
+    await pipe.add_document(
+        text="# Other\n\nSecret other-user document about purple widget.",
+        source="other.md",
+        title="other",
+        strategy="structural",
+        scope="session",
+        owner_id="user-b",
+    )
+    mine = pipe.list_documents(owner_id="user-a", all_owners=False)
+    assert mine["count"] == 1
+    assert mine["documents"][0]["source"] == "mine.md"  # type: ignore[index]
+    admin = pipe.list_documents(all_owners=True)
+    assert int(admin["count"] or 0) >= 3
+    hits_a = await pipe.search("purple widget", top_k=5, mode="raw", owner_id="user-a")
+    sources_a = {h.chunk.source for h in hits_a}
+    assert "other.md" not in sources_a
+    hits_b = await pipe.search("purple widget", top_k=5, mode="raw", owner_id="user-b")
+    sources_b = {h.chunk.source for h in hits_b}
+    assert "other.md" in sources_b or any("purple" in h.chunk.text.lower() for h in hits_b)
+
+
+@pytest.mark.asyncio
 async def test_rebuild_falls_back_when_embedder_hangs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Shrink batch timeout so the test finishes quickly.
     monkeypatch.setattr("aichallenge_rag.pipeline.EMBED_BATCH_TIMEOUT_S", 0.05)

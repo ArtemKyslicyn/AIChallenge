@@ -1,4 +1,6 @@
-# День 22 — RESULTS (чеклист)
+# День 22 — доказательства сдачи
+
+Домашка: [`README.md`](README.md).
 
 Корпус (compose): `docs/` + `README.md` + `AGENTS.md` + `CLAUDE.md` → **58** файлов.  
 Прод stats: `GET /api/v1/rag/stats` → structural **761** чанков (совпадает с таблицей).  
@@ -13,9 +15,9 @@
 | indexed_files | 58 | 58 |
 | meta: source / title / section / chunk_id / strategy | yes | yes |
 
-## Чеклист задания
+## Чеклист
 
-| # | Требование | Доказательство | Статус |
+| # | Критерий | Где видно | Статус |
 |---|---|---|---|
 | 1 | Индексация корпуса в Docker-сервисе | `apps/rag` + compose `rag`; прод `total_chunks≥761` | **PASS** |
 | 2 | Две стратегии чанкинга | таблица fixed vs structural выше | **PASS** |

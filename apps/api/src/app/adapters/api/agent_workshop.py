@@ -441,6 +441,7 @@ async def run_workshop_agent(
                 rag_client=container.rag_client,
                 rag_mode=payload.rag_mode,
                 rag_top_k=int(payload.rag_top_k or 6),
+                rag_owner_id=owner,
             )
             await db.commit()
             content = outcome.result.content

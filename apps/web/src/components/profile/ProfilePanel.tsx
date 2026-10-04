@@ -23,6 +23,8 @@ import {
   listModels,
   patchRagSettings,
   setAuthToken,
+  emitRagIngested,
+  emitRagListDocs,
   uploadRagDocumentForSession,
   type AuthUserDto,
   type ModelCatalogItemDto,
@@ -481,6 +483,10 @@ function RagStandSection({ sessionId }: { sessionId: string | null }) {
     try {
       const result = await uploadRagDocumentForSession(sessionId, file);
       setUploadHint(`Добавлено · +${result.added_chunks ?? 0} чанков`);
+      emitRagIngested({
+        ...result,
+        filename: result.filename || file.name,
+      });
       refreshStats();
     } catch (err) {
       setUploadHint(err instanceof Error ? err.message : "Ошибка загрузки");
@@ -508,6 +514,24 @@ function RagStandSection({ sessionId }: { sessionId: string | null }) {
         >
           Добавить документ
         </button>
+        <button
+          type="button"
+          className="composer-media-btn"
+          disabled={!sessionId || busy}
+          onClick={() => emitRagListDocs()}
+        >
+          Мои документы
+        </button>
+        {eligible ? (
+          <button
+            type="button"
+            className="composer-media-btn"
+            disabled={busy}
+            onClick={() => emitRagListDocs({ all: true })}
+          >
+            Все документы
+          </button>
+        ) : null}
         <input
           ref={fileRef}
           type="file"

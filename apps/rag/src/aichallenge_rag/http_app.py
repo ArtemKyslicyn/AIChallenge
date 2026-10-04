@@ -41,6 +41,7 @@ class SearchRequest(BaseModel):
     top_k_pre: int | None = Field(default=None, ge=1, le=64)
     top_k_post: int | None = Field(default=None, ge=1, le=32)
     min_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    owner_id: str | None = None
 
 
 class SettingsPatch(BaseModel):
@@ -167,6 +168,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             owner_id=owner_id,
         )
 
+    @app.get("/v1/documents")
+    async def list_documents(
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> dict[str, Any]:
+        return pipeline().list_documents(
+            owner_id=owner_id,
+            include_stand=include_stand,
+            all_owners=all_owners,
+        )
+
     @app.post("/v1/search")
     async def search(body: SearchRequest) -> dict[str, Any]:
         return await pipeline().search_payload(
@@ -176,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             top_k_pre=body.top_k_pre,
             top_k_post=body.top_k_post or body.top_k,
             min_score=body.min_score,
+            owner_id=body.owner_id,
         )
 
     @app.post("/v1/ask")
@@ -188,6 +202,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             top_k_pre=body.top_k_pre,
             top_k_post=body.top_k_post or body.top_k,
             min_score=body.min_score,
+            owner_id=body.owner_id,
         )
         hits = payload["hits"]
         assert isinstance(hits, list)
