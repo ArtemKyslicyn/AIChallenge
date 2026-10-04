@@ -128,6 +128,33 @@ async def test_list_documents_and_search_owner_filter(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ensure_vectors_force_reembeds_fake_matrix(tmp_path: Path) -> None:
+    """Stuck fake-hash matrix must rebuild when force=True (no silent no-op)."""
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=16,
+        embedding_model="text-embedding-3-small",
+    )
+    store = VectorStore(tmp_path)
+    pipe = RagPipeline(settings, store, FakeEmbedder(16))
+    await pipe.add_document(
+        text="# Ports\n\nPublic :443 terminates at Reality then nginx :8443.",
+        source="ports.md",
+        title="ports",
+        strategy="structural",
+        scope="stand",
+    )
+    assert store.stats()["embed_model"] == "fake-hash"
+    noop = await pipe.ensure_vectors()
+    assert noop["healed"] is False
+    forced = await pipe.ensure_vectors(force=True)
+    assert forced["healed"] is True
+    assert int(store.stats()["vector_count"] or 0) >= 1
+    store.close()
+
+
+@pytest.mark.asyncio
 async def test_rebuild_falls_back_when_embedder_hangs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -6,6 +6,7 @@ import {
   emitRagIngested,
   fetchRagAdminEligible,
   fetchRagStats,
+  healRag,
   listAllRagDocuments,
   listSessionRagDocuments,
   uploadRagDocumentForSession,
@@ -138,6 +139,30 @@ export function RagFloat({ sessionId, open: openProp, onOpenChange }: Props) {
     }
   };
 
+  const onForceHeal = async () => {
+    if (
+      !window.confirm(
+        "Пересобрать эмбеддинги через API? Это займёт несколько минут; поиск может временно просесть.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setHint("Пересобираем эмбеддинги…");
+    try {
+      const result = await healRag(true);
+      setHint(
+        `Heal: ${String(result.healed)} · embed ${result.embed_model || result.embed_model_runtime || "—"} · vectors ${result.vector_count ?? "—"}`,
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Heal не удался");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="debug-float-root rag-float-root">
       {!open && (
@@ -206,18 +231,30 @@ export function RagFloat({ sessionId, open: openProp, onOpenChange }: Props) {
             <p className="rag-float-stats">
               {stats?.disabled
                 ? "Сервис базы недоступен."
-                : `Чанков: ${stats?.total_chunks ?? "…"} · ${stats?.chunk_strategy ?? "—"} · embed ${stats?.embedding_provider ?? "—"} · vectors ${stats?.vector_count ?? "—"}`}
+                : `Чанков: ${stats?.total_chunks ?? "…"} · ${stats?.chunk_strategy ?? "—"} · embed ${stats?.embed_model || stats?.embedding_provider || "—"} · vectors ${stats?.vector_count ?? "—"}`}
             </p>
 
             {admin ? (
-              <label className="composer-toggle rag-float-admin-toggle">
-                <input
-                  type="checkbox"
-                  checked={showAll}
-                  onChange={(e) => setShowAll(e.target.checked)}
-                />
-                <span>Все документы (админ)</span>
-              </label>
+              <div className="rag-float-admin-row">
+                <label className="composer-toggle rag-float-admin-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showAll}
+                    onChange={(e) => setShowAll(e.target.checked)}
+                  />
+                  <span>Все документы (админ)</span>
+                </label>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy}
+                  onClick={() => void onForceHeal()}
+                >
+                  {stats?.embed_model === "fake-hash"
+                    ? "Пересобрать API-эмбеддинги"
+                    : "Force heal"}
+                </button>
+              </div>
             ) : null}
 
             <input

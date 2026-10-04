@@ -76,7 +76,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         async def _startup_heal() -> None:
             stats0 = store.stats()
+            stuck_fake = (
+                int(stats0.get("total_chunks") or 0) > 0
+                and str(stats0.get("embed_model") or "") == "fake-hash"
+                and settings.effective_provider() == "api"
+            )
             try:
+                if stuck_fake:
+                    # Long API re-embed of existing corpus — keep serving meanwhile.
+                    logger.info(
+                        "startup: matrix is fake-hash under API provider — force re-embed (%s chunks)",
+                        stats0.get("total_chunks"),
+                    )
+                    healed = await pipeline.ensure_vectors(force=True)
+                    logger.info("auto-reembed fake→api %s", healed)
+                    state["embedder"] = pipeline.embedder
+                    state["pipeline"] = pipeline
+                    return
                 async with asyncio.timeout(STARTUP_HEAL_BUDGET_S):
                     if int(stats0.get("total_chunks") or 0) == 0:
                         structural = await pipeline.reindex(strategy="structural")
@@ -136,10 +152,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def index(body: IndexRequest) -> dict[str, Any]:
         return await pipeline().reindex(strategy=body.strategy)
 
+    class HealRequest(BaseModel):
+        force: bool = False
+
     @app.post("/v1/heal")
-    async def heal() -> dict[str, Any]:
-        """Rebuild embeddings if chunks exist without a vector matrix."""
-        result = await pipeline().ensure_vectors()
+    async def heal(body: HealRequest | None = None) -> dict[str, Any]:
+        """Rebuild embeddings if missing, fake-stuck, or force=true."""
+        force = bool(body.force) if body is not None else False
+        result = await pipeline().ensure_vectors(force=force)
         state["embedder"] = state["pipeline"].embedder
         return {**result, **(await stats())}
 

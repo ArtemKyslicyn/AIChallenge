@@ -1,7 +1,11 @@
 # План пересъёмки недели 21–25
 
 Один проход: пять роликов, каждый закрывает свой `RESULTS.md` **кадрами**.  
-Прод: https://aichallenge.arcilite.ru/ (после деплоя с upload-карточками).
+Прод: https://aichallenge.arcilite.ru/
+
+**Перед съёмкой (гейт):** `GET /api/v1/rag/stats` → `embed_model` ≠ `fake-hash`, `embedding_provider=api`.  
+После деплоя rag сам force-пересобирает матрицу (~несколько минут). Пока `fake-hash` — день 23/24 не снимать.  
+LLM-флейки: `record.mjs` / `25-rag-memory/run.py` ретраят 400/502.
 
 ## Порядок и бюджет времени
 
@@ -135,8 +139,10 @@ VIDEO: [`25-rag-memory/VIDEO.md`](25-rag-memory/VIDEO.md).
 
 | Симптом | Что делать |
 |---------|------------|
+| `embed_model=fake-hash` | деплой rag (startup force re-embed) или админ «База» → «Пересобрать API-эмбеддинги» |
 | Нет `rag_ingest` | прод без деплоя upload UX → проверить `/api/v1/rag/stats`, задеплоить |
 | Саммари `local-preview` | probe/LLM; ручной дубль бита 23.3 |
 | Пустой пульс день 21 | «Снять пульс» ещё раз / другая live-модель |
 | День 25 без источников | индекс/heal; не снимать «пустые» ответы |
+| Таймаут / 400/502 LLM | авто-ретрай; иначе `RECORD_ONLY=<n>` ещё раз |
 | Таймаут одного дня | `RECORD_ONLY=<n>` только этот день |

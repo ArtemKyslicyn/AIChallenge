@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -49,19 +50,41 @@ def _lines_for(scenario: str) -> list[str]:
     return out
 
 
-def _request(base: str, path: str, payload: dict, visitor: str) -> dict:
+def _request(base: str, path: str, payload: dict, visitor: str, *, attempts: int = 3) -> dict:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        f"{base.rstrip('/')}{path}",
-        data=data,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "X-Visitor-Id": visitor,
-        },
-    )
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last: Exception | None = None
+    for i in range(1, attempts + 1):
+        req = urllib.request.Request(
+            f"{base.rstrip('/')}{path}",
+            data=data,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "X-Visitor-Id": visitor,
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read()[:200]
+            # Free-tier LLM flakes: retry transient upstream failures.
+            if exc.code in {400, 429, 500, 502, 503, 504} and i < attempts:
+                print(f"retry {i}/{attempts} http {exc.code}: {body!r}", file=sys.stderr)
+                time.sleep(2.0 * i)
+                last = exc
+                continue
+            print(f"FAIL http {exc.code}: {body!r}", file=sys.stderr)
+            raise
+        except urllib.error.URLError as exc:
+            if i < attempts:
+                print(f"retry {i}/{attempts} url: {exc}", file=sys.stderr)
+                time.sleep(2.0 * i)
+                last = exc
+                continue
+            raise
+    assert last is not None
+    raise last
 
 
 def main() -> int:
@@ -112,7 +135,10 @@ def main() -> int:
                 visitor,
             )
         except urllib.error.HTTPError as exc:
-            print(f"{i}. FAIL http {exc.code}: {exc.read()[:200]!r}", file=sys.stderr)
+            print(f"{i}. FAIL http {exc.code}", file=sys.stderr)
+            return 1
+        except urllib.error.URLError as exc:
+            print(f"{i}. FAIL url: {exc}", file=sys.stderr)
             return 1
         sources = body.get("rag_sources") or []
         model = body.get("model_id")

@@ -15,7 +15,7 @@
 | filtered | 20 → ≤6 | как есть | порог; на fake-векторах часто = truncate | **PASS*** |
 | full | 20 → 6 | `Guest MCP … Streamable HTTP` | строка «Запрос после rewrite» + rerank | **PASS** |
 
-\* Filter заметен сильнее на API-эмбеддингах (шире разброс scores). На `fake-hash` heal все top-20 часто ≥ 0.18 — тогда filtered ≈ raw; факт зафиксирован.
+\* Filter заметнее на API-эмбеддингах. Если `stats.embed_model=fake-hash` при `embedding_provider=api` — force heal (startup или «База» → пересобрать); иначе filtered часто ≈ raw.
 
 ## Чеклист
 
