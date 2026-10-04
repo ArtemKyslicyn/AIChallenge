@@ -1,15 +1,30 @@
-"""SQLite metadata + numpy vector matrix on disk."""
+"""Qdrant-backed vector store (embedded path or remote URL)."""
 
 from __future__ import annotations
 
 import json
-import sqlite3
+import logging
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
-import numpy as np
+from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from aichallenge_rag.chunking import Chunk
+
+logger = logging.getLogger(__name__)
+
+_POINT_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 
 @dataclass(slots=True)
@@ -31,67 +46,226 @@ class SearchHit:
     score: float
 
 
+def _point_id(chunk_id: str) -> str:
+    return str(uuid.uuid5(_POINT_NS, chunk_id))
+
+
+def _payload_from_chunk(
+    chunk: Chunk | StoredChunk,
+    *,
+    scope: str,
+    owner_id: str,
+    embed_model: str,
+) -> dict[str, Any]:
+    return {
+        "chunk_id": chunk.chunk_id,
+        "text": chunk.text,
+        "source": chunk.source,
+        "title": chunk.title,
+        "section": chunk.section,
+        "strategy": chunk.strategy,
+        "index": int(chunk.index),
+        "scope": scope,
+        "owner_id": owner_id,
+        "embed_model": embed_model,
+    }
+
+
+def _chunk_from_payload(payload: dict[str, Any]) -> StoredChunk:
+    return StoredChunk(
+        chunk_id=str(payload.get("chunk_id") or ""),
+        text=str(payload.get("text") or ""),
+        source=str(payload.get("source") or ""),
+        title=str(payload.get("title") or ""),
+        section=str(payload.get("section") or ""),
+        strategy=str(payload.get("strategy") or ""),
+        index=int(payload.get("index") or 0),
+        scope=str(payload.get("scope") or "stand"),
+        owner_id=str(payload.get("owner_id") or ""),
+    )
+
+
 class VectorStore:
-    def __init__(self, data_dir: Path) -> None:
-        self.data_dir = data_dir
+    """Dense vector index in Qdrant + payload metadata."""
+
+    backend = "qdrant"
+
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        qdrant_url: str = "",
+        collection: str = "aichallenge_rag",
+    ) -> None:
+        self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.db_path = self.data_dir / "chunks.sqlite"
-        self.vectors_path = self.data_dir / "vectors.npy"
+        self.collection = collection or "aichallenge_rag"
         self.meta_path = self.data_dir / "index_meta.json"
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._init_schema()
-        self._vectors: np.ndarray | None = None
-        self._ids: list[str] = []
-        self._load_vectors()
-
-    def _init_schema(self) -> None:
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS chunks (
-              chunk_id TEXT PRIMARY KEY,
-              text TEXT NOT NULL,
-              source TEXT NOT NULL,
-              title TEXT NOT NULL,
-              section TEXT NOT NULL,
-              strategy TEXT NOT NULL,
-              idx INTEGER NOT NULL,
-              scope TEXT NOT NULL DEFAULT 'stand',
-              owner_id TEXT NOT NULL DEFAULT ''
-            )
-            """
-        )
-        self._conn.commit()
-
-    def _load_vectors(self) -> None:
-        if self.vectors_path.exists() and self.meta_path.exists():
-            self._vectors = np.load(self.vectors_path)
-            meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
-            self._ids = list(meta.get("ids") or [])
+        self.qdrant_path = self.data_dir / "qdrant"
+        self._url = (qdrant_url or "").strip()
+        if self._url:
+            self._client = QdrantClient(url=self._url)
+            logger.info("qdrant remote url=%s collection=%s", self._url, self.collection)
         else:
-            self._vectors = None
-            self._ids = []
+            self.qdrant_path.mkdir(parents=True, exist_ok=True)
+            self._client = QdrantClient(path=str(self.qdrant_path))
+            logger.info("qdrant embedded path=%s collection=%s", self.qdrant_path, self.collection)
+        self._dims: int | None = self._read_meta_dims()
+
+    def _read_meta(self) -> dict[str, Any]:
+        if not self.meta_path.exists():
+            return {}
+        try:
+            return json.loads(self.meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _read_meta_dims(self) -> int | None:
+        meta = self._read_meta()
+        dims = meta.get("dims")
+        return int(dims) if dims else None
+
+    def _write_meta(self, *, embed_model: str, dims: int, count: int) -> None:
+        payload = {
+            "embed_model": embed_model,
+            "dims": dims,
+            "count": count,
+            "backend": "qdrant",
+            "collection": self.collection,
+        }
+        self.meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._dims = dims
+
+    def _collection_exists(self) -> bool:
+        try:
+            return self._client.collection_exists(self.collection)
+        except Exception:
+            names = {c.name for c in self._client.get_collections().collections}
+            return self.collection in names
+
+    def _ensure_collection(self, dims: int) -> None:
+        if dims <= 0:
+            raise ValueError("vector dims must be positive")
+        if self._collection_exists():
+            info = self._client.get_collection(self.collection)
+            current = None
+            vectors = info.config.params.vectors
+            if isinstance(vectors, VectorParams):
+                current = int(vectors.size)
+            elif isinstance(vectors, dict) and "" in vectors:
+                current = int(vectors[""].size)
+            elif hasattr(vectors, "size"):
+                current = int(vectors.size)  # type: ignore[arg-type]
+            if current is not None and current != dims:
+                logger.warning(
+                    "qdrant dim mismatch collection=%s have=%s need=%s — recreating",
+                    self.collection,
+                    current,
+                    dims,
+                )
+                self._client.delete_collection(self.collection)
+            else:
+                self._dims = dims
+                return
+        self._client.create_collection(
+            collection_name=self.collection,
+            vectors_config=VectorParams(size=dims, distance=Distance.COSINE),
+        )
+        # Payload indexes only help on server Qdrant (noop / warning on embedded).
+        if self._url:
+            for field in ("scope", "owner_id", "strategy", "source", "chunk_id"):
+                try:
+                    self._client.create_payload_index(
+                        collection_name=self.collection,
+                        field_name=field,
+                        field_schema="keyword",
+                    )
+                except Exception:
+                    logger.debug(
+                        "payload index %s already present or unsupported", field, exc_info=True
+                    )
+        self._dims = dims
+
+    def compatible(self, *, embed_model: str, dims: int) -> bool:
+        """True when new vectors can upsert into the existing collection."""
+        if not self._collection_exists():
+            return True
+        meta = self._read_meta()
+        meta_model = str(meta.get("embed_model") or "")
+        meta_dims = meta.get("dims")
+        if meta_dims is not None and int(meta_dims) != dims:
+            return False
+        if meta_model and meta_model != embed_model:
+            return False
+        if self._dims is not None and self._dims != dims:
+            return False
+        return True
+
+    # Back-compat name used by older pipeline call sites.
+    def can_append(self, *, embed_model: str, dims: int) -> bool:
+        return self.compatible(embed_model=embed_model, dims=dims)
 
     def clear(self, *, strategy: str | None = None, scope: str | None = None) -> None:
-        if strategy and scope:
-            self._conn.execute(
-                "DELETE FROM chunks WHERE strategy = ? AND scope = ?", (strategy, scope)
-            )
-        elif strategy:
-            self._conn.execute("DELETE FROM chunks WHERE strategy = ?", (strategy,))
-        elif scope:
-            self._conn.execute("DELETE FROM chunks WHERE scope = ?", (scope,))
-        else:
-            self._conn.execute("DELETE FROM chunks")
-        self._conn.commit()
-        # Do not unlink vectors.npy here — rebuild overwrites after embeds succeed.
-        # Wiping early left prod with chunks but vector_count=0 when embed failed.
+        if not self._collection_exists():
+            return
         if strategy is None and scope is None:
-            self._vectors = None
-            self._ids = []
-            for path in (self.vectors_path, self.meta_path):
-                if path.exists():
-                    path.unlink()
+            self._client.delete_collection(self.collection)
+            if self.meta_path.exists():
+                self.meta_path.unlink()
+            self._dims = None
+            return
+        must: list[FieldCondition] = []
+        if strategy is not None:
+            must.append(FieldCondition(key="strategy", match=MatchValue(value=strategy)))
+        if scope is not None:
+            must.append(FieldCondition(key="scope", match=MatchValue(value=scope)))
+        self._client.delete(
+            collection_name=self.collection,
+            points_selector=Filter(must=must),
+        )
+
+    def upsert(
+        self,
+        chunks: list[Chunk],
+        vectors: list[list[float]],
+        *,
+        scope: str,
+        owner_id: str,
+        embed_model: str,
+    ) -> int:
+        if len(chunks) != len(vectors):
+            raise ValueError("chunks/vectors length mismatch")
+        if not chunks:
+            return 0
+        dims = len(vectors[0])
+        self._ensure_collection(dims)
+        points = [
+            PointStruct(
+                id=_point_id(chunk.chunk_id),
+                vector=[float(x) for x in vec],
+                payload=_payload_from_chunk(
+                    chunk, scope=scope, owner_id=owner_id, embed_model=embed_model
+                ),
+            )
+            for chunk, vec in zip(chunks, vectors, strict=True)
+        ]
+        self._client.upsert(collection_name=self.collection, points=points)
+        count = self._count()
+        self._write_meta(embed_model=embed_model, dims=dims, count=count)
+        return len(points)
+
+    def upsert_chunks(
+        self,
+        chunks: list[Chunk],
+        vectors: list[list[float]],
+        *,
+        scope: str,
+        owner_id: str,
+        embed_model: str,
+    ) -> int:
+        return self.upsert(
+            chunks, vectors, scope=scope, owner_id=owner_id, embed_model=embed_model
+        )
 
     def replace_all(
         self,
@@ -103,189 +277,52 @@ class VectorStore:
         strategy: str,
         embed_model: str,
     ) -> int:
-        if len(chunks) != len(vectors):
-            raise ValueError("chunks/vectors length mismatch")
         self.clear(strategy=strategy, scope=scope)
-        for chunk in chunks:
-            self._conn.execute(
-                """
-                INSERT OR REPLACE INTO chunks
-                (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    chunk.chunk_id,
-                    chunk.text,
-                    chunk.source,
-                    chunk.title,
-                    chunk.section,
-                    chunk.strategy,
-                    chunk.index,
-                    scope,
-                    owner_id,
-                ),
-            )
-        self._conn.commit()
-        return self._rebuild_matrix(embed_model=embed_model)
-
-    def upsert_chunks(
-        self,
-        chunks: list[Chunk],
-        vectors: list[list[float]],
-        *,
-        scope: str,
-        owner_id: str,
-        embed_model: str,
-    ) -> int:
-        if len(chunks) != len(vectors):
-            raise ValueError("chunks/vectors length mismatch")
-        for chunk in chunks:
-            self._conn.execute(
-                """
-                INSERT OR REPLACE INTO chunks
-                (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    chunk.chunk_id,
-                    chunk.text,
-                    chunk.source,
-                    chunk.title,
-                    chunk.section,
-                    chunk.strategy,
-                    chunk.index,
-                    scope,
-                    owner_id,
-                ),
-            )
-        self._conn.commit()
-        return self._rebuild_matrix(embed_model=embed_model)
-
-    def _rebuild_matrix(self, *, embed_model: str) -> int:
-        rows = self._conn.execute(
-            "SELECT chunk_id, text FROM chunks ORDER BY source, idx"
-        ).fetchall()
-        # Vectors must be re-read from caller path — we keep ids aligned by re-encode outside.
-        # Here we only sync ids list if vectors.npy was written by pipeline via set_matrix.
-        self._ids = [row["chunk_id"] for row in rows]
-        meta = {
-            "ids": self._ids,
-            "embed_model": embed_model,
-            "count": len(self._ids),
-        }
-        self.meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        return len(self._ids)
-
-    def set_matrix(self, ids: list[str], matrix: np.ndarray, *, embed_model: str) -> None:
-        if len(ids) != matrix.shape[0]:
-            raise ValueError("ids/matrix mismatch")
-        self._ids = list(ids)
-        self._vectors = matrix.astype(np.float32)
-        np.save(self.vectors_path, self._vectors)
-        self.meta_path.write_text(
-            json.dumps(
-                {"ids": self._ids, "embed_model": embed_model, "count": len(self._ids)},
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
+        return self.upsert(
+            chunks, vectors, scope=scope, owner_id=owner_id, embed_model=embed_model
         )
 
-    def can_append(self, *, embed_model: str, dims: int) -> bool:
-        """True when existing matrix can take new rows without a full re-embed."""
-        if self._vectors is None or not self._ids:
-            return False
-        if int(self._vectors.shape[1]) != dims:
-            return False
-        meta: dict[str, object] = {}
-        if self.meta_path.exists():
-            meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
-        return str(meta.get("embed_model") or "") == embed_model
+    def _count(self) -> int:
+        if not self._collection_exists():
+            return 0
+        return int(self._client.count(collection_name=self.collection, exact=True).count)
 
-    def upsert_matrix_rows(
-        self,
-        ids: list[str],
-        matrix: np.ndarray,
-        *,
-        embed_model: str,
-    ) -> None:
-        """Replace rows for known ids or append new ones. Requires matching dims."""
-        if len(ids) != matrix.shape[0]:
-            raise ValueError("ids/matrix mismatch")
-        matrix = matrix.astype(np.float32)
-        if self._vectors is None or not self._ids:
-            self.set_matrix(ids, matrix, embed_model=embed_model)
-            return
-        if matrix.shape[1] != self._vectors.shape[1]:
-            raise ValueError("dim mismatch")
-        id_to_row = {cid: i for i, cid in enumerate(self._ids)}
-        rows = [self._vectors[i] for i in range(len(self._ids))]
-        out_ids = list(self._ids)
-        for cid, vec in zip(ids, matrix, strict=True):
-            if cid in id_to_row:
-                rows[id_to_row[cid]] = vec
-            else:
-                id_to_row[cid] = len(out_ids)
-                out_ids.append(cid)
-                rows.append(vec)
-        self.set_matrix(out_ids, np.vstack(rows), embed_model=embed_model)
+    def _scroll_all(self, *, batch: int = 256) -> list[Any]:
+        if not self._collection_exists():
+            return []
+        out: list[Any] = []
+        offset = None
+        while True:
+            points, offset = self._client.scroll(
+                collection_name=self.collection,
+                limit=batch,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            out.extend(points)
+            if offset is None:
+                break
+        return out
 
     def get_chunk(self, chunk_id: str) -> StoredChunk | None:
-        row = self._conn.execute(
-            "SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
-        if row is None:
+        if not self._collection_exists():
             return None
-        return StoredChunk(
-            chunk_id=row["chunk_id"],
-            text=row["text"],
-            source=row["source"],
-            title=row["title"],
-            section=row["section"],
-            strategy=row["strategy"],
-            index=row["idx"],
-            scope=row["scope"],
-            owner_id=row["owner_id"],
+        points = self._client.retrieve(
+            collection_name=self.collection,
+            ids=[_point_id(chunk_id)],
+            with_payload=True,
+            with_vectors=False,
         )
+        if not points:
+            return None
+        payload = points[0].payload or {}
+        return _chunk_from_payload(payload)
 
     def list_chunks(self) -> list[StoredChunk]:
-        rows = self._conn.execute("SELECT * FROM chunks ORDER BY source, idx").fetchall()
-        return [
-            StoredChunk(
-                chunk_id=row["chunk_id"],
-                text=row["text"],
-                source=row["source"],
-                title=row["title"],
-                section=row["section"],
-                strategy=row["strategy"],
-                index=row["idx"],
-                scope=row["scope"],
-                owner_id=row["owner_id"],
-            )
-            for row in rows
-        ]
-
-    def remove_matrix_ids(self, chunk_ids: list[str], *, embed_model: str | None = None) -> None:
-        """Drop rows for deleted chunk ids; keep remaining matrix aligned."""
-        if not chunk_ids or self._vectors is None or not self._ids:
-            return
-        drop = set(chunk_ids)
-        keep_idx = [i for i, cid in enumerate(self._ids) if cid not in drop]
-        if len(keep_idx) == len(self._ids):
-            return
-        meta_model = embed_model
-        if meta_model is None and self.meta_path.exists():
-            meta_model = str(json.loads(self.meta_path.read_text(encoding="utf-8")).get("embed_model") or "")
-        if not keep_idx:
-            self._vectors = None
-            self._ids = []
-            for path in (self.vectors_path, self.meta_path):
-                if path.exists():
-                    path.unlink()
-            return
-        new_ids = [self._ids[i] for i in keep_idx]
-        new_matrix = self._vectors[np.asarray(keep_idx, dtype=np.int64)]
-        self.set_matrix(new_ids, new_matrix, embed_model=meta_model or "unknown")
+        chunks = [_chunk_from_payload(p.payload or {}) for p in self._scroll_all()]
+        chunks.sort(key=lambda c: (c.source, c.index))
+        return chunks
 
     def delete_document(
         self,
@@ -294,22 +331,41 @@ class VectorStore:
         scope: str,
         owner_id: str,
     ) -> dict[str, object]:
-        rows = self._conn.execute(
-            """
-            SELECT chunk_id FROM chunks
-            WHERE source = ? AND scope = ? AND owner_id = ?
-            """,
-            (source, scope, owner_id),
-        ).fetchall()
-        ids = [str(r["chunk_id"]) for r in rows]
+        if not self._collection_exists():
+            return {"deleted_chunks": 0, "source": source, "scope": scope, "owner_id": owner_id}
+        # Collect ids for response, then delete by filter.
+        filt = Filter(
+            must=[
+                FieldCondition(key="source", match=MatchValue(value=source)),
+                FieldCondition(key="scope", match=MatchValue(value=scope)),
+                FieldCondition(key="owner_id", match=MatchValue(value=owner_id)),
+            ]
+        )
+        ids: list[str] = []
+        offset = None
+        while True:
+            points, offset = self._client.scroll(
+                collection_name=self.collection,
+                scroll_filter=filt,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for p in points:
+                payload = p.payload or {}
+                ids.append(str(payload.get("chunk_id") or ""))
+            if offset is None:
+                break
         if not ids:
             return {"deleted_chunks": 0, "source": source, "scope": scope, "owner_id": owner_id}
-        self._conn.execute(
-            "DELETE FROM chunks WHERE source = ? AND scope = ? AND owner_id = ?",
-            (source, scope, owner_id),
+        self._client.delete(collection_name=self.collection, points_selector=filt)
+        meta = self._read_meta()
+        self._write_meta(
+            embed_model=str(meta.get("embed_model") or "unknown"),
+            dims=int(meta.get("dims") or self._dims or 1),
+            count=self._count(),
         )
-        self._conn.commit()
-        self.remove_matrix_ids(ids)
         return {
             "deleted_chunks": len(ids),
             "source": source,
@@ -325,14 +381,10 @@ class VectorStore:
         include_stand: bool = False,
         all_owners: bool = False,
     ) -> list[dict[str, object]]:
-        """Aggregate chunks into document rows (source + scope + owner)."""
-        rows = self._conn.execute(
-            "SELECT * FROM chunks ORDER BY source, scope, owner_id, idx"
-        ).fetchall()
         grouped: dict[tuple[str, str, str], dict[str, object]] = {}
-        for row in rows:
-            scope = str(row["scope"] or "stand")
-            oid = str(row["owner_id"] or "")
+        for chunk in self.list_chunks():
+            scope = chunk.scope or "stand"
+            oid = chunk.owner_id or ""
             if all_owners:
                 pass
             elif include_stand and scope == "stand":
@@ -341,48 +393,68 @@ class VectorStore:
                 pass
             else:
                 continue
-            key = (str(row["source"]), scope, oid)
+            key = (chunk.source, scope, oid)
             entry = grouped.get(key)
             if entry is None:
-                preview = str(row["text"] or "")[:300]
                 grouped[key] = {
-                    "source": str(row["source"]),
-                    "title": str(row["title"] or row["source"]),
+                    "source": chunk.source,
+                    "title": chunk.title or chunk.source,
                     "scope": scope,
                     "owner_id": oid,
-                    "strategy": str(row["strategy"] or ""),
+                    "strategy": chunk.strategy,
                     "chunk_count": 1,
-                    "preview": preview,
+                    "preview": (chunk.text or "")[:300],
                 }
             else:
                 entry["chunk_count"] = int(entry["chunk_count"]) + 1
         return list(grouped.values())
 
     def chunk_visible(self, chunk: StoredChunk, *, owner_id: str | None) -> bool:
-        """Stand corpus is public; session chunks only for matching owner."""
         if chunk.scope == "stand":
             return True
         if chunk.scope == "session":
             return bool(owner_id) and chunk.owner_id == owner_id
         return False
 
+    def _owner_filter(self, owner_id: str | None) -> Filter | None:
+        """Stand always visible; session only for matching owner."""
+        stand = FieldCondition(key="scope", match=MatchValue(value="stand"))
+        if not owner_id:
+            return Filter(must=[stand])
+        session = Filter(
+            must=[
+                FieldCondition(key="scope", match=MatchValue(value="session")),
+                FieldCondition(key="owner_id", match=MatchValue(value=owner_id)),
+            ]
+        )
+        return Filter(should=[Filter(must=[stand]), session])
+
     def stats(self) -> dict[str, object]:
-        rows = self._conn.execute(
-            "SELECT strategy, COUNT(*) AS n, AVG(LENGTH(text)) AS avg_len FROM chunks GROUP BY strategy"
-        ).fetchall()
-        by_strategy = {
-            row["strategy"]: {"count": row["n"], "avg_chars": round(float(row["avg_len"] or 0), 1)}
-            for row in rows
+        chunks = self.list_chunks()
+        by_strategy: dict[str, dict[str, float | int]] = {}
+        for chunk in chunks:
+            bucket = by_strategy.setdefault(chunk.strategy, {"count": 0, "chars": 0.0})
+            bucket["count"] = int(bucket["count"]) + 1
+            bucket["chars"] = float(bucket["chars"]) + len(chunk.text or "")
+        formatted = {
+            name: {
+                "count": int(vals["count"]),
+                "avg_chars": round(float(vals["chars"]) / int(vals["count"]), 1)
+                if int(vals["count"])
+                else 0.0,
+            }
+            for name, vals in by_strategy.items()
         }
-        total = self._conn.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
-        meta = {}
-        if self.meta_path.exists():
-            meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        meta = self._read_meta()
+        vector_count = self._count()
         return {
-            "total_chunks": total,
-            "by_strategy": by_strategy,
+            "total_chunks": len(chunks),
+            "by_strategy": formatted,
             "embed_model": meta.get("embed_model"),
-            "vector_count": int(self._vectors.shape[0]) if self._vectors is not None else 0,
+            "vector_count": vector_count,
+            "backend": "qdrant",
+            "dims": meta.get("dims") or self._dims,
+            "collection": self.collection,
         }
 
     def search(
@@ -392,38 +464,43 @@ class VectorStore:
         top_k: int = 6,
         owner_id: str | None = None,
     ) -> list[SearchHit]:
-        if self._vectors is None or not self._ids:
+        if not self._collection_exists() or top_k <= 0:
             return []
-        q = np.asarray(query_vec, dtype=np.float32)
-        q_norm = float(np.linalg.norm(q)) or 1.0
-        q = q / q_norm
-        # Align dims if fake vs api switched — truncate/pad.
-        dim = self._vectors.shape[1]
-        if q.shape[0] < dim:
-            q = np.pad(q, (0, dim - q.shape[0]))
-        elif q.shape[0] > dim:
-            q = q[:dim]
-        scores = self._vectors @ q
-        # Over-fetch then filter: session docs of other owners must not leak.
-        fetch_n = min(len(self._ids), max(top_k * 8, top_k))
-        if fetch_n <= 0:
+        dims = self._dims or self._read_meta_dims() or len(query_vec)
+        q = [float(x) for x in query_vec]
+        if len(q) < dims:
+            q = q + [0.0] * (dims - len(q))
+        elif len(q) > dims:
+            q = q[:dims]
+        # Over-fetch then rely on server-side filter for ownership.
+        limit = min(max(top_k * 4, top_k), 64)
+        try:
+            response = self._client.query_points(
+                collection_name=self.collection,
+                query=q,
+                query_filter=self._owner_filter(owner_id),
+                limit=limit,
+                with_payload=True,
+            )
+        except UnexpectedResponse:
+            logger.exception("qdrant search failed")
             return []
-        top_idx = np.argpartition(-scores, kth=fetch_n - 1)[:fetch_n]
-        top_idx = top_idx[np.argsort(-scores[top_idx])]
         hits: list[SearchHit] = []
-        for i in top_idx:
-            chunk = self.get_chunk(self._ids[int(i)])
-            if chunk is None:
-                continue
+        for point in response.points:
+            payload = point.payload or {}
+            chunk = _chunk_from_payload(payload)
             if not self.chunk_visible(chunk, owner_id=owner_id):
                 continue
-            hits.append(SearchHit(chunk=chunk, score=float(scores[int(i)])))
+            # Cosine distance in Qdrant is returned as similarity score for COSINE.
+            hits.append(SearchHit(chunk=chunk, score=float(point.score or 0.0)))
             if len(hits) >= top_k:
                 break
         return hits
 
     def close(self) -> None:
-        self._conn.close()
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            close()
 
 
 def chunk_to_dict(chunk: StoredChunk | Chunk, score: float | None = None) -> dict[str, object]:
