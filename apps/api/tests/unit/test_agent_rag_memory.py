@@ -52,7 +52,12 @@ class _FakeRouter:
 
 class _StubRag:
     async def search(
-        self, query: str, *, top_k: int = 6, mode: str | None = None
+        self,
+        query: str,
+        *,
+        top_k: int = 6,
+        mode: str | None = None,
+        owner_id: str | None = None,
     ) -> RagSearchResult:
         hit = RagChunkHit(
             chunk_id="c1",
@@ -77,6 +82,12 @@ class _StubRag:
 
     async def add_document_bytes(self, **kwargs):  # noqa: ANN003
         return {}
+
+    async def list_documents(self, **kwargs):  # noqa: ANN003
+        return {"documents": [], "count": 0}
+
+    async def delete_document(self, **kwargs):  # noqa: ANN003
+        return {"deleted_chunks": 0}
 
     async def stats(self):
         return {}
