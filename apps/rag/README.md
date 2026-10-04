@@ -3,6 +3,8 @@
 Public standalone repo (docs + releases):
 **[ArtemKyslicyn/aichallenge-rag](https://github.com/ArtemKyslicyn/aichallenge-rag)**
 
+Vector backend: **Qdrant** (embedded under `RAG_DATA_DIR/qdrant` by default, or `QDRANT_URL` for a server).
+
 This folder is the in-monorepo copy used by Compose (`127.0.0.1:18766`). Connect from AIChallenge chat (`use_rag`) or from outside via Guest MCP (`/mcp` Streamable HTTP).
 
 ## Run locally
@@ -20,7 +22,10 @@ uv run python -m aichallenge_rag
 - Index: `POST /v1/index` `{"strategy":"structural"}`
 - Search: `POST /v1/search` `{"query":"..."}`
 - Upload: `POST /v1/documents/upload`
+- Stats: `GET /v1/stats` → `backend=qdrant`
 - MCP: `/mcp` with `Authorization: Bearer $RAG_SHARED_TOKEN`
+
+Optional server Qdrant: `export QDRANT_URL=http://127.0.0.1:6333`.
 
 ## Docker
 

@@ -61,7 +61,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        store = VectorStore(settings.data_path())
+        store = VectorStore(
+            settings.data_path(),
+            qdrant_url=settings.qdrant_url,
+            collection=settings.qdrant_collection,
+        )
         embedder = build_embedder(settings)
         pipeline = RagPipeline(settings, store, embedder)
         state["store"] = store
@@ -124,6 +128,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "local_embeddings_enabled": s.local_embeddings_enabled,
             "chunk_strategy": s.rag_chunk_strategy,
             "embed_model_runtime": state["embedder"].model_id,
+            "qdrant_url": s.qdrant_url or None,
+            "vector_backend": "qdrant",
         }
 
     @app.post("/v1/index")

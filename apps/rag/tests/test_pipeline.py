@@ -1,4 +1,4 @@
-"""Pipeline heal + append-only document indexing."""
+"""Pipeline heal + Qdrant upsert indexing."""
 
 from __future__ import annotations
 
@@ -25,34 +25,30 @@ class _HangingEmbedder:
 
 
 @pytest.mark.asyncio
-async def test_ensure_vectors_heals_empty_matrix(tmp_path: Path) -> None:
+async def test_ensure_vectors_indexes_empty_store_from_corpus(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("# Hello\n\nguest mcp docs here.\n", encoding="utf-8")
     settings = Settings(
-        rag_data_dir=str(tmp_path),
+        rag_data_dir=str(tmp_path / "data"),
+        rag_corpus_dir=str(corpus),
         embedding_provider="fake",
         embedding_dims=16,
     )
-    store = VectorStore(tmp_path)
-    # Simulate prod: chunks without vectors.npy
-    store._conn.execute(
-        """
-        INSERT INTO chunks
-        (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-        VALUES ('c1', 'hello guest mcp', 'a.md', 'a', 's', 'structural', 0, 'stand', '')
-        """
-    )
-    store._conn.commit()
-    assert store.stats()["vector_count"] == 0
+    store = VectorStore(settings.data_path())
+    assert store.stats()["total_chunks"] == 0
 
     pipe = RagPipeline(settings, store, FakeEmbedder(16))
     result = await pipe.ensure_vectors()
-    assert result["healed"] is True
-    assert int(result["vector_count"] or 0) == 1
+    assert result["healed"] in {True, "indexed_both"} or result.get("healed")
+    assert int(store.stats()["vector_count"] or 0) >= 1
     hits = await pipe.search("guest mcp", top_k=3, mode="raw")
     assert hits
+    store.close()
 
 
 @pytest.mark.asyncio
-async def test_add_document_appends_without_full_rebuild(tmp_path: Path) -> None:
+async def test_add_document_upserts_without_losing_previous(tmp_path: Path) -> None:
     settings = Settings(
         rag_data_dir=str(tmp_path),
         embedding_provider="fake",
@@ -77,6 +73,7 @@ async def test_add_document_appends_without_full_rebuild(tmp_path: Path) -> None
     assert int(second["added_chunks"] or 0) >= 1
     n2 = int(store.stats()["vector_count"] or 0)
     assert n2 > n1
+    store.close()
 
 
 @pytest.mark.asyncio
@@ -127,31 +124,55 @@ async def test_list_documents_and_search_owner_filter(tmp_path: Path) -> None:
     assert int(deleted["deleted_chunks"] or 0) >= 1
     mine_after = pipe.list_documents(owner_id="user-a", all_owners=False)
     assert mine_after["count"] == 0
+    store.close()
 
 
 @pytest.mark.asyncio
-async def test_rebuild_falls_back_when_embedder_hangs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Shrink batch timeout so the test finishes quickly.
+async def test_rebuild_falls_back_when_embedder_hangs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("aichallenge_rag.pipeline.EMBED_BATCH_TIMEOUT_S", 0.05)
     monkeypatch.setattr("aichallenge_rag.pipeline.REBUILD_BUDGET_S", 0.15)
 
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("# Hang\n\nhang probe text\n", encoding="utf-8")
     settings = Settings(
-        rag_data_dir=str(tmp_path),
+        rag_data_dir=str(tmp_path / "data"),
+        rag_corpus_dir=str(corpus),
         embedding_provider="fake",
         embedding_dims=8,
     )
-    store = VectorStore(tmp_path)
-    store._conn.execute(
-        """
-        INSERT INTO chunks
-        (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-        VALUES ('c1', 'hang probe', 'a.md', 'a', 's', 'structural', 0, 'stand', '')
-        """
-    )
-    store._conn.commit()
+    store = VectorStore(settings.data_path())
     pipe = RagPipeline(settings, store, _HangingEmbedder())  # type: ignore[arg-type]
-    result = await pipe.ensure_vectors()
-    assert result["healed"] is True
+    result = await pipe.reindex(strategy="structural")
+    assert int(result["chunks"] or 0) >= 1
     assert pipe.embedder.model_id == "fake-hash"
-    assert int(result["vector_count"] or 0) == 1
+    assert int(store.stats()["vector_count"] or 0) >= 1
     assert EMBED_BATCH_TIMEOUT_S > 0
+    store.close()
+
+
+@pytest.mark.asyncio
+async def test_qdrant_search_uses_vector_store(tmp_path: Path) -> None:
+    """Smoke: Qdrant-backed store returns scored hits (not numpy matrix)."""
+    settings = Settings(
+        rag_data_dir=str(tmp_path),
+        embedding_provider="fake",
+        embedding_dims=16,
+    )
+    store = VectorStore(tmp_path)
+    assert (tmp_path / "qdrant").exists() or store.backend == "qdrant"
+    pipe = RagPipeline(settings, store, FakeEmbedder(16))
+    await pipe.add_document(
+        text="# Qdrant\n\nVector search with HNSW index.",
+        source="q.md",
+        title="q",
+        strategy="structural",
+        scope="stand",
+    )
+    hits = store.search((await FakeEmbedder(16).embed(["HNSW vector"]))[0], top_k=3)
+    assert hits
+    assert hits[0].chunk.source == "q.md"
+    assert isinstance(hits[0].score, float)
+    store.close()

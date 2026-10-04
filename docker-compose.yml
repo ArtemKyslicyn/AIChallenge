@@ -93,6 +93,9 @@ services:
       RAG_DATA_DIR: /app/data
       RAG_CORPUS_DIR: /app/corpus
       RAG_CHUNK_STRATEGY: ${RAG_CHUNK_STRATEGY:-structural}
+      # Empty = embedded Qdrant under /app/data/qdrant. Set to use a server, e.g. http://qdrant:6333
+      QDRANT_URL: ${QDRANT_URL:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-aichallenge_rag}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://routerai.ru/api/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}

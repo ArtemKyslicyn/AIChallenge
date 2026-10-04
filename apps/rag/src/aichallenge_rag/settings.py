@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     #: Default retrieval mode: raw | filtered | full
     rag_mode: str = "full"
 
+    #: Empty = embedded Qdrant under RAG_DATA_DIR/qdrant; else http(s) URL.
+    qdrant_url: str = ""
+    qdrant_collection: str = "aichallenge_rag"
+
     embedding_provider: str = "api"  # api | local | fake
     embedding_model: str = "text-embedding-3-small"
     embedding_dims: int = 64  # used by fake; API uses provider dims

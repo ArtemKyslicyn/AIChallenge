@@ -73,11 +73,13 @@ def iter_corpus_files(corpus_dir: Path) -> list[Path]:
     return files
 
 
-def _normalize_matrix(vectors: list[list[float]]) -> np.ndarray:
+def _normalize_vectors(vectors: list[list[float]]) -> list[list[float]]:
     matrix = np.asarray(vectors, dtype=np.float32)
+    if matrix.size == 0:
+        return []
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
-    return matrix / norms
+    return (matrix / norms).tolist()
 
 
 class RagPipeline:
@@ -159,46 +161,17 @@ class RagPipeline:
                 "scope": scope,
                 "owner_id": owner_id,
             }
-        for chunk in chunks:
-            self.store._conn.execute(
-                """
-                INSERT OR REPLACE INTO chunks
-                (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    chunk.chunk_id,
-                    chunk.text,
-                    chunk.source,
-                    chunk.title,
-                    chunk.section,
-                    chunk.strategy,
-                    chunk.index,
-                    scope,
-                    owner_id,
-                ),
-            )
-        self.store._conn.commit()
-
-        # Prefer embedding only the new rows — full rebuild hangs for hundreds of chunks.
         try:
-            vectors = await asyncio.wait_for(
-                self.embedder.embed([c.text for c in chunks]),
-                timeout=EMBED_BATCH_TIMEOUT_S,
+            await self._upsert_chunks(
+                chunks, scope=scope, owner_id=owner_id, allow_full_rebuild=True
             )
-            matrix = _normalize_matrix(vectors)
-            dims = int(matrix.shape[1])
-            if self.store.can_append(embed_model=self.embedder.model_id, dims=dims):
-                self.store.upsert_matrix_rows(
-                    [c.chunk_id for c in chunks],
-                    matrix,
-                    embed_model=self.embedder.model_id,
-                )
-            else:
-                await self._rebuild_all_vectors()
         except Exception:
-            logger.exception("add_document embed failed; rebuilding with fallback")
-            await self._rebuild_all_vectors()
+            logger.exception("add_document embed/upsert failed; falling back to fake rebuild")
+            fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
+            self.embedder = fake
+            await self._upsert_chunks(
+                chunks, scope=scope, owner_id=owner_id, allow_full_rebuild=False
+            )
 
         preview = (chunks[0].text or "")[:300]
         return {
@@ -222,29 +195,10 @@ class RagPipeline:
     ) -> dict[str, object]:
         self.store.clear(strategy=strategy, scope=scope)
         if not chunks:
-            await self._rebuild_all_vectors()
             return {"indexed_files": 0, "chunks": 0, "strategy": strategy}
-        for chunk in chunks:
-            self.store._conn.execute(
-                """
-                INSERT OR REPLACE INTO chunks
-                (chunk_id, text, source, title, section, strategy, idx, scope, owner_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    chunk.chunk_id,
-                    chunk.text,
-                    chunk.source,
-                    chunk.title,
-                    chunk.section,
-                    chunk.strategy,
-                    chunk.index,
-                    scope,
-                    owner_id,
-                ),
-            )
-        self.store._conn.commit()
-        await self._rebuild_all_vectors()
+        await self._upsert_chunks(
+            chunks, scope=scope, owner_id=owner_id, allow_full_rebuild=False
+        )
         sources = {c.source for c in chunks}
         return {
             "indexed_files": len(sources),
@@ -260,40 +214,119 @@ class RagPipeline:
             vectors.extend(
                 await asyncio.wait_for(self.embedder.embed(part), timeout=EMBED_BATCH_TIMEOUT_S)
             )
-        return vectors
+        return _normalize_vectors(vectors)
 
-    async def _rebuild_all_vectors(self) -> None:
-        rows = self.store.list_chunks()
-        if not rows:
-            self.store.set_matrix(
-                [], np.zeros((0, 1), dtype=np.float32), embed_model=self.embedder.model_id
-            )
+    async def _upsert_chunks(
+        self,
+        chunks: list[Chunk],
+        *,
+        scope: str,
+        owner_id: str,
+        allow_full_rebuild: bool,
+    ) -> None:
+        if not chunks:
             return
-        texts = [r.text for r in rows]
 
         async def _run() -> list[list[float]]:
-            return await self._embed_texts(texts)
+            return await self._embed_texts([c.text for c in chunks])
+
+        try:
+            vectors = await asyncio.wait_for(_run(), timeout=REBUILD_BUDGET_S)
+        except Exception:
+            logger.exception(
+                "embed failed/timed out for %s chunks; falling back to FakeEmbedder",
+                len(chunks),
+            )
+            fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
+            self.embedder = fake
+            vectors = await self._embed_texts([c.text for c in chunks])
+
+        dims = len(vectors[0]) if vectors else 0
+        if dims and not self.store.compatible(embed_model=self.embedder.model_id, dims=dims):
+            if allow_full_rebuild:
+                logger.warning("embed model/dims mismatch — rebuilding whole collection")
+                await self._rebuild_all_vectors(extra_chunks=chunks, scope=scope, owner_id=owner_id)
+                return
+            # Force recreate via clear of incompatible collection by upserting after wipe.
+            self.store.clear()
+        self.store.upsert(
+            chunks,
+            vectors,
+            scope=scope,
+            owner_id=owner_id,
+            embed_model=self.embedder.model_id,
+        )
+
+    async def _rebuild_all_vectors(
+        self,
+        *,
+        extra_chunks: list[Chunk] | None = None,
+        scope: str = "stand",
+        owner_id: str = "",
+    ) -> None:
+        """Re-embed every stored chunk (plus optional new ones) into Qdrant."""
+        existing = self.store.list_chunks()
+        # Convert StoredChunk → Chunk for upsert API.
+        from aichallenge_rag.chunking import Chunk as ChunkModel
+
+        all_chunks: list[Chunk] = [
+            ChunkModel(
+                chunk_id=c.chunk_id,
+                text=c.text,
+                source=c.source,
+                title=c.title,
+                section=c.section,
+                strategy=c.strategy,
+                index=c.index,
+            )
+            for c in existing
+        ]
+        scopes = {c.chunk_id: (c.scope, c.owner_id) for c in existing}
+        if extra_chunks:
+            known = {c.chunk_id for c in all_chunks}
+            for chunk in extra_chunks:
+                if chunk.chunk_id not in known:
+                    all_chunks.append(chunk)
+                    scopes[chunk.chunk_id] = (scope, owner_id)
+                    known.add(chunk.chunk_id)
+                else:
+                    scopes[chunk.chunk_id] = (scope, owner_id)
+
+        if not all_chunks:
+            self.store.clear()
+            return
+
+        async def _run() -> list[list[float]]:
+            return await self._embed_texts([c.text for c in all_chunks])
 
         try:
             vectors = await asyncio.wait_for(_run(), timeout=REBUILD_BUDGET_S)
         except Exception:
             logger.exception(
                 "embed rebuild failed/timed out; falling back to FakeEmbedder (%s chunks)",
-                len(texts),
+                len(all_chunks),
             )
             fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
             self.embedder = fake
-            vectors = await self._embed_texts(texts)
+            vectors = await self._embed_texts([c.text for c in all_chunks])
 
-        matrix = _normalize_matrix(vectors)
-        self.store.set_matrix(
-            [r.chunk_id for r in rows],
-            matrix,
-            embed_model=self.embedder.model_id,
-        )
+        self.store.clear()
+        # Group by scope/owner to preserve visibility metadata.
+        groups: dict[tuple[str, str], list[tuple[Chunk, list[float]]]] = {}
+        for chunk, vec in zip(all_chunks, vectors, strict=True):
+            key = scopes.get(chunk.chunk_id, (scope, owner_id))
+            groups.setdefault(key, []).append((chunk, vec))
+        for (grp_scope, grp_owner), items in groups.items():
+            self.store.upsert(
+                [c for c, _ in items],
+                [v for _, v in items],
+                scope=grp_scope,
+                owner_id=grp_owner,
+                embed_model=self.embedder.model_id,
+            )
 
     async def ensure_vectors(self) -> dict[str, object]:
-        """Rebuild matrix when chunks exist but vectors are missing (prod heal)."""
+        """Index corpus when empty; no-op when Qdrant already has points."""
         stats = self.store.stats()
         total = int(stats.get("total_chunks") or 0)
         vectors = int(stats.get("vector_count") or 0)
