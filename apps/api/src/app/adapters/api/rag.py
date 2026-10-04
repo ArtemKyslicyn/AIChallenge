@@ -201,10 +201,15 @@ async def rag_reindex(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Индексация не удалась.") from exc
 
 
+class RagHealBody(BaseModel):
+    force: bool = False
+
+
 @router.post("/rag/heal")
 async def rag_heal(
     request: Request,
     user: Annotated[UserAccount, Depends(require_auth_user)],
+    payload: RagHealBody | None = None,
 ) -> dict[str, Any]:
     """Rebuild embeddings when chunks exist without a vector matrix."""
     container = get_container(request)
@@ -212,8 +217,9 @@ async def rag_heal(
         assert_guest_mcp_email_allowed(user.email, _admin_emails(container))
     except GuestMcpForbiddenError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    force = bool(payload.force) if payload is not None else False
     try:
-        return dict(await container.rag_client.heal())
+        return dict(await container.rag_client.heal(force=force))
     except Exception as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Heal не удался.") from exc
 

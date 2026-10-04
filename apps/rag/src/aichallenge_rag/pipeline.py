@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from aichallenge_rag.chunking import Chunk, chunk_document
-from aichallenge_rag.embeddings import Embedder, FakeEmbedder
+from aichallenge_rag.embeddings import Embedder, FakeEmbedder, build_embedder
 from aichallenge_rag.rerank import apply_pipeline, rewrite_query
 from aichallenge_rag.settings import Settings
 from aichallenge_rag.store import SearchHit, VectorStore, chunk_to_dict
@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 TEXT_SUFFIXES = {".md", ".txt", ".rst", ".py", ".ts", ".tsx", ".yml", ".yaml", ".toml", ".json"}
 
 #: Per-batch ceiling for upstream embeddings (API hang fuse).
-EMBED_BATCH_TIMEOUT_S = 35.0
-#: Whole rebuild/heal budget — then fall back to FakeEmbedder.
+EMBED_BATCH_TIMEOUT_S = 45.0
+#: Whole rebuild/heal budget — then fall back to FakeEmbedder (routine path).
 REBUILD_BUDGET_S = 90.0
+#: Force API re-embed of a full corpus (~1k+ chunks) — no silent fake fallback.
+FORCE_REBUILD_BUDGET_S = 900.0
 
 
 def looks_like_pdf_garbage(text: str) -> bool:
@@ -263,6 +265,8 @@ class RagPipeline:
         extra_chunks: list[Chunk] | None = None,
         scope: str = "stand",
         owner_id: str = "",
+        allow_fake_fallback: bool = True,
+        budget_s: float | None = None,
     ) -> None:
         """Re-embed every stored chunk (plus optional new ones) into Qdrant."""
         existing = self.store.list_chunks()
@@ -296,12 +300,22 @@ class RagPipeline:
             self.store.clear()
             return
 
+        budget = FORCE_REBUILD_BUDGET_S if budget_s is None and not allow_fake_fallback else (
+            budget_s if budget_s is not None else REBUILD_BUDGET_S
+        )
+
         async def _run() -> list[list[float]]:
             return await self._embed_texts([c.text for c in all_chunks])
 
         try:
-            vectors = await asyncio.wait_for(_run(), timeout=REBUILD_BUDGET_S)
+            vectors = await asyncio.wait_for(_run(), timeout=budget)
         except Exception:
+            if not allow_fake_fallback:
+                logger.exception(
+                    "force re-embed failed for %s chunks — not falling back to fake",
+                    len(all_chunks),
+                )
+                raise
             logger.exception(
                 "embed rebuild failed/timed out; falling back to FakeEmbedder (%s chunks)",
                 len(all_chunks),
@@ -325,21 +339,51 @@ class RagPipeline:
                 embed_model=self.embedder.model_id,
             )
 
-    async def ensure_vectors(self) -> dict[str, object]:
-        """Index corpus when empty; no-op when Qdrant already has points."""
+    async def ensure_vectors(self, *, force: bool = False) -> dict[str, object]:
+        """Index corpus when empty; rebuild vectors when missing or force/fake→API."""
         stats = self.store.stats()
         total = int(stats.get("total_chunks") or 0)
         vectors = int(stats.get("vector_count") or 0)
+        matrix_model = str(stats.get("embed_model") or "")
+        provider = self.settings.effective_provider()
+        wants_api = provider == "api"
+        stuck_on_fake = matrix_model == "fake-hash" and wants_api
+
         if total == 0:
             result = await self.reindex(strategy="structural")
             await self.reindex(strategy="fixed")
             return {"healed": "indexed_both", **result}
-        if vectors > 0 and vectors == total:
-            return {"healed": False, "total_chunks": total, "vector_count": vectors}
-        await self._rebuild_all_vectors()
+
+        if not force and not stuck_on_fake and vectors > 0 and vectors == total:
+            return {
+                "healed": False,
+                "total_chunks": total,
+                "vector_count": vectors,
+                "embed_model": matrix_model,
+            }
+
+        # Reset embedder from settings so a prior Fake fallback cannot stick.
+        if wants_api or force:
+            self.embedder = build_embedder(self.settings)
+        allow_fake = not (force or stuck_on_fake) or provider == "fake"
+        if stuck_on_fake or force:
+            logger.info(
+                "re-embedding corpus force=%s stuck_fake=%s provider=%s chunks=%s",
+                force,
+                stuck_on_fake,
+                provider,
+                total,
+            )
+            await self._rebuild_all_vectors(
+                allow_fake_fallback=allow_fake,
+                budget_s=FORCE_REBUILD_BUDGET_S if (force or stuck_on_fake) else REBUILD_BUDGET_S,
+            )
+        else:
+            await self._rebuild_all_vectors()
         after = self.store.stats()
         return {
             "healed": True,
+            "forced": bool(force or stuck_on_fake),
             "total_chunks": after.get("total_chunks"),
             "vector_count": after.get("vector_count"),
             "embed_model": after.get("embed_model"),
@@ -408,20 +452,21 @@ class RagPipeline:
         """Embed query; keep the same space as the on-disk matrix when possible."""
         stats = self.store.stats()
         matrix_model = str(stats.get("embed_model") or "")
-        # Healed indexes often sit on fake-hash while runtime provider is still API.
+        # Temporary query-space match only — do not permanently demote API embedder.
         if matrix_model == "fake-hash" and self.embedder.model_id != "fake-hash":
             fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
-            self.embedder = fake
             return await fake.embed(texts)
         try:
             return await asyncio.wait_for(
                 self.embedder.embed(texts),
-                timeout=min(EMBED_BATCH_TIMEOUT_S, 12.0),
+                timeout=min(EMBED_BATCH_TIMEOUT_S, 20.0),
             )
         except Exception:
-            logger.warning("query embed failed/timed out; using FakeEmbedder for search")
+            logger.warning("query embed failed/timed out; using FakeEmbedder for this query")
+            if matrix_model and matrix_model != "fake-hash":
+                # Matrix is real API space — fake query would be useless.
+                raise
             fake = FakeEmbedder(getattr(self.settings, "embedding_dims", 64) or 64)
-            self.embedder = fake
             return await fake.embed(texts)
 
     async def search_payload(

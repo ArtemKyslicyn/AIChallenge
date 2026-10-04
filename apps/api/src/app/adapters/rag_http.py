@@ -190,10 +190,19 @@ class HttpRagClient:
         resp.raise_for_status()
         return dict(resp.json())
 
-    async def heal(self) -> dict[str, object]:
+    async def heal(self, *, force: bool = False) -> dict[str, object]:
+        # Force re-embed of ~1k chunks can take several minutes.
+        heal_timeout = httpx.Timeout(
+            connect=5.0,
+            read=960.0 if force else 120.0,
+            write=30.0,
+            pool=5.0,
+        )
         resp = await self._client.post(
             f"{self._base}/v1/heal",
             headers=self._headers(),
+            json={"force": force},
+            timeout=heal_timeout,
         )
         resp.raise_for_status()
         return dict(resp.json())

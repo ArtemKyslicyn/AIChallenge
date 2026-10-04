@@ -2024,8 +2024,27 @@ export interface RagStatsDto {
   embedding_provider?: string;
   local_embeddings_enabled?: boolean;
   chunk_strategy?: string;
+  embed_model?: string;
   embed_model_runtime?: string;
   disabled?: boolean;
+}
+
+/** Force re-embed of a large corpus can take several minutes. */
+const RAG_HEAL_TIMEOUT_MS = 960_000;
+
+export function healRag(
+  force = false,
+  signal?: AbortSignal,
+): Promise<RagStatsDto & { healed?: boolean | string; forced?: boolean }> {
+  return request(
+    "/rag/heal",
+    {
+      method: "POST",
+      body: JSON.stringify({ force }),
+      signal,
+    },
+    RAG_HEAL_TIMEOUT_MS,
+  );
 }
 
 export function fetchRagStats(signal?: AbortSignal): Promise<RagStatsDto> {

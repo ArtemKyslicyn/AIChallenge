@@ -31,7 +31,8 @@
 | 8 | Tool «Документы» → `rag_list_documents` (свои) | кнопка «Документы» в композиторе | **PASS** (код; видео после деплоя) |
 | 9 | Внешний RAG ≠ stand `/mcp/*` | Guest MCP docs | documented |
 
-Пересъёмка: после деплоя `cd challenges/record && RECORD_ONLY=23 npm run record`.
+Перед пересъёмкой: `/api/v1/rag/stats` → `embed_model` ≠ `fake-hash`.  
+Пересъёмка: `cd challenges/record && RECORD_ONLY=23 npm run record`.
 
 ## Как повторить
 

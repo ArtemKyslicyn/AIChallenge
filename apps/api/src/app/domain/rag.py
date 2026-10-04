@@ -78,7 +78,7 @@ class RagClient(Protocol):
 
     async def reindex(self, strategy: str | None = None) -> dict[str, object]: ...
 
-    async def heal(self) -> dict[str, object]: ...
+    async def heal(self, *, force: bool = False) -> dict[str, object]: ...
 
 
 class NullRagClient:
@@ -149,8 +149,8 @@ class NullRagClient:
     async def reindex(self, strategy: str | None = None) -> dict[str, object]:
         return {"chunks": 0, "disabled": True}
 
-    async def heal(self) -> dict[str, object]:
-        return {"healed": False, "disabled": True}
+    async def heal(self, *, force: bool = False) -> dict[str, object]:
+        return {"healed": False, "disabled": True, "forced": force}
 
 
 def format_rag_system_context(result: RagSearchResult) -> str:

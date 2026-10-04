@@ -1959,13 +1959,49 @@ async function enableRag(page, mode = "full") {
   await settle(page, 600);
 }
 
-async function sendChat(page, text) {
+async function sendChatOnce(page, text) {
+  const prev = await page.locator(".turn.assistant").count();
   const box = page.locator("textarea").last();
   await box.fill(text);
   await settle(page, 400);
   await page.getByRole("button", { name: /Отправить|Send/i }).click();
-  await page.locator(".turn.assistant .badge").last().waitFor({ timeout: 180_000 });
-  await settle(page, 800);
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    const n = await page.locator(".turn.assistant").count();
+    if (n > prev) {
+      const last = page.locator(".turn.assistant").last();
+      const badge = last.locator(".badge");
+      if ((await badge.count()) > 0) {
+        await settle(page, 800);
+        return;
+      }
+      const alert = (await last.innerText().catch(() => "")) || "";
+      if (/ошибка|error|502|400|не удалось/i.test(alert)) {
+        throw new Error(`chat turn error: ${alert.slice(0, 160)}`);
+      }
+    }
+    const flash = (await page.locator(".alert, .composer-error").allTextContents().catch(() => [])).join(" ");
+    if (/502|400|rate|лимит|не удалось|ошибка llm/i.test(flash)) {
+      throw new Error(`chat flash error: ${flash.slice(0, 160)}`);
+    }
+    await settle(page, 500);
+  }
+  throw new Error(`sendChat timeout: ${text.slice(0, 80)}`);
+}
+
+async function sendChat(page, text, attempts = 3) {
+  let last;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await sendChatOnce(page, text);
+      return;
+    } catch (err) {
+      last = err;
+      console.warn(`chat retry ${i}/${attempts}:`, err?.message || err);
+      await settle(page, 2800 * i);
+    }
+  }
+  throw last;
 }
 
 async function challenge22(page) {
