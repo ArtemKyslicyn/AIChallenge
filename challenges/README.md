@@ -28,6 +28,7 @@
 ## Неделя 21–25 (живой выбор + RAG)
 
 Текст домашек одной таблицей: [`WEEK-RAG.md`](WEEK-RAG.md).  
+План пересъёмки 21–25: [`WEEK-RAG-SHOOT.md`](WEEK-RAG-SHOOT.md).  
 В папке дня: **README** = что сделать · **RESULTS** = PASS · **VIDEO** = кадры.
 
 ```bash
