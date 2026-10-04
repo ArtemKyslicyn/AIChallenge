@@ -26,5 +26,6 @@
 | 10 вопросов | [`QUESTIONS.md`](QUESTIONS.md) |
 | Чеклист | [`RESULTS.md`](RESULTS.md) |
 | Кадры | [`VIDEO.md`](VIDEO.md) |
+| План съёмки | [`SHOOT.md`](SHOOT.md) |
 
 Формат: **видео + код** (`use_rag`, `rag_sources`, upload UX, list docs).
