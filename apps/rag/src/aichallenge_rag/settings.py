@@ -34,8 +34,11 @@ class Settings(BaseSettings):
     qdrant_collection: str = "aichallenge_rag"
 
     embedding_provider: str = "api"  # api | local | fake
-    embedding_model: str = "text-embedding-3-small"
+    #: RouterAI / many gateways expect the vendor-prefixed id.
+    embedding_model: str = "openai/text-embedding-3-small"
     embedding_dims: int = 64  # used by fake; API uses provider dims
+    #: Empty = reuse LLM_BASE_URL. Set when chat goes to OpenRouter but embeds need RouterAI.
+    embedding_base_url: str = ""
     llm_base_url: str = "https://routerai.ru/api/v1"
     llm_api_key: str = ""
     routerai_key: str = ""
@@ -51,12 +54,21 @@ class Settings(BaseSettings):
     def effective_api_key(self) -> str:
         return (self.llm_api_key or self.routerai_key or "").strip()
 
+    def effective_embedding_base_url(self) -> str:
+        return (self.embedding_base_url or self.llm_base_url or "").strip().rstrip("/")
+
+    def effective_embedding_api_key(self) -> str:
+        base = self.effective_embedding_base_url().lower()
+        if "routerai" in base and self.routerai_key.strip():
+            return self.routerai_key.strip()
+        return self.effective_api_key()
+
     def effective_provider(self) -> str:
         if self.local_embeddings_enabled and self.embedding_provider == "local":
             return "local"
         if self.embedding_provider == "local" and not self.local_embeddings_enabled:
-            return "api" if self.effective_api_key() else "fake"
-        if self.embedding_provider == "api" and not self.effective_api_key():
+            return "api" if self.effective_embedding_api_key() else "fake"
+        if self.embedding_provider == "api" and not self.effective_embedding_api_key():
             return "fake"
         return self.embedding_provider
 
