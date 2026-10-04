@@ -526,9 +526,7 @@ async def send_message(
                 rag_top_k=container.settings.rag_top_k,
                 rag_mode=payload.rag_mode,
                 rag_owner_id=(
-                    str(auth_user.id)
-                    if auth_user is not None
-                    else (session.visitor_hash or "")
+                    str(auth_user.id) if auth_user is not None else (session.visitor_hash or "")
                 ),
                 guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
                 guest_mcp_registry=container.guest_mcp_registry,
