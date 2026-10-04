@@ -908,23 +908,30 @@ export function Chat({
       const filename = detail.filename || "upload.txt";
       const chunks = detail.added_chunks ?? 0;
       const preview = (detail.preview || "").trim();
+      const previewLooksBinary =
+        preview.startsWith("%PDF") ||
+        (preview.includes("endobj") && preview.includes("/BaseFont"));
+      const safePreview = previewLooksBinary ? "" : preview;
       const toolId = `rag-ingest-${Date.now()}`;
       const toolTurn: RagToolTurn = {
         kind: "rag_tool",
         id: toolId,
         tool: "rag_ingest",
         title: filename,
-        summary: `Добавлено в базу · +${chunks} чанков`,
-        preview: preview || undefined,
+        summary: previewLooksBinary
+          ? `Файл принят, но текст не извлечён (PDF без текстового слоя?) · +${chunks} чанков`
+          : `Добавлено в базу · +${chunks} чанков`,
+        preview: safePreview || undefined,
         open: true,
       };
       setItems((prev) => [...prev, toolTurn]);
       stick.current = true;
       setStatus(`Документ ${filename} в базе.`);
 
-      const fallback =
-        preview.length > 0
-          ? `Принял документ «${filename}» (+${chunks} чанков). Кратко по тексту: ${preview.slice(0, 220)}${preview.length > 220 ? "…" : ""}`
+      const fallback = safePreview
+        ? `Принял документ «${filename}» (+${chunks} чанков). Кратко по тексту: ${safePreview.slice(0, 220)}${safePreview.length > 220 ? "…" : ""}`
+        : previewLooksBinary
+          ? `Файл «${filename}» загружен (+${chunks} чанков), но извлечь читаемый текст не удалось. Залейте .md/.txt или PDF с текстовым слоем — иначе поиск по смыслу не сработает.`
           : `Принял документ «${filename}» (+${chunks} чанков). Откройте карточку выше, чтобы увидеть фрагмент.`;
 
       const replyId = `rag-summary-${Date.now()}`;
@@ -937,11 +944,21 @@ export function Chat({
           modelId: null,
         },
       ]);
+      if (!safePreview) {
+        setItems((prev) =>
+          prev.map((item) =>
+            isTurn(item) && item.id === replyId
+              ? { ...item, content: fallback, modelId: "local-preview" }
+              : item,
+          ),
+        );
+        return;
+      }
       try {
         const prompt =
           `В 2–3 коротких предложениях на русском: сообщи, что принял документ «${filename}» ` +
           `(${chunks} чанков в базе), и о чём этот текст по фрагменту ниже. Без вступления.\n\n` +
-          (preview || "(пустой preview)");
+          safePreview;
         const result = await probeComplete(prompt, {
           model: modelPin || "",
           max_tokens: 180,

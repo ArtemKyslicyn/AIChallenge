@@ -11,7 +11,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from aichallenge_rag.embeddings import build_embedder
-from aichallenge_rag.pipeline import REBUILD_BUDGET_S, RagPipeline, extract_text
+from aichallenge_rag.pipeline import (
+    REBUILD_BUDGET_S,
+    RagPipeline,
+    extract_text,
+    looks_like_pdf_garbage,
+)
 from aichallenge_rag.settings import Settings, get_settings
 from aichallenge_rag.store import VectorStore
 
@@ -157,8 +162,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from pathlib import Path
 
         text = extract_text(Path(name), raw=raw)
-        if not text.strip():
-            raise HTTPException(422, detail="empty document")
+        if not text.strip() or looks_like_pdf_garbage(text):
+            raise HTTPException(
+                422,
+                detail=(
+                    "Не удалось извлечь текст из файла. "
+                    "Для PDF нужен текстовый слой (не скан); попробуйте .md / .txt."
+                ),
+            )
         return await pipeline().add_document(
             text=text,
             source=name,

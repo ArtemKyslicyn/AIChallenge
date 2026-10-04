@@ -20,6 +20,7 @@ dependencies = [
     { name = "mcp" },
     { name = "numpy" },
     { name = "pydantic-settings" },
+    { name = "pypdf" },
     { name = "python-multipart" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -27,9 +28,6 @@ dependencies = [
 [package.optional-dependencies]
 local = [
     { name = "sentence-transformers" },
-]
-pdf = [
-    { name = "pypdf" },
 ]
 
 [package.dev-dependencies]
@@ -45,7 +43,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.13,<2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.5" },
-    { name = "pypdf", marker = "extra == 'pdf'", specifier = ">=5.0" },
+    { name = "pypdf", specifier = ">=5.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "sentence-transformers", marker = "extra == 'local'", specifier = ">=3.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },

@@ -24,18 +24,37 @@ EMBED_BATCH_TIMEOUT_S = 35.0
 REBUILD_BUDGET_S = 90.0
 
 
+def looks_like_pdf_garbage(text: str) -> bool:
+    """True when upload fell back to raw PDF bytes instead of extracted text."""
+    head = (text or "")[:800].lstrip()
+    if head.startswith("%PDF"):
+        return True
+    markers = ("endobj", "stream", "/Type /Page", "/BaseFont", "ReportLab Generated")
+    hits = sum(1 for m in markers if m in head)
+    return hits >= 2
+
+
 def extract_text(path: Path, raw: bytes | None = None) -> str:
     data = raw if raw is not None else path.read_bytes()
     suffix = path.suffix.lower()
-    if suffix == ".pdf":
+    is_pdf = suffix == ".pdf" or data[:5] == b"%PDF-"
+    if is_pdf:
         try:
             from pypdf import PdfReader
             import io
 
             reader = PdfReader(io.BytesIO(data))
-            return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+            text = "\n\n".join((page.extract_text() or "") for page in reader.pages)
         except ImportError:
-            return data.decode("utf-8", errors="ignore")
+            logger.error("pypdf is not installed — cannot extract PDF text")
+            return ""
+        except Exception:
+            logger.exception("PDF extract failed for %s", path.name)
+            return ""
+        text = text.strip()
+        if not text or looks_like_pdf_garbage(text):
+            return ""
+        return text
     return data.decode("utf-8", errors="ignore")
 
 
@@ -109,6 +128,18 @@ class RagPipeline:
         owner_id: str = "",
     ) -> dict[str, object]:
         strategy = strategy or self.settings.rag_chunk_strategy
+        if looks_like_pdf_garbage(text):
+            return {
+                "added_chunks": 0,
+                "strategy": strategy,
+                "filename": source,
+                "title": title,
+                "preview": "",
+                "chunk_ids": [],
+                "scope": scope,
+                "owner_id": owner_id,
+                "error": "pdf_text_extract_failed",
+            }
         chunks = chunk_document(
             text,
             source=source,

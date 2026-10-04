@@ -10,14 +10,12 @@ dependencies = [
   "pydantic-settings>=2.5",
   "python-multipart>=0.0.9",
   "mcp>=1.13,<2",
+  "pypdf>=5.0",
 ]
 
 [project.optional-dependencies]
 local = [
   "sentence-transformers>=3.0",
-]
-pdf = [
-  "pypdf>=5.0",
 ]
 
 [project.scripts]
