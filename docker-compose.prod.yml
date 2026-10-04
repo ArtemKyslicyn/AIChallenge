@@ -107,6 +107,9 @@ services:
       QDRANT_URL: ${QDRANT_URL:-}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-aichallenge_rag}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      # Chat may use OpenRouter; embeds often need RouterAI (OpenRouter /embeddings → 403).
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://routerai.ru/api/v1}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://routerai.ru/api/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       ROUTERAI_KEY: ${ROUTERAI_KEY:-}

@@ -141,10 +141,11 @@ def build_embedder(settings: Settings) -> Embedder:
         logger.info("embedder=local model=%s", settings.local_embedding_model)
         return LocalEmbedder(settings.local_embedding_model)
     if kind == "api":
-        logger.info("embedder=api model=%s", settings.embedding_model)
+        base = settings.effective_embedding_base_url()
+        logger.info("embedder=api base=%s model=%s", base, settings.embedding_model)
         return ApiEmbedder(
-            base_url=settings.llm_base_url,
-            api_key=settings.effective_api_key(),
+            base_url=base,
+            api_key=settings.effective_embedding_api_key(),
             model=settings.embedding_model,
         )
     logger.info("embedder=fake dims=%s", settings.embedding_dims)
