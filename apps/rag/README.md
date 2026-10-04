@@ -1,7 +1,9 @@
 # AIChallenge RAG
 
-Separate index/search service for the stand. Connect from AIChallenge chat
-(`use_rag`) or from outside via Guest MCP (`/mcp` Streamable HTTP).
+Public standalone repo (docs + releases):
+**[ArtemKyslicyn/aichallenge-rag](https://github.com/ArtemKyslicyn/aichallenge-rag)**
+
+This folder is the in-monorepo copy used by Compose (`127.0.0.1:18766`). Connect from AIChallenge chat (`use_rag`) or from outside via Guest MCP (`/mcp` Streamable HTTP).
 
 ## Run locally
 
@@ -31,3 +33,5 @@ requires image built with `sentence-transformers` extras; default is API/fake.
 
 Tunnel `http://127.0.0.1:18766/mcp` and paste the HTTPS URL into AIChallenge
 Profile → Подключения (Guest MCP). Tools: `rag_stats`, `rag_search`, `rag_index`.
+
+Full public docs: https://github.com/ArtemKyslicyn/aichallenge-rag

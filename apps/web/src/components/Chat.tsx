@@ -34,6 +34,7 @@ import {
   isTempStudioTurn,
   isTurn,
 } from "../types";
+import { RagFloat } from "./RagFloat";
 import { RagToolCard } from "./RagToolCard";
 import { initSessionChatPrefs, loadGlobalChatPrefs } from "../chatPrefs";
 import { isMediaSseToolName } from "../guestMcpHints";
@@ -78,7 +79,7 @@ const TEMP_STUDIO_SUGGESTIONS = [
 const STICK_THRESHOLD = 80;
 
 /** Panels sharing the float dock. Only one may be expanded at a time. */
-type FloatId = "debug" | "results" | "models";
+type FloatId = "debug" | "results" | "models" | "rag";
 
 function toTurn(message: MessageDto): Turn {
   return {
@@ -140,6 +141,7 @@ export function Chat({
   const closeResults = useCallback(() => setFloat("results", false), [setFloat]);
   const openDebug = useCallback((next: boolean) => setFloat("debug", next), [setFloat]);
   const openModels = useCallback((next: boolean) => setFloat("models", next), [setFloat]);
+  const openRag = useCallback((next: boolean) => setFloat("rag", next), [setFloat]);
 
   const thread = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -1326,6 +1328,11 @@ export function Chat({
           }
         />
         <DebugFloat open={activeFloat === "debug"} onOpenChange={openDebug} />
+        <RagFloat
+          sessionId={session.id}
+          open={activeFloat === "rag"}
+          onOpenChange={openRag}
+        />
         <ModelsFloat
           open={activeFloat === "models"}
           onOpenChange={openModels}

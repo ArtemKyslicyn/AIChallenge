@@ -2155,6 +2155,44 @@ export async function listAllRagDocuments(
   return request<RagDocumentListDto>("/rag/documents", { signal });
 }
 
+export async function deleteSessionRagDocument(
+  sessionId: string,
+  source: string,
+  signal?: AbortSignal,
+): Promise<{ deleted_chunks?: number; source?: string }> {
+  const store = loadStore();
+  const owned = store.items[sessionId];
+  if (!owned?.access_token) {
+    throw new ApiError("Сессия недоступна в этом браузере.", 403);
+  }
+  const qs = new URLSearchParams({ source });
+  return request<{ deleted_chunks?: number; source?: string }>(
+    `/sessions/${encodeURIComponent(sessionId)}/rag/documents?${qs}`,
+    {
+      method: "DELETE",
+      headers: {
+        "X-Session-Token": owned.access_token,
+        ...visitorHeaders(),
+      },
+      signal,
+    },
+  );
+}
+
+export async function deleteAnyRagDocument(
+  source: string,
+  opts: { scope?: string; ownerId?: string } = {},
+  signal?: AbortSignal,
+): Promise<{ deleted_chunks?: number; source?: string }> {
+  const qs = new URLSearchParams({ source });
+  if (opts.scope) qs.set("scope", opts.scope);
+  if (opts.ownerId) qs.set("owner_id", opts.ownerId);
+  return request<{ deleted_chunks?: number; source?: string }>(
+    `/rag/documents?${qs}`,
+    { method: "DELETE", signal },
+  );
+}
+
 /** Browser events so Profile / Composer can push tool cards into Chat. */
 export type RagIngestedDetail = RagUploadResultDto & { filename: string };
 export type RagListDocsDetail = { all?: boolean };

@@ -1160,6 +1160,61 @@ textarea {
   padding-left: 1.1rem;
 }
 
+.rag-float {
+  min-width: min(28rem, 92vw);
+  max-width: min(36rem, 96vw);
+}
+
+.rag-float-body {
+  padding: 0 0.75rem 0.75rem;
+  max-height: min(52vh, 420px);
+  overflow: auto;
+}
+
+.rag-float-stats {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.rag-float-admin-toggle {
+  margin-bottom: 0.5rem;
+}
+
+.rag-float-docs {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rag-float-doc {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, #0ea5e9 5%, var(--surface));
+}
+
+.rag-float-doc-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.rag-float-doc-main pre {
+  margin: 0.35rem 0 0;
+  max-height: 4.5rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+}
+
 .composer-rag-tools {
   display: flex;
   flex-wrap: wrap;
@@ -3150,7 +3205,9 @@ textarea {
 .float-dock .lab-results-fab,
 .float-dock .lab-results-float,
 .float-dock .models-float-fab,
-.float-dock .models-float {
+.float-dock .models-float,
+.float-dock .rag-float-fab,
+.float-dock .rag-float {
   pointer-events: auto;
 }
 
@@ -3189,7 +3246,8 @@ textarea {
    target below. */
 .debug-float-fab,
 .lab-results-fab,
-.models-float-fab {
+.models-float-fab,
+.rag-float-fab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);

@@ -141,6 +141,21 @@ class HttpRagClient:
         resp.raise_for_status()
         return dict(resp.json())
 
+    async def delete_document(
+        self,
+        *,
+        source: str,
+        scope: str = "session",
+        owner_id: str = "",
+    ) -> dict[str, object]:
+        resp = await self._client.delete(
+            f"{self._base}/v1/documents",
+            headers=self._headers(),
+            params={"source": source, "scope": scope, "owner_id": owner_id},
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
     async def stats(self) -> dict[str, object]:
         try:
             resp = await self._client.get(

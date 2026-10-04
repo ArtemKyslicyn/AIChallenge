@@ -64,6 +64,14 @@ class RagClient(Protocol):
         all_owners: bool = False,
     ) -> dict[str, object]: ...
 
+    async def delete_document(
+        self,
+        *,
+        source: str,
+        scope: str = "session",
+        owner_id: str = "",
+    ) -> dict[str, object]: ...
+
     async def stats(self) -> dict[str, object]: ...
 
     async def patch_settings(self, payload: dict[str, object]) -> dict[str, object]: ...
@@ -122,6 +130,15 @@ class NullRagClient:
         all_owners: bool = False,
     ) -> dict[str, object]:
         return {"documents": [], "count": 0, "disabled": True}
+
+    async def delete_document(
+        self,
+        *,
+        source: str,
+        scope: str = "session",
+        owner_id: str = "",
+    ) -> dict[str, object]:
+        return {"deleted_chunks": 0, "disabled": True, "source": source}
 
     async def stats(self) -> dict[str, object]:
         return {"total_chunks": 0, "disabled": True}
