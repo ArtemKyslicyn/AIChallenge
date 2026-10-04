@@ -2019,6 +2019,7 @@ export function invokeMcpTool(
 
 export interface RagStatsDto {
   total_chunks?: number;
+  vector_count?: number;
   by_strategy?: Record<string, { count: number; avg_chars: number }>;
   embedding_provider?: string;
   local_embeddings_enabled?: boolean;
