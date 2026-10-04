@@ -191,6 +191,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             all_owners=all_owners,
         )
 
+    @app.delete("/v1/documents")
+    async def delete_document(
+        source: str,
+        scope: str = "session",
+        owner_id: str = "",
+    ) -> dict[str, Any]:
+        if not source.strip():
+            raise HTTPException(422, detail="source required")
+        result = pipeline().delete_document(
+            source=source.strip(),
+            scope=scope.strip() or "session",
+            owner_id=owner_id,
+        )
+        if int(result.get("deleted_chunks") or 0) == 0:
+            raise HTTPException(404, detail="document not found")
+        return result
+
     @app.post("/v1/search")
     async def search(body: SearchRequest) -> dict[str, Any]:
         return await pipeline().search_payload(

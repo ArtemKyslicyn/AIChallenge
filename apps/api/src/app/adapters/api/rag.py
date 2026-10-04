@@ -65,6 +65,37 @@ async def list_session_rag_documents(
         ) from exc
 
 
+@router.delete("/sessions/{session_id}/rag/documents")
+async def delete_session_rag_document(
+    session_id: UUID,
+    request: Request,
+    session: AuthorizedSession,
+    auth_user: OptionalAuthUser,
+    source: str,
+) -> dict[str, Any]:
+    """Delete one of this visitor/user's session-scoped documents."""
+    if session.id != session_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сессия не найдена.")
+    container = get_container(request)
+    owner = _rag_owner_id(auth_user, session)
+    if not owner or not source.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Нужен source.")
+    try:
+        return await container.rag_client.delete_document(
+            source=source.strip(),
+            scope="session",
+            owner_id=owner,
+        )
+    except Exception as exc:
+        detail = "Не удалось удалить документ."
+        status_code = status.HTTP_502_BAD_GATEWAY
+        resp = getattr(exc, "response", None)
+        if resp is not None and getattr(resp, "status_code", None) == 404:
+            status_code = status.HTTP_404_NOT_FOUND
+            detail = "Документ не найден."
+        raise HTTPException(status_code, detail=detail) from exc
+
+
 @router.get("/rag/documents")
 async def list_all_rag_documents(
     request: Request,
@@ -82,6 +113,38 @@ async def list_all_rag_documents(
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, detail="Не удалось получить список документов."
         ) from exc
+
+
+@router.delete("/rag/documents")
+async def delete_any_rag_document(
+    request: Request,
+    user: Annotated[UserAccount, Depends(require_auth_user)],
+    source: str,
+    scope: str = "session",
+    owner_id: str = "",
+) -> dict[str, Any]:
+    """Admin: delete any document (session or stand)."""
+    container = get_container(request)
+    try:
+        assert_guest_mcp_email_allowed(user.email, _admin_emails(container))
+    except GuestMcpForbiddenError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    if not source.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Нужен source.")
+    try:
+        return await container.rag_client.delete_document(
+            source=source.strip(),
+            scope=(scope or "session").strip(),
+            owner_id=owner_id,
+        )
+    except Exception as exc:
+        detail = "Не удалось удалить документ."
+        status_code = status.HTTP_502_BAD_GATEWAY
+        resp = getattr(exc, "response", None)
+        if resp is not None and getattr(resp, "status_code", None) == 404:
+            status_code = status.HTTP_404_NOT_FOUND
+            detail = "Документ не найден."
+        raise HTTPException(status_code, detail=detail) from exc
 
 
 @router.post("/sessions/{session_id}/rag/documents")

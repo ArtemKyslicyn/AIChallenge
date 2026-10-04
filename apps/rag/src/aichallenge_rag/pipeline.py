@@ -362,6 +362,15 @@ class RagPipeline:
         )
         return {"documents": docs, "count": len(docs)}
 
+    def delete_document(
+        self,
+        *,
+        source: str,
+        scope: str,
+        owner_id: str,
+    ) -> dict[str, object]:
+        return self.store.delete_document(source=source, scope=scope, owner_id=owner_id)
+
     async def _embed_query(self, texts: list[str]) -> list[list[float]]:
         """Embed query; keep the same space as the on-disk matrix when possible."""
         stats = self.store.stats()

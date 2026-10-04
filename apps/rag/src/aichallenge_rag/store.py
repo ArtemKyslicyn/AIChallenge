@@ -265,6 +265,59 @@ class VectorStore:
             for row in rows
         ]
 
+    def remove_matrix_ids(self, chunk_ids: list[str], *, embed_model: str | None = None) -> None:
+        """Drop rows for deleted chunk ids; keep remaining matrix aligned."""
+        if not chunk_ids or self._vectors is None or not self._ids:
+            return
+        drop = set(chunk_ids)
+        keep_idx = [i for i, cid in enumerate(self._ids) if cid not in drop]
+        if len(keep_idx) == len(self._ids):
+            return
+        meta_model = embed_model
+        if meta_model is None and self.meta_path.exists():
+            meta_model = str(json.loads(self.meta_path.read_text(encoding="utf-8")).get("embed_model") or "")
+        if not keep_idx:
+            self._vectors = None
+            self._ids = []
+            for path in (self.vectors_path, self.meta_path):
+                if path.exists():
+                    path.unlink()
+            return
+        new_ids = [self._ids[i] for i in keep_idx]
+        new_matrix = self._vectors[np.asarray(keep_idx, dtype=np.int64)]
+        self.set_matrix(new_ids, new_matrix, embed_model=meta_model or "unknown")
+
+    def delete_document(
+        self,
+        *,
+        source: str,
+        scope: str,
+        owner_id: str,
+    ) -> dict[str, object]:
+        rows = self._conn.execute(
+            """
+            SELECT chunk_id FROM chunks
+            WHERE source = ? AND scope = ? AND owner_id = ?
+            """,
+            (source, scope, owner_id),
+        ).fetchall()
+        ids = [str(r["chunk_id"]) for r in rows]
+        if not ids:
+            return {"deleted_chunks": 0, "source": source, "scope": scope, "owner_id": owner_id}
+        self._conn.execute(
+            "DELETE FROM chunks WHERE source = ? AND scope = ? AND owner_id = ?",
+            (source, scope, owner_id),
+        )
+        self._conn.commit()
+        self.remove_matrix_ids(ids)
+        return {
+            "deleted_chunks": len(ids),
+            "source": source,
+            "scope": scope,
+            "owner_id": owner_id,
+            "chunk_ids": ids,
+        }
+
     def list_documents(
         self,
         *,

@@ -123,6 +123,10 @@ async def test_list_documents_and_search_owner_filter(tmp_path: Path) -> None:
     hits_b = await pipe.search("purple widget", top_k=5, mode="raw", owner_id="user-b")
     sources_b = {h.chunk.source for h in hits_b}
     assert "other.md" in sources_b or any("purple" in h.chunk.text.lower() for h in hits_b)
+    deleted = pipe.delete_document(source="mine.md", scope="session", owner_id="user-a")
+    assert int(deleted["deleted_chunks"] or 0) >= 1
+    mine_after = pipe.list_documents(owner_id="user-a", all_owners=False)
+    assert mine_after["count"] == 0
 
 
 @pytest.mark.asyncio
