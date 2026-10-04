@@ -421,6 +421,7 @@ async def run_agent_with_dialog(
     rag_client: RagClient | None = None,
     rag_mode: str | None = "full",
     rag_top_k: int = 6,
+    rag_owner_id: str | None = None,
 ) -> tuple[AgentRunOutcome, AgentDialog]:
     """Load/create Postgres dialog keyed by client visitor id + draft id."""
     draft_key = (client_draft_id or "").strip()
@@ -699,7 +700,12 @@ async def run_agent_with_dialog(
     rag_retrieval: dict[str, object] | None = None
     if use_rag and rag_client is not None:
         try:
-            rag_result = await rag_client.search(message.strip(), top_k=rag_top_k, mode=rag_mode)
+            rag_result = await rag_client.search(
+                message.strip(),
+                top_k=rag_top_k,
+                mode=rag_mode,
+                owner_id=rag_owner_id or owner,
+            )
             rag_block = format_rag_system_context(rag_result)
             system_extra = f"{system_extra}\n\n{rag_block}".strip() if system_extra else rag_block
             rag_sources = tuple(

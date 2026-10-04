@@ -28,6 +28,12 @@ def _admin_emails(container: Any) -> str:
     return str(container.settings.guest_mcp_allowed_emails or "").strip()
 
 
+def _rag_owner_id(auth_user: UserAccount | None, session: Any) -> str:
+    if auth_user is not None:
+        return str(auth_user.id)
+    return str(getattr(session, "visitor_hash", None) or "")
+
+
 @router.get("/rag/stats")
 async def rag_stats(request: Request) -> dict[str, Any]:
     container = get_container(request)
@@ -35,6 +41,47 @@ async def rag_stats(request: Request) -> dict[str, Any]:
         return await container.rag_client.stats()
     except Exception as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="База знаний недоступна.") from exc
+
+
+@router.get("/sessions/{session_id}/rag/documents")
+async def list_session_rag_documents(
+    session_id: UUID,
+    request: Request,
+    session: AuthorizedSession,
+    auth_user: OptionalAuthUser,
+) -> dict[str, Any]:
+    """List documents uploaded by this visitor/user (session scope only)."""
+    if session.id != session_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сессия не найдена.")
+    container = get_container(request)
+    owner = _rag_owner_id(auth_user, session)
+    if not owner:
+        return {"documents": [], "count": 0}
+    try:
+        return await container.rag_client.list_documents(owner_id=owner, all_owners=False)
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, detail="Не удалось получить список документов."
+        ) from exc
+
+
+@router.get("/rag/documents")
+async def list_all_rag_documents(
+    request: Request,
+    user: Annotated[UserAccount, Depends(require_auth_user)],
+) -> dict[str, Any]:
+    """Admin: all stand + session documents."""
+    container = get_container(request)
+    try:
+        assert_guest_mcp_email_allowed(user.email, _admin_emails(container))
+    except GuestMcpForbiddenError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    try:
+        return await container.rag_client.list_documents(all_owners=True)
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, detail="Не удалось получить список документов."
+        ) from exc
 
 
 @router.post("/sessions/{session_id}/rag/documents")
@@ -56,14 +103,18 @@ async def upload_rag_document(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Файл слишком большой."
         )
     name = file.filename or "upload.txt"
-    owner = str(auth_user.id) if auth_user is not None else (session.visitor_hash or "")
+    owner = _rag_owner_id(auth_user, session)
     try:
-        return await container.rag_client.add_document_bytes(
+        result = await container.rag_client.add_document_bytes(
             filename=name,
             data=raw,
             scope="session",
             owner_id=owner,
         )
+        # Ensure clients always see filename even if sidecar omits it.
+        if not result.get("filename"):
+            result["filename"] = name
+        return result
     except Exception as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, detail="Не удалось добавить документ в базу."

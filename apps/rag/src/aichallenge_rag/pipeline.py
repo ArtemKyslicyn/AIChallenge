@@ -118,7 +118,16 @@ class RagPipeline:
             fixed_overlap=self.settings.rag_fixed_overlap,
         )
         if not chunks:
-            return {"added_chunks": 0, "strategy": strategy}
+            return {
+                "added_chunks": 0,
+                "strategy": strategy,
+                "filename": source,
+                "title": title,
+                "preview": "",
+                "chunk_ids": [],
+                "scope": scope,
+                "owner_id": owner_id,
+            }
         for chunk in chunks:
             self.store._conn.execute(
                 """
@@ -160,10 +169,16 @@ class RagPipeline:
             logger.exception("add_document embed failed; rebuilding with fallback")
             await self._rebuild_all_vectors()
 
+        preview = (chunks[0].text or "")[:300]
         return {
             "added_chunks": len(chunks),
             "strategy": strategy,
             "chunk_ids": [c.chunk_id for c in chunks],
+            "filename": source,
+            "title": title,
+            "preview": preview,
+            "scope": scope,
+            "owner_id": owner_id,
         }
 
     async def _persist(
@@ -275,6 +290,7 @@ class RagPipeline:
         top_k_pre: int | None = None,
         top_k_post: int | None = None,
         min_score: float | None = None,
+        owner_id: str | None = None,
     ) -> list[SearchHit]:
         q = query.strip()
         if not q:
@@ -291,7 +307,7 @@ class RagPipeline:
         except Exception:
             logger.exception("query embed failed")
             return []
-        raw_hits = self.store.search(vectors[0], top_k=pre)
+        raw_hits = self.store.search(vectors[0], top_k=pre, owner_id=owner_id)
         final_hits, _meta = apply_pipeline(
             rewritten,
             raw_hits,
@@ -300,6 +316,20 @@ class RagPipeline:
             top_k_post=post,
         )
         return final_hits
+
+    def list_documents(
+        self,
+        *,
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> dict[str, object]:
+        docs = self.store.list_documents(
+            owner_id=owner_id,
+            include_stand=include_stand,
+            all_owners=all_owners,
+        )
+        return {"documents": docs, "count": len(docs)}
 
     async def _embed_query(self, texts: list[str]) -> list[list[float]]:
         """Embed query; keep the same space as the on-disk matrix when possible."""
@@ -330,6 +360,7 @@ class RagPipeline:
         top_k_pre: int | None = None,
         top_k_post: int | None = None,
         min_score: float | None = None,
+        owner_id: str | None = None,
     ) -> dict[str, object]:
         q = query.strip()
         if not q:
@@ -366,7 +397,7 @@ class RagPipeline:
                     "error": "embed_timeout",
                 },
             }
-        raw_hits = self.store.search(vectors[0], top_k=pre)
+        raw_hits = self.store.search(vectors[0], top_k=pre, owner_id=owner_id)
         final_hits, retrieval_meta = apply_pipeline(
             rewritten,
             raw_hits,

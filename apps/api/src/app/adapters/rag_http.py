@@ -37,10 +37,14 @@ class HttpRagClient:
         *,
         top_k: int = 6,
         mode: str | None = None,
+        owner_id: str | None = None,
     ) -> RagSearchResult:
         body: dict[str, object] = {"query": query, "top_k": top_k}
         if mode:
             body["mode"] = mode
+        # Always send owner_id (even "") so session chunks of others never leak.
+        if owner_id is not None:
+            body["owner_id"] = owner_id
         try:
             resp = await self._client.post(
                 f"{self._base}/v1/ask",
@@ -111,6 +115,28 @@ class HttpRagClient:
             headers=self._headers(),
             files={"file": (filename, data)},
             data={"scope": scope, "owner_id": owner_id},
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
+    async def list_documents(
+        self,
+        *,
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> dict[str, object]:
+        params: dict[str, str] = {}
+        if owner_id:
+            params["owner_id"] = owner_id
+        if include_stand:
+            params["include_stand"] = "true"
+        if all_owners:
+            params["all_owners"] = "true"
+        resp = await self._client.get(
+            f"{self._base}/v1/documents",
+            headers=self._headers(),
+            params=params,
         )
         resp.raise_for_status()
         return dict(resp.json())

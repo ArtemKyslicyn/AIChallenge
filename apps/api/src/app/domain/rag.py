@@ -34,6 +34,7 @@ class RagClient(Protocol):
         *,
         top_k: int = 6,
         mode: str | None = None,
+        owner_id: str | None = None,
     ) -> RagSearchResult: ...
 
     async def add_document_text(
@@ -55,6 +56,14 @@ class RagClient(Protocol):
         owner_id: str = "",
     ) -> dict[str, object]: ...
 
+    async def list_documents(
+        self,
+        *,
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> dict[str, object]: ...
+
     async def stats(self) -> dict[str, object]: ...
 
     async def patch_settings(self, payload: dict[str, object]) -> dict[str, object]: ...
@@ -73,6 +82,7 @@ class NullRagClient:
         *,
         top_k: int = 6,
         mode: str | None = None,
+        owner_id: str | None = None,
     ) -> RagSearchResult:
         return RagSearchResult(
             query=query,
@@ -92,7 +102,7 @@ class NullRagClient:
         scope: str = "session",
         owner_id: str = "",
     ) -> dict[str, object]:
-        return {"added_chunks": 0, "disabled": True}
+        return {"added_chunks": 0, "disabled": True, "filename": source, "preview": ""}
 
     async def add_document_bytes(
         self,
@@ -102,7 +112,16 @@ class NullRagClient:
         scope: str = "session",
         owner_id: str = "",
     ) -> dict[str, object]:
-        return {"added_chunks": 0, "disabled": True}
+        return {"added_chunks": 0, "disabled": True, "filename": filename, "preview": ""}
+
+    async def list_documents(
+        self,
+        *,
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> dict[str, object]:
+        return {"documents": [], "count": 0, "disabled": True}
 
     async def stats(self) -> dict[str, object]:
         return {"total_chunks": 0, "disabled": True}

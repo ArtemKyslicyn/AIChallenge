@@ -3,12 +3,16 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import {
   MAX_MESSAGE_CHARS,
   isNotFound,
+  listAllRagDocuments,
   listMessages,
   listModels,
+  listSessionRagDocuments,
   probeComplete,
   sendMessageSSE,
   type ChatEvent,
   type MessageDto,
+  type RagIngestedDetail,
+  type RagListDocsDetail,
   type SessionCredentials,
 } from "../api/client";
 import { prefsToProbeBody } from "../chatPrefs/outgoing";
@@ -21,14 +25,16 @@ import {
   runPromptStrategy,
 } from "../strategies";
 import type { PromptStrategyId } from "../strategies/types";
-import type { MediaJobState, ThreadItem, Turn } from "../types";
+import type { MediaJobState, RagToolTurn, ThreadItem, Turn } from "../types";
 import {
   EMPTY_PROBE_SLOT,
   isCompareTurn,
   isLabTurn,
+  isRagToolTurn,
   isTempStudioTurn,
   isTurn,
 } from "../types";
+import { RagToolCard } from "./RagToolCard";
 import { initSessionChatPrefs, loadGlobalChatPrefs } from "../chatPrefs";
 import { isMediaSseToolName } from "../guestMcpHints";
 import { compareTemplateLabel, CompareTurnView } from "./CompareTurnView";
@@ -897,6 +903,133 @@ export function Chat({
     [patchLabSlot, patchLabJudge, onFirstMessage, debug],
   );
 
+  const appendRagIngest = useCallback(
+    async (detail: RagIngestedDetail) => {
+      const filename = detail.filename || "upload.txt";
+      const chunks = detail.added_chunks ?? 0;
+      const preview = (detail.preview || "").trim();
+      const toolId = `rag-ingest-${Date.now()}`;
+      const toolTurn: RagToolTurn = {
+        kind: "rag_tool",
+        id: toolId,
+        tool: "rag_ingest",
+        title: filename,
+        summary: `Добавлено в базу · +${chunks} чанков`,
+        preview: preview || undefined,
+        open: true,
+      };
+      setItems((prev) => [...prev, toolTurn]);
+      stick.current = true;
+      setStatus(`Документ ${filename} в базе.`);
+
+      const fallback =
+        preview.length > 0
+          ? `Принял документ «${filename}» (+${chunks} чанков). Кратко по тексту: ${preview.slice(0, 220)}${preview.length > 220 ? "…" : ""}`
+          : `Принял документ «${filename}» (+${chunks} чанков). Откройте карточку выше, чтобы увидеть фрагмент.`;
+
+      const replyId = `rag-summary-${Date.now()}`;
+      setItems((prev) => [
+        ...prev,
+        {
+          id: replyId,
+          role: "assistant",
+          content: "",
+          modelId: null,
+        },
+      ]);
+      try {
+        const prompt =
+          `В 2–3 коротких предложениях на русском: сообщи, что принял документ «${filename}» ` +
+          `(${chunks} чанков в базе), и о чём этот текст по фрагменту ниже. Без вступления.\n\n` +
+          (preview || "(пустой preview)");
+        const result = await probeComplete(prompt, {
+          model: modelPin || "",
+          max_tokens: 180,
+          temperature: 0.2,
+        });
+        setItems((prev) =>
+          prev.map((item) =>
+            isTurn(item) && item.id === replyId
+              ? {
+                  ...item,
+                  content: (result.content || "").trim() || fallback,
+                  modelId: result.model_id || null,
+                }
+              : item,
+          ),
+        );
+      } catch {
+        setItems((prev) =>
+          prev.map((item) =>
+            isTurn(item) && item.id === replyId
+              ? { ...item, content: fallback, modelId: "local-preview" }
+              : item,
+          ),
+        );
+      }
+    },
+    [modelPin],
+  );
+
+  const appendRagList = useCallback(
+    async (detail: RagListDocsDetail = {}) => {
+      const toolId = `rag-list-${Date.now()}`;
+      setStatus(detail.all ? "Список всех документов…" : "Список моих документов…");
+      try {
+        const payload = detail.all
+          ? await listAllRagDocuments()
+          : await listSessionRagDocuments(session.id);
+        const docs = (payload.documents || []).map((d) => ({
+          source: d.source,
+          title: d.title,
+          scope: d.scope,
+          owner_id: d.owner_id,
+          strategy: d.strategy,
+          chunk_count: d.chunk_count,
+          preview: d.preview,
+        }));
+        const toolTurn: RagToolTurn = {
+          kind: "rag_tool",
+          id: toolId,
+          tool: "rag_list_documents",
+          title: detail.all ? "Все документы" : "Мои документы",
+          summary:
+            docs.length > 0
+              ? `${docs.length} документ(ов) в базе`
+              : "Своих загрузок пока нет — в поиске участвует стендовый корпус. Загрузите файл кнопкой «В базу».",
+          documents: docs,
+          open: true,
+        };
+        setItems((prev) => [...prev, toolTurn]);
+        stick.current = true;
+        setStatus(docs.length > 0 ? `Документов: ${docs.length}` : "Своих документов нет.");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Не удалось получить список";
+        setError(msg);
+        setStatus(msg);
+      }
+    },
+    [session.id],
+  );
+
+  useEffect(() => {
+    const onIngest = (event: Event) => {
+      const detail = (event as CustomEvent<RagIngestedDetail>).detail;
+      if (!detail) return;
+      void appendRagIngest(detail);
+    };
+    const onList = (event: Event) => {
+      const detail = (event as CustomEvent<RagListDocsDetail>).detail || {};
+      void appendRagList(detail);
+    };
+    window.addEventListener("aichallenge:rag-ingested", onIngest);
+    window.addEventListener("aichallenge:rag-list-docs", onList);
+    return () => {
+      window.removeEventListener("aichallenge:rag-ingested", onIngest);
+      window.removeEventListener("aichallenge:rag-list-docs", onList);
+    };
+  }, [appendRagIngest, appendRagList]);
+
   const send = useCallback(
     async (message: OutgoingMessage) => {
       const controller = new AbortController();
@@ -1109,6 +1242,9 @@ export function Chat({
               }
               if (isTempStudioTurn(item)) {
                 return <TempStudioTurnView key={item.id} turn={item} />;
+              }
+              if (isRagToolTurn(item)) {
+                return <RagToolCard key={item.id} turn={item} />;
               }
               const streaming =
                 busy && index === items.length - 1 && item.role === "assistant";

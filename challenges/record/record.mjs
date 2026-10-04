@@ -2029,17 +2029,46 @@ async function challenge23(page) {
     await pauseOn(sources, 9000);
   }
   await pauseOn(page.locator(".turn.assistant").last(), 7000);
-  await openComposerSettings(page);
+
   await showRecordCard(page, {
     day: "День 23",
     title: "Upload в базу",
-    beat: "«Добавить в базу» — свой файл рядом с галочкой RAG.",
+    beat: "Файл → карточка rag_ingest + ответ «принял документ…».",
     hold: 5000,
   });
-  const upload23 = page.getByRole("button", { name: /Добавить в базу/i });
-  if ((await upload23.count()) > 0) await pauseOn(upload23.first(), 5000);
-  else await pauseOn(page.locator(".composer-settings"), 4000);
   await hideRecordCard(page);
+  const uploadInput = page.locator('input[type="file"][accept*=".md"]').first();
+  await uploadInput.setInputFiles({
+    name: "day23-sample.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# Day 23 sample\n\nЭтот файл загружен в базу для проверки upload UX.\n" +
+        "Тема: оранжевый виджет и публичный :443 на стенде.\n",
+      "utf8",
+    ),
+  });
+  await page.locator('.rag-tool-call[data-tool="rag_ingest"]').last().waitFor({
+    timeout: 120_000,
+  });
+  await pauseOn(page.locator('.rag-tool-call[data-tool="rag_ingest"]').last(), 7000);
+  await page.locator(".turn.assistant").last().waitFor({ timeout: 180_000 });
+  await pauseOn(page.locator(".turn.assistant").last(), 8000);
+
+  await showRecordCard(page, {
+    day: "День 23",
+    title: "Документы в базе",
+    beat: "Список своих загрузок — карточка rag_list_documents.",
+    hold: 4000,
+  });
+  await hideRecordCard(page);
+  await page.getByRole("button", { name: /^Документы$/i }).click();
+  await page.locator('.rag-tool-call[data-tool="rag_list_documents"]').last().waitFor({
+    timeout: 60_000,
+  });
+  await pauseOn(
+    page.locator('.rag-tool-call[data-tool="rag_list_documents"]').last(),
+    8000,
+  );
 }
 
 async function challenge24(page) {

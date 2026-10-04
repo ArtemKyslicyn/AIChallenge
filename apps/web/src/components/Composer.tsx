@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { authMe, listGuestMcp, listLabPresets, listModels, uploadRagDocumentForSession, type LabPresetDto, type ModelCatalogItemDto } from "../api/client";
+import {
+  authMe,
+  emitRagIngested,
+  emitRagListDocs,
+  listGuestMcp,
+  listLabPresets,
+  listModels,
+  uploadRagDocumentForSession,
+  type LabPresetDto,
+  type ModelCatalogItemDto,
+} from "../api/client";
 import {
   initSessionChatPrefs,
   loadGlobalChatPrefs,
@@ -369,6 +379,10 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
         if (!session.useRag) {
           patchSession({ useRag: true });
         }
+        emitRagIngested({
+          ...result,
+          filename: result.filename || file.name,
+        });
       } catch (err) {
         setRagUploadHint(err instanceof Error ? err.message : "Не удалось добавить файл");
       }
@@ -509,6 +523,16 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
               title="Документ в базу (.md / .txt / .pdf)"
             >
               В базу
+            </button>
+            <button
+              type="button"
+              className="composer-media-btn composer-media-btn--quiet"
+              disabled={busy}
+              onClick={() => emitRagListDocs()}
+              aria-label="Показать мои документы в базе"
+              title="Список загруженных документов"
+            >
+              Документы
             </button>
             <input
               ref={fileInputRef}

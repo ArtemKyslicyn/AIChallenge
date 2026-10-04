@@ -265,6 +265,54 @@ class VectorStore:
             for row in rows
         ]
 
+    def list_documents(
+        self,
+        *,
+        owner_id: str | None = None,
+        include_stand: bool = False,
+        all_owners: bool = False,
+    ) -> list[dict[str, object]]:
+        """Aggregate chunks into document rows (source + scope + owner)."""
+        rows = self._conn.execute(
+            "SELECT * FROM chunks ORDER BY source, scope, owner_id, idx"
+        ).fetchall()
+        grouped: dict[tuple[str, str, str], dict[str, object]] = {}
+        for row in rows:
+            scope = str(row["scope"] or "stand")
+            oid = str(row["owner_id"] or "")
+            if all_owners:
+                pass
+            elif include_stand and scope == "stand":
+                pass
+            elif owner_id is not None and scope == "session" and oid == owner_id:
+                pass
+            else:
+                continue
+            key = (str(row["source"]), scope, oid)
+            entry = grouped.get(key)
+            if entry is None:
+                preview = str(row["text"] or "")[:300]
+                grouped[key] = {
+                    "source": str(row["source"]),
+                    "title": str(row["title"] or row["source"]),
+                    "scope": scope,
+                    "owner_id": oid,
+                    "strategy": str(row["strategy"] or ""),
+                    "chunk_count": 1,
+                    "preview": preview,
+                }
+            else:
+                entry["chunk_count"] = int(entry["chunk_count"]) + 1
+        return list(grouped.values())
+
+    def chunk_visible(self, chunk: StoredChunk, *, owner_id: str | None) -> bool:
+        """Stand corpus is public; session chunks only for matching owner."""
+        if chunk.scope == "stand":
+            return True
+        if chunk.scope == "session":
+            return bool(owner_id) and chunk.owner_id == owner_id
+        return False
+
     def stats(self) -> dict[str, object]:
         rows = self._conn.execute(
             "SELECT strategy, COUNT(*) AS n, AVG(LENGTH(text)) AS avg_len FROM chunks GROUP BY strategy"
@@ -284,7 +332,13 @@ class VectorStore:
             "vector_count": int(self._vectors.shape[0]) if self._vectors is not None else 0,
         }
 
-    def search(self, query_vec: list[float], *, top_k: int = 6) -> list[SearchHit]:
+    def search(
+        self,
+        query_vec: list[float],
+        *,
+        top_k: int = 6,
+        owner_id: str | None = None,
+    ) -> list[SearchHit]:
         if self._vectors is None or not self._ids:
             return []
         q = np.asarray(query_vec, dtype=np.float32)
@@ -297,17 +351,22 @@ class VectorStore:
         elif q.shape[0] > dim:
             q = q[:dim]
         scores = self._vectors @ q
-        k = min(top_k, len(self._ids))
-        if k <= 0:
+        # Over-fetch then filter: session docs of other owners must not leak.
+        fetch_n = min(len(self._ids), max(top_k * 8, top_k))
+        if fetch_n <= 0:
             return []
-        top_idx = np.argpartition(-scores, kth=k - 1)[:k]
+        top_idx = np.argpartition(-scores, kth=fetch_n - 1)[:fetch_n]
         top_idx = top_idx[np.argsort(-scores[top_idx])]
         hits: list[SearchHit] = []
         for i in top_idx:
             chunk = self.get_chunk(self._ids[int(i)])
             if chunk is None:
                 continue
+            if not self.chunk_visible(chunk, owner_id=owner_id):
+                continue
             hits.append(SearchHit(chunk=chunk, score=float(scores[int(i)])))
+            if len(hits) >= top_k:
+                break
         return hits
 
     def close(self) -> None:

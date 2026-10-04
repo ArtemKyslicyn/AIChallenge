@@ -9,7 +9,7 @@ import {
   type ResponseTemplateId,
 } from "../promptControls";
 import { useRef, useState } from "react";
-import { uploadRagDocumentForSession } from "../api/client";
+import { emitRagIngested, emitRagListDocs, uploadRagDocumentForSession } from "../api/client";
 
 export type SettingsTab = "session";
 
@@ -62,6 +62,10 @@ export function ComposerSettings({
       const n = result.added_chunks ?? 0;
       setUploadHint(`В базе · +${n} чанков (${file.name})`);
       if (!session.useRag) onPatchSession({ useRag: true });
+      emitRagIngested({
+        ...result,
+        filename: result.filename || file.name,
+      });
     } catch (err) {
       setUploadHint(err instanceof Error ? err.message : "Не удалось добавить файл");
     }
@@ -142,6 +146,13 @@ export function ComposerSettings({
             onClick={() => fileRef.current?.click()}
           >
             Добавить в базу
+          </button>
+          <button
+            type="button"
+            className="composer-media-btn"
+            onClick={() => emitRagListDocs()}
+          >
+            Документы в базе
           </button>
           <input
             ref={fileRef}
