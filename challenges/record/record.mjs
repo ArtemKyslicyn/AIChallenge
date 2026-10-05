@@ -2031,12 +2031,21 @@ async function challenge22(page) {
 }
 
 async function challenge23(page) {
+  // Course «День 22 · первый RAG» = папка 23-rag-query (стенд day 23).
   await openChatFresh(page);
   await showRecordCard(page, {
-    day: "День 23 · запрос",
-    title: "Без базы",
-    beat: "Тот же вопрос про :443 — без источников.",
-    hold: 5000,
+    day: "День 23 · первый RAG",
+    title: "Ask без базы vs с базой",
+    beat: "Один вопрос :443 → сравнение · источники · цитаты · 10 QUESTIONS.md",
+    hold: 7000,
+  });
+  await hideRecordCard(page);
+
+  await showRecordCard(page, {
+    day: "БЕЗ RAG",
+    title: "База выключена",
+    beat: "Ответ без блока «Источники базы». Часто общий/неточный путь портов.",
+    hold: 5500,
   });
   await openComposerSettings(page);
   const box = page.locator(".composer-settings label.composer-toggle").filter({
@@ -2047,24 +2056,40 @@ async function challenge23(page) {
   await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
   await hideRecordCard(page);
   await sendChat(page, "Куда ходит публичный :443 на этом стенде? Коротко.");
-  await pauseOn(page.locator(".turn.assistant").last(), 8000);
+  const offTurn = page.locator(".turn.assistant").last();
+  await pauseOn(offTurn, 9000);
+  // Control: no sources block on this turn.
+  const offSources = offTurn.locator(".rag-sources");
+  if ((await offSources.count()) > 0) {
+    throw new Error("challenge23: expected no rag-sources with RAG off");
+  }
 
   await showRecordCard(page, {
-    day: "День 23",
-    title: "С базой + источники",
-    beat: "Галочка «Использовать базу» → ответ с фрагментами и model_id.",
-    hold: 5000,
+    day: "С RAG",
+    title: "База включена · full",
+    beat: "Тот же вопрос → цитаты + source/section/chunk_id + model_id.",
+    hold: 5500,
   });
   await enableRag(page, "full");
   await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
   await hideRecordCard(page);
-  await sendChat(page, "Куда ходит публичный :443 на этом стенде? Коротко по базе.");
-  const sources = page.locator(".rag-sources").last();
-  if ((await sources.count()) > 0) {
-    await sources.locator("summary").click().catch(() => {});
-    await pauseOn(sources, 9000);
+  const ragQ =
+    "По фрагментам базы: куда идёт публичный :443 на стенде? " +
+    "Назови цепочку (xray/Reality → nginx → порт). Коротко, без выдумок.";
+  await sendChat(page, ragQ, 4);
+  const onTurn = page.locator(".turn.assistant").last();
+  const sources = onTurn.locator(".rag-sources");
+  await sources.waitFor({ timeout: 30_000 });
+  await sources.locator("summary").click().catch(() => {});
+  await sources.locator(".rag-sources-quote").first().waitFor({ timeout: 15_000 }).catch(() => {});
+  await pauseOn(sources, 10000);
+  await pauseOn(onTurn.locator(".badge").last(), 5000);
+  const onText = ((await onTurn.innerText().catch(() => "")) || "").toLowerCase();
+  if (!/xray|reality|8443|18080|nginx/.test(onText)) {
+    throw new Error(
+      `challenge23: RAG answer not grounded on port path: ${onText.slice(0, 200)}`,
+    );
   }
-  await pauseOn(page.locator(".turn.assistant").last(), 7000);
 
   await showRecordCard(page, {
     day: "День 23",
@@ -2097,7 +2122,6 @@ async function challenge23(page) {
     hold: 4000,
   });
   await hideRecordCard(page);
-  // Accessible name comes from aria-label, not the visible "Документы" label.
   const docsBtn = page.getByRole("button", {
     name: /Показать мои документы|Документы/i,
   });
@@ -2110,6 +2134,14 @@ async function challenge23(page) {
     page.locator('.rag-tool-call[data-tool="rag_list_documents"]').last(),
     8000,
   );
+
+  await showRecordCard(page, {
+    day: "QUESTIONS.md",
+    title: "10 контрольных вопросов",
+    beat: "Ожидание + источники на каждый вопрос — challenges/23-rag-query/QUESTIONS.md",
+    hold: 8000,
+  });
+  await hideRecordCard(page);
 }
 
 async function challenge24(page) {

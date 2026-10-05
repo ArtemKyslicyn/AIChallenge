@@ -19,6 +19,13 @@ def test_rewrite_strips_filler_and_expands_alias() -> None:
     assert "Streamable" in out or "Guest MCP" in out
 
 
+def test_rewrite_expands_port_443_alias() -> None:
+    out = rewrite_query("Куда ходит публичный :443 на стенде?")
+    assert "Reality" in out or "xray" in out
+    assert "8443" in out
+    assert "18080" in out
+
+
 def test_apply_pipeline_modes() -> None:
     chunks = [
         SearchHit(

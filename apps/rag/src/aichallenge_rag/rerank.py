@@ -23,7 +23,10 @@ _ALIASES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bguest\s*mcp\b", re.I), "Guest MCP Streamable HTTP"),
     (re.compile(r"\bсвой\s+сервер\b", re.I), "Guest MCP свой сервер"),
     (re.compile(r"\bmodel[_\s]?id\b", re.I), "model_id атрибуция модели"),
-    (re.compile(r"\b:443\b|\bпорт\s*443\b", re.I), "443 Reality xray nginx 8443"),
+    (
+        re.compile(r"\b:443\b|\bпорт\s*443\b|публичн\w*\s*:?443", re.I),
+        "443 Reality xray nginx 8443 18080 Production deploy VLESS",
+    ),
     (re.compile(r"\breality\b", re.I), "VLESS Reality xray"),
     (re.compile(r"\bfakellm\b", re.I), "FakeLLM FakeLLMProvider"),
 ]
@@ -57,10 +60,20 @@ def token_overlap(query: str, hit: SearchHit) -> float:
     return len(q & d) / len(q)
 
 
-def heuristic_rerank_score(query: str, hit: SearchHit, *, overlap_weight: float = 0.35) -> float:
+def heuristic_rerank_score(query: str, hit: SearchHit, *, overlap_weight: float = 0.4) -> float:
     """Blend cosine similarity with lexical overlap against title/section/text."""
     overlap = token_overlap(query, hit)
-    return (1.0 - overlap_weight) * float(hit.score) + overlap_weight * overlap
+    blended = (1.0 - overlap_weight) * float(hit.score) + overlap_weight * overlap
+    q = (query or "").lower()
+    blob = f"{hit.chunk.source} {hit.chunk.section} {hit.chunk.text}".lower()
+    # Port / edge questions: prefer chunks that literally mention the path.
+    if ":443" in q or "443" in q or "reality" in q:
+        bonus = 0.0
+        for needle in (":443", "8443", "18080", "reality", "xray", "vless"):
+            if needle in blob:
+                bonus += 0.04
+        blended = min(1.0, blended + bonus)
+    return blended
 
 
 def apply_pipeline(

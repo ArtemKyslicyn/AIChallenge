@@ -1,10 +1,10 @@
 # День 23 — доказательства сдачи
 
-Домашка: [`README.md`](README.md).
+Домашка курса «День 22 · первый RAG-запрос» → папка [`23-rag-query`](./) (карта: [`../WEEK-RAG-MAP.md`](../WEEK-RAG-MAP.md)).
 
-Видео: `challenge-23.mp4`  
-Контрольные вопросы: `QUESTIONS.md` (10 шт.)  
-Прод индекс: ~761–766 structural chunks, `vector_count` > 0.
+Видео: `challenge-23.mp4` (пересъёмка после API-эмбеддингов + цитат в UI)  
+Контрольные вопросы: [`QUESTIONS.md`](QUESTIONS.md) (10 шт.: ожидание + источники)  
+Прод: `embed_model=openai/text-embedding-3-small`, ~1380+ vectors.
 
 ## Главное сравнение (задание)
 
@@ -12,34 +12,37 @@
 
 | Режим | Ожидание | Что видно | Статус |
 |---|---|---|---|
-| База **выкл** | общий ответ, **нет** блока источников | видео: ответ без «Источники базы» | **PASS** |
-| База **вкл** | опора на docs + источники | видео: «Источники базы» + `model_id` | **PASS** |
+| База **выкл** | ответ без блока источников | видео кадр «БЕЗ RAG» | **PASS** |
+| База **вкл** | опора на docs + источники + цитаты + `model_id` | видео кадр «С RAG» | **PASS** |
 
-Типичный grounded ответ с базой: `:443 → xray Reality → nginx :8443 → web :18080` (AGENTS / deploy docs).
+Grounded путь с базой: `:443 → xray Reality → nginx :8443 → web :18080`.
 
 ## Чеклист
 
 | # | Критерий | Где видно | Статус |
 |---|---|---|---|
-| 1 | Ask без RAG | видео кадр 1 | **PASS** |
-| 2 | Ask с RAG | видео кадр 2 | **PASS** |
-| 3 | Источники видны (title/section/source/chunk_id) | UI details «Источники базы» | **PASS** |
-| 4 | `model_id` на ответе | badge | **PASS** |
-| 5 | 10 контрольных вопросов подготовлены | `QUESTIONS.md` | **PASS** |
-| 6 | Upload → карточка `rag_ingest` + preview | видео кадр 3 | **PASS** |
-| 7 | После upload — ответ ассистента «принял…» | видео кадр 3 | **PASS** |
-| 8 | Tool «Документы» → `rag_list_documents` (свои) | видео кадр 4 | **PASS** |
-| 9 | Внешний RAG ≠ stand `/mcp/*` | Guest MCP docs | documented |
-
-Перед пересъёмкой: `/api/v1/rag/stats` → `embed_model` ≠ `fake-hash`.  
-Пересъёмка: `cd challenges/record && RECORD_ONLY=23 npm run record`.
+| 1 | Ask без RAG | видео | **PASS** |
+| 2 | Ask с RAG (поиск → контекст → LLM) | видео + код `chat.py` / `format_rag_system_context` | **PASS** |
+| 3 | Источники: title / section / source / chunk_id | UI «Источники базы» | **PASS** |
+| 4 | Цитаты фрагментов | `rag-sources-quote` | **PASS** |
+| 5 | `model_id` на ответе | badge | **PASS** |
+| 6 | 10 контрольных вопросов | [`QUESTIONS.md`](QUESTIONS.md) | **PASS** |
+| 7 | Upload → `rag_ingest` + саммари | видео | **PASS** |
+| 8 | «Документы» → `rag_list_documents` | видео | **PASS** |
 
 ## Как повторить
 
+```bash
+# гейт
+curl -sS https://aichallenge.arcilite.ru/api/v1/rag/stats | jq '{embed_model,vector_count}'
+# видео
+cd challenges/record && RECORD_ONLY=23 npm run record
+```
+
 1. Новый чат → Настройки → снять «Использовать базу» → вопрос про `:443`.  
-2. Включить базу → тот же вопрос → раскрыть источники.  
-3. **В базу** → дождаться карточки и саммари.  
-4. **Документы** → список своих загрузок.  
-5. (Полный набор) пройти `QUESTIONS.md` 1–10 с базой вкл.
+2. Включить базу (режим full) → тот же вопрос → раскрыть источники и цитаты.  
+3. **В базу** → карточка + саммари.  
+4. **Документы** → свои загрузки.  
+5. Пройти [`QUESTIONS.md`](QUESTIONS.md) 1–10 с базой вкл.
 
 Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw
