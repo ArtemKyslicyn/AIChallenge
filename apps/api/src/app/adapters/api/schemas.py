@@ -230,6 +230,8 @@ class AgentRagSourceResponse(BaseModel):
     section: str = ""
     strategy: str = ""
     score: float = 0.0
+    #: Short citation fragment from the chunk (anti-hallucination evidence).
+    text: str = ""
 
 
 class AgentWorkshopRunResponse(BaseModel):

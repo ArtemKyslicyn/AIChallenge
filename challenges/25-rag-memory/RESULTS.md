@@ -24,6 +24,8 @@
 
 ## Live прогон (prod)
 
+Пересъёмка / прогон **2026-10-04** (`embed_model=openai/text-embedding-3-small`):
+
 ```text
 DONE turns=12 with_sources=12   # scenario A
 DONE turns=12 with_sources=12   # scenario B
@@ -45,4 +47,6 @@ python3 challenges/25-rag-memory/run.py --scenario b --limit 12
 
 ## Probe
 
-`rag_retrieval`: hits_pre=20 → hits_post=6; при healed matrix query в пространстве `fake-hash`.
+`rag_retrieval`: hits_pre=20 → hits_post=6; matrix `openai/text-embedding-3-small` (1536).
+
+Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw

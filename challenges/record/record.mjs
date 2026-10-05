@@ -2097,7 +2097,12 @@ async function challenge23(page) {
     hold: 4000,
   });
   await hideRecordCard(page);
-  await page.getByRole("button", { name: /^Документы$/i }).click();
+  // Accessible name comes from aria-label, not the visible "Документы" label.
+  const docsBtn = page.getByRole("button", {
+    name: /Показать мои документы|Документы/i,
+  });
+  await docsBtn.first().waitFor({ state: "visible", timeout: 15_000 });
+  await docsBtn.first().click();
   await page.locator('.rag-tool-call[data-tool="rag_list_documents"]').last().waitFor({
     timeout: 60_000,
   });
@@ -2134,7 +2139,11 @@ async function challenge24(page) {
     }
   }
   await openComposerSettings(page);
-  await pauseOn(page.getByRole("button", { name: /Добавить в базу/i }), 5000);
+  const uploadPath = page.getByRole("button", {
+    name: /Добавить документ в базу|В базу|Добавить в базу/i,
+  });
+  if ((await uploadPath.count()) > 0) await pauseOn(uploadPath.first(), 5000);
+  else await pauseOn(page.locator(".composer-settings"), 4000);
 }
 
 async function challenge25(page) {

@@ -26,7 +26,11 @@
 | 3 | Режим full = rewrite + filter + rerank | rewrite string в sources UI | **PASS** |
 | 4 | pre→post в источниках | «было N → K» в details | **PASS** |
 | 5 | Upload в базу рядом с режимами | UI «Добавить в базу» (Ещё / Профиль) | **PASS** (path) |
+| 6 | Цитаты фрагментов в источниках | `rag-sources-quote` под каждым hit | **PASS** |
+| 7 | «не знаю» при пустом/слабом контексте | `format_rag_system_context` + prompt | **PASS** (код + UI) |
 
 ## Как повторить
 
 Настройки → Использовать базу → сменить Режим базы → один и тот же вопрос → сравнить блок источников.
+
+Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw

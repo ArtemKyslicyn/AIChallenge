@@ -10,3 +10,5 @@
 | 4 | Кнопка «Добавить в базу» в кадре | upload path |
 
 Числа режимов — `RESULTS.md`.
+
+Сводка недели (Яндекс.Диск): https://disk.yandex.ru/i/01KhOD_G7dBWPw

@@ -10,3 +10,5 @@
 | 4 | (Кадр) «Добавить в базу» рядом с настройками | путь загрузки |
 
 **Числа и reindex curl** — в `RESULTS.md` (и `apps/rag` `/v1/index`). Видео = UI + цифры, не полный terminal reindex.
+
+Сводка недели (Яндекс.Диск): https://disk.yandex.ru/i/01KhOD_G7dBWPw

@@ -211,6 +211,7 @@ def _rag_source_dto(row: dict[str, object]) -> AgentRagSourceResponse:
         section=str(row.get("section") or ""),
         strategy=str(row.get("strategy") or ""),
         score=score,
+        text=str(row.get("text") or ""),
     )
 
 

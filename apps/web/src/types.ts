@@ -49,6 +49,7 @@ export interface Turn {
     section: string;
     strategy: string;
     score: number;
+    text?: string;
   }[];
   ragQueryRewritten?: string | null;
   ragRetrieval?: {

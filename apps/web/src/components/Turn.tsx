@@ -125,6 +125,7 @@ export function TurnView({ turn, streaming, session }: Props) {
                   {" "}
                   ({s.source} · {s.chunk_id} · {s.score.toFixed(2)})
                 </span>
+                {s.text ? <pre className="rag-sources-quote">{s.text}</pre> : null}
               </li>
             ))}
           </ul>

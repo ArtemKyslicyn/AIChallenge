@@ -1127,6 +1127,22 @@ textarea {
   opacity: 0.75;
 }
 
+.rag-sources-quote {
+  margin: 0.25rem 0 0.45rem;
+  padding: 0.4rem 0.5rem;
+  max-height: 5.5rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent-soft));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
 .rag-tool-call {
   margin: 0.65rem 0;
   padding: 0.65rem 0.75rem;

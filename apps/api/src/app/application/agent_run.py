@@ -50,7 +50,7 @@ from app.domain.personalization import (
     get_expert_lens,
 )
 from app.domain.ports import AgentDialogRepository, ChatRouter
-from app.domain.rag import RagClient, format_rag_system_context
+from app.domain.rag import RagClient, format_rag_system_context, quote_snip
 from app.domain.task_state import (
     build_skip_refusal,
     find_task_skip_conflicts,
@@ -716,6 +716,7 @@ async def run_agent_with_dialog(
                     "section": h.section,
                     "strategy": h.strategy,
                     "score": h.score,
+                    "text": quote_snip(h.text),
                 }
                 for h in rag_result.hits
             )
