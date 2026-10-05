@@ -99,6 +99,7 @@ export type ChatEvent =
         section: string;
         strategy: string;
         score: number;
+        text?: string;
       }[];
       embed_model?: string | null;
       query_rewritten?: string | null;
@@ -931,6 +932,7 @@ export interface AgentWorkshopRunResultDto {
     section: string;
     strategy: string;
     score: number;
+    text?: string;
   }>;
   rag_embed_model?: string | null;
   rag_query_rewritten?: string | null;

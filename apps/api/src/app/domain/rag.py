@@ -153,15 +153,26 @@ class NullRagClient:
         return {"healed": False, "disabled": True, "forced": force}
 
 
+def quote_snip(text: str, *, limit: int = 280) -> str:
+    """Short citation fragment for UI / API source cards."""
+    cleaned = " ".join((text or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: max(0, limit - 1)] + "…"
+
+
 def format_rag_system_context(result: RagSearchResult) -> str:
     if not result.hits:
         return (
-            "Режим базы знаний включён, но релевантных фрагментов не найдено. "
-            "Ответь честно, без выдуманных цитат."
+            "Режим базы знаний включён, но релевантных фрагментов не найдено "
+            "(ниже порога similarity или пустой индекс). "
+            "Ты ОБЯЗАН ответить: что не знаешь по базе, и попросить уточнить вопрос. "
+            "Не выдумывай факты, порты и цитаты."
         )
     lines = [
-        "Ниже фрагменты из базы знаний стенда. Опирайся на них в ответе. "
-        "Если данных недостаточно — скажи об этом. Укажи источники по title/source."
+        "Ниже фрагменты из базы знаний стенда. Опирайся только на них. "
+        "В ответе используй смысл цитат; укажи источники (title/source/section). "
+        "Если фрагменты не покрывают вопрос — скажи «не знаю по базе» и попроси уточнение."
     ]
     for i, hit in enumerate(result.hits, start=1):
         lines.append(

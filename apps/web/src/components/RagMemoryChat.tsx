@@ -22,7 +22,8 @@ const DEFINITION = {
   system_prompt: [
     "Ты ассистент стенда AIChallenge с доступом к базе знаний (RAG).",
     "Отвечай по найденным фрагментам и памяти задачи (цель, факты, ограничения).",
-    "Если в базе нет ответа — скажи об этом. Не выдумывай порты, токены и имена файлов.",
+    "Если релевантных фрагментов нет или они слабые — скажи «не знаю по базе» и попроси уточнение.",
+    "Не выдумывай порты, токены и имена файлов. Опирайся на цитаты из источников.",
     "В конце ответа кратко назови title/source использованных фрагментов.",
     "Всегда учитывай цель диалога и зафиксированные ограничения.",
   ].join(" "),
@@ -36,6 +37,7 @@ const DEFAULT_GOAL =
 
 type RagSource = {
   chunk_id: string;
+  text?: string;
   source: string;
   title: string;
   section: string;
@@ -125,6 +127,17 @@ export function RagMemoryChat() {
     let cancelled = false;
     (async () => {
       try {
+        // Drop stale draft (old invariant triggers like ":443" blocked homework Qs).
+        setBootHint("Сбрасываем черновик…");
+        try {
+          await clearAgentDialogByDraft(DRAFT_ID);
+        } catch {
+          /* no prior dialog */
+        }
+        if (cancelled) return;
+        setTurns([]);
+        setFacts({});
+        setInvariants([]);
         setBootHint("Ставим цель задачи…");
         try {
           await postAgentTaskEvent({
@@ -140,16 +153,17 @@ export function RagMemoryChat() {
           /* already started on this draft — continue */
         }
         setBootHint("Фиксируем ограничения…");
+        // Triggers must NOT match homework questions (:443 / Guest MCP) — only inventing.
         for (const inv of [
           {
             kind: "architecture",
-            statement: "Не выдумывать порты и путь :443 — только из базы / deploy docs.",
-            triggers: [":443", "порт", "xray", "nginx"],
+            statement: "Порты и путь :443 — только из базы / deploy docs, не выдумывать.",
+            triggers: ["выдумай порт", "придумай :443", "наугад nginx", "без базы скажи порт"],
           },
           {
             kind: "decision",
             statement: "Guest MCP ≠ стендовый /mcp/*.",
-            triggers: ["Guest MCP", "guest mcp", "/mcp"],
+            triggers: ["guest mcp = /mcp", "guest mcp это /mcp", "стендовый mcp = guest"],
           },
         ] as const) {
           try {
@@ -217,6 +231,7 @@ export function RagMemoryChat() {
         section: s.section,
         strategy: s.strategy,
         score: Number(s.score) || 0,
+        text: s.text || "",
       }));
       if (result.messages?.length) {
         setTurns(
@@ -277,8 +292,17 @@ export function RagMemoryChat() {
         event: "add",
         clientDraftId: DRAFT_ID,
         kind: "architecture",
-        statement: "Не выдумывать порты и путь :443 — только из базы / deploy docs.",
-        triggers: [":443", "порт", "xray", "nginx"],
+        statement: "Порты и путь :443 — только из базы / deploy docs, не выдумывать.",
+        triggers: ["выдумай порт", "придумай :443", "наугад nginx", "без базы скажи порт"],
+        dialogName: DEFINITION.name,
+        dialogSystemPrompt: DEFINITION.system_prompt,
+      });
+      await postAgentInvariants({
+        event: "add",
+        clientDraftId: DRAFT_ID,
+        kind: "decision",
+        statement: "Guest MCP ≠ стендовый /mcp/*.",
+        triggers: ["guest mcp = /mcp", "guest mcp это /mcp", "стендовый mcp = guest"],
         dialogName: DEFINITION.name,
         dialogSystemPrompt: DEFINITION.system_prompt,
       });
@@ -406,6 +430,7 @@ export function RagMemoryChat() {
                               {" "}
                               ({s.source} · {s.chunk_id} · {s.score.toFixed(2)})
                             </span>
+                            {s.text ? <pre className="rag-sources-quote">{s.text}</pre> : null}
                           </li>
                         ))}
                       </ul>

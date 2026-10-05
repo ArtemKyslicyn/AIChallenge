@@ -26,9 +26,9 @@
 | 3 | Источники видны (title/section/source/chunk_id) | UI details «Источники базы» | **PASS** |
 | 4 | `model_id` на ответе | badge | **PASS** |
 | 5 | 10 контрольных вопросов подготовлены | `QUESTIONS.md` | **PASS** |
-| 6 | Upload → карточка `rag_ingest` + preview | UI + `record.mjs` challenge23 | **PASS** (код; видео после деплоя) |
-| 7 | После upload — ответ ассистента «принял…» | UI probe summary | **PASS** (код; видео после деплоя) |
-| 8 | Tool «Документы» → `rag_list_documents` (свои) | кнопка «Документы» в композиторе | **PASS** (код; видео после деплоя) |
+| 6 | Upload → карточка `rag_ingest` + preview | видео кадр 3 | **PASS** |
+| 7 | После upload — ответ ассистента «принял…» | видео кадр 3 | **PASS** |
+| 8 | Tool «Документы» → `rag_list_documents` (свои) | видео кадр 4 | **PASS** |
 | 9 | Внешний RAG ≠ stand `/mcp/*` | Guest MCP docs | documented |
 
 Перед пересъёмкой: `/api/v1/rag/stats` → `embed_model` ≠ `fake-hash`.  
@@ -41,3 +41,5 @@
 3. **В базу** → дождаться карточки и саммари.  
 4. **Документы** → список своих загрузок.  
 5. (Полный набор) пройти `QUESTIONS.md` 1–10 с базой вкл.
+
+Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw

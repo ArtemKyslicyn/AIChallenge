@@ -16,3 +16,5 @@
 - Пульс / чипы: web LiveWho + API live models pulse  
 - Пин: composer model select  
 - Атрибуция: каждый assistant turn несёт `model_id` (контракт платформы)
+
+Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw

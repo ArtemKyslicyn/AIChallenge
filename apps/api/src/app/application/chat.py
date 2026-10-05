@@ -73,7 +73,7 @@ from app.domain.ports import (
     SessionRepository,
     UnitOfWork,
 )
-from app.domain.rag import RagClient, format_rag_system_context
+from app.domain.rag import RagClient, format_rag_system_context, quote_snip
 from app.domain.tracing import (
     STATUS_ABORTED,
     STATUS_ERROR,
@@ -434,6 +434,7 @@ async def send_user_message_and_stream(
                         "section": h.section,
                         "strategy": h.strategy,
                         "score": h.score,
+                        "text": quote_snip(h.text),
                     }
                     for h in rag_result.hits
                 ],

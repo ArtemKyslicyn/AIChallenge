@@ -10,3 +10,5 @@
 | 4 | Кнопка **Документы** → карточка `rag_list_documents` | список своих docs |
 
 Полный список из 10 вопросов — `QUESTIONS.md`.
+
+Сводка недели (Яндекс.Диск): https://disk.yandex.ru/i/01KhOD_G7dBWPw

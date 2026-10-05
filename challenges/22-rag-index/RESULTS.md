@@ -37,3 +37,5 @@
 | FakeLLM | plans / AGENTS |
 
 Structural лучше для вопросов «по секции»; fixed — ровнее по размеру.
+
+Диск (неделя): https://disk.yandex.ru/i/01KhOD_G7dBWPw

@@ -12,4 +12,6 @@
 
 **Вес недели:** по 20% на день.  
 **Приёмка:** в каждой папке `RESULTS.md` — PASS по строкам чеклиста.  
-**Пересъёмка всей недели:** [`WEEK-RAG-SHOOT.md`](WEEK-RAG-SHOOT.md).
+**Карта «домашка курса ↔ папка»:** [`WEEK-RAG-MAP.md`](WEEK-RAG-MAP.md).  
+**Пересъёмка всей недели:** [`WEEK-RAG-SHOOT.md`](WEEK-RAG-SHOOT.md).  
+**Сводка на Диск:** https://disk.yandex.ru/i/01KhOD_G7dBWPw
