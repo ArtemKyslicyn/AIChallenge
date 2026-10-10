@@ -1,4 +1,4 @@
-# Challenges (Days 4–25)
+# Challenges (Days 4–30)
 
 Автопрогон и видео-сдачи AIChallenge.  
 **Правило:** номер папки = номер дня сдачи (кроме оговорок внутри README).
@@ -19,13 +19,19 @@
 | [`15-task-transitions/`](15-task-transitions/) | Граф переходов | **Агенты** | video · run |
 | [`16-mcp-connect/`](16-mcp-connect/) | MCP connect | **MCP** | video · run |
 | [`17-mcp-tool/`](17-mcp-tool/) … [`20-mcp-orchestration/`](20-mcp-orchestration/) | MCP tools / jobs / pipe | **MCP** | video |
-| [`21-live-models/`](21-live-models/) | Живой выбор модели в чате | **Чат** | **RESULTS** · video |
-| [`22-rag-index/`](22-rag-index/) | Индекс · fixed vs structural | **Профиль / rag** | **RESULTS** · video |
-| [`23-rag-query/`](23-rag-query/) | Ask ± база · источники | **Чат · Настройки** | **RESULTS** · QUESTIONS · video |
-| [`24-rag-rerank/`](24-rag-rerank/) | raw / filtered / full | **Чат · Режим базы** | **RESULTS** · video |
-| [`25-rag-memory/`](25-rag-memory/) | Мини-чат RAG + память задачи | **База** `?shell=rag` | **RESULTS** · SCENARIOS · run · video |
+| [`21-rag-index/`](21-rag-index/) | **21** Индексация · fixed vs structural | **Профиль / rag** | **RESULTS** · video |
+| [`22-rag-query/`](22-rag-query/) | **22** Первый RAG ask ± база | **Чат · Настройки** | **RESULTS** · QUESTIONS · video |
+| [`23-rag-rerank/`](23-rag-rerank/) | **23** Реранк raw / filtered / full | **Чат · Режим базы** | **RESULTS** · video |
+| [`24-rag-citations/`](24-rag-citations/) | **24** Цитаты · источники · «не знаю» | **Чат · база** | **RESULTS** · video |
+| [`25-rag-memory/`](25-rag-memory/) | **25** Мини-чат RAG + память | **База** `?shell=rag` | **RESULTS** · SCENARIOS · run · video |
+| [`26-local-llm/`](26-local-llm/) | **26** Локальная 35B, три вопроса | **Чат** | **RESULTS** · video · run |
+| [`27-local-app/`](27-local-app/) | **27** Подключение и пин в профиле | **Профиль · Чат** | README · video |
+| [`28-local-rag/`](28-local-rag/) | **28** Тот же пин, база выкл / вкл | **Чат · База** | README · video |
+| [`29-local-optimize/`](29-local-optimize/) | **29** Температура и фрагменты | **Чат** | README · run · video |
+| [`30-local-service/`](30-local-service/) | **30** Свой HTTP, лимит, длина | **Профиль · Чат** | README · video |
+| [`live-models/`](live-models/) | (опц.) Живой выбор модели | **Чат** | video |
 
-## Неделя 21–25 (живой выбор + RAG)
+## Неделя 21–25 (RAG по домашке курса)
 
 Текст домашек одной таблицей: [`WEEK-RAG.md`](WEEK-RAG.md).  
 План пересъёмки 21–25: [`WEEK-RAG-SHOOT.md`](WEEK-RAG-SHOOT.md).  

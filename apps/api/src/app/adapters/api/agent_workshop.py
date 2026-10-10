@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.adapters.api.auth import OptionalAuthUser
+from app.adapters.api.local_llm import load_user_source
 from app.adapters.api.schemas import (
     AgentCompressionResponse,
     AgentContextStrategyResponse,
@@ -42,6 +43,7 @@ from app.application.invariants_ops import (
     ensure_dialog_for_invariants,
 )
 from app.application.llm_catalog import generation_from_api
+from app.application.local_llm_rate_limit import charge_local_pin
 from app.application.task_fsm import apply_task_event_to_dialog, ensure_dialog_for_task
 from app.core.deps import (
     ClientVisitorId,
@@ -69,6 +71,7 @@ from app.domain.context_strategies import StrategyMeta
 from app.domain.entities import AUTO_MODEL
 from app.domain.errors import MessageValidationError
 from app.domain.invariants import InvariantEvent, parse_invariant_chat_commands
+from app.domain.local_llm import reset_local_llm_source, set_local_llm_source
 from app.domain.owner_key import memory_owner_key
 from app.domain.task_state import (
     TaskEvent,
@@ -229,6 +232,12 @@ async def run_workshop_agent(
     container.agent_run_limiter.check_and_record(visitor_key)
 
     definition = _definition_from_payload(payload)
+    charge_local_pin(
+        container.local_llm_limiter,
+        user_id=None if auth_user is None else auth_user.id,
+        models=[definition.preferred_model],
+    )
+    source = await load_user_source(request, auth_user)
     generation = generation_from_api(
         temperature=payload.definition.temperature,
         max_tokens=payload.definition.max_tokens,
@@ -249,6 +258,7 @@ async def run_workshop_agent(
     strategy_out: AgentContextStrategyResponse | None = None
     ctx_limit = _resolve_context_limit(payload.context_limit)
     task_just_resumed = False
+    scope = set_local_llm_source(source if source is not None and source.enabled else None)
     try:
         if payload.persist:
             visitor = (client_visitor_id or "").strip().lower()
@@ -496,6 +506,7 @@ async def run_workshop_agent(
         await db.rollback()
         raise
     finally:
+        reset_local_llm_source(scope)
         latency_ms = int((time.perf_counter() - t0) * 1000)
 
         async def _emit() -> None:

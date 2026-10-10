@@ -23,6 +23,7 @@ from app.adapters.llm.heuristic_scorer import HeuristicAnswerScorer
 from app.adapters.llm.llm_judge import HourlyJudgeBudget, LLMAnswerJudge
 from app.adapters.llm.openai_compatible import OpenAICompatibleProvider
 from app.adapters.llm.router import ModelRouter, TieredModelRouter
+from app.adapters.llm.routing_provider import RoutingLLMProvider
 from app.adapters.media.fake import FakeMediaGenerator
 from app.adapters.media.pixazo import PixazoVideoClient
 from app.adapters.media.pollinations import PollinationsImageClient
@@ -38,6 +39,7 @@ from app.adapters.persistence.trace_repo import SqlAlchemyRunTraceRepository
 from app.adapters.rag_http import HttpRagClient
 from app.adapters.scenarios.yaml_repo import YamlScenarioRepository
 from app.application.agent_rate_limit import AgentRunRateLimiter
+from app.application.local_llm_rate_limit import LocalLlmRateLimiter
 from app.application.media_tools import SessionMediaRateLimiter
 from app.application.sessions import authorize_session
 from app.core.settings import Settings
@@ -124,6 +126,7 @@ class Container:
     media_store: MediaStore | None
     media_limiter: SessionMediaRateLimiter | None
     agent_run_limiter: AgentRunRateLimiter
+    local_llm_limiter: LocalLlmRateLimiter
     #: Shared by every router tier, refreshed once per chat request.
     penalties: FeedbackPenaltyCache
     #: Judges a cheap answer for the cascade. Stateless, so one is enough.
@@ -199,6 +202,7 @@ def _router_for(
         exhausted_ttl_seconds=settings.llm_exhausted_ttl_seconds,
         max_attempts=settings.llm_max_attempts,
         first_token_timeout_seconds=settings.llm_first_token_timeout_seconds,
+        local_first_token_timeout_seconds=settings.local_llm_first_token_timeout_seconds,
         penalties=penalties,
     )
 
@@ -258,7 +262,7 @@ def build_container(settings: Settings) -> Container:
     # different provider happens to be serving it.
     penalties = _penalty_cache(settings)
     if settings.fake_llm_enabled():
-        provider = FakeLLMProvider()
+        provider = RoutingLLMProvider(FakeLLMProvider())
         chain = settings.model_chain_list() or [DEFAULT_FAKE_MODEL_ID]
         router: ModelRouter | TieredModelRouter = _router_for(settings, provider, chain, penalties)
         logger.info("using FakeLLMProvider (no provider key configured)")
@@ -266,11 +270,13 @@ def build_container(settings: Settings) -> Container:
         primary_proxy = settings.llm_http_proxy.strip() or None
         if primary_proxy:
             logger.info("LLM outbound proxy enabled for primary tier")
-        provider = _openai_provider(
-            settings,
-            base_url=settings.llm_base_url,
-            api_key=settings.primary_llm_api_key(),
-            proxy=primary_proxy,
+        provider = RoutingLLMProvider(
+            _openai_provider(
+                settings,
+                base_url=settings.llm_base_url,
+                api_key=settings.primary_llm_api_key(),
+                proxy=primary_proxy,
+            )
         )
         chain = settings.model_chain_list()
         if not chain:
@@ -353,6 +359,7 @@ def build_container(settings: Settings) -> Container:
         media_store=media_store,
         media_limiter=media_limiter,
         agent_run_limiter=AgentRunRateLimiter(limit_per_hour=settings.agents_run_limit_per_hour),
+        local_llm_limiter=LocalLlmRateLimiter(limit_per_hour=settings.local_llm_requests_per_hour),
         penalties=penalties,
         scorer=HeuristicAnswerScorer(
             min_answer_chars=settings.cascade_min_answer_chars,

@@ -48,6 +48,10 @@ class AgentRunRateLimitError(DomainError):
     """Visitor exceeded the configured agent-workshop run rate limit."""
 
 
+class LocalLlmRateLimitError(DomainError):
+    """Signed-in user exceeded the hourly cap on pinned local-model calls."""
+
+
 class LLMProviderError(DomainError):
     """A provider call failed. Carries just enough for the router to decide.
 
@@ -65,6 +69,7 @@ class LLMProviderError(DomainError):
         model_id: str | None = None,
     ) -> None:
         super().__init__(message)
+        self.message = message
         self.status = status
         self.kind = kind
         self.model_id = model_id

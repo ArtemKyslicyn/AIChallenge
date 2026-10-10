@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import type { SessionCredentials } from "../api/client";
 import { extractComicFromContent, stripComicFence } from "../comic";
 import type { Turn } from "../types";
@@ -10,6 +12,22 @@ import { MediaJobCard } from "./MediaJobCard";
  * Checklist keys `escalated_badge` / `escalated_hint`
  * (`docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`).
  */
+function LocalLoadHint({ modelId }: { modelId: string }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setSeconds(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <p className="body" role="status">
+      {modelId} · {seconds} с · Модель грузится, до 90 с.
+    </p>
+  );
+}
+
 const ESCALATED_BADGE = "эскалировали";
 const ESCALATED_HINT = "Дешёвая модель не справилась — ответила модель посильнее";
 
@@ -30,6 +48,8 @@ export function TurnView({ turn, streaming, session }: Props) {
     (turn.mediaJob.phase === "running" || turn.mediaJob.phase === "error") &&
     turn.mediaJob.kind !== "comic";
   const emptyBody = isAssistant && !bodyText.trim() && !comic;
+  const localWait =
+    emptyBody && streaming && Boolean(turn.modelId?.startsWith("ollama/"));
   // Prep D10: a live reply has no server id until `message_end`, so this is
   // also the «no feedback mid-stream» guard the checklist (H5) asks for.
   // A cut-off or empty answer is not rateable either: an abort that lands after
@@ -49,7 +69,9 @@ export function TurnView({ turn, streaming, session }: Props) {
       {isAssistant ? (
         // The caret is attached in CSS to the last rendered block, so it keeps
         // flowing with the text while Markdown re-renders on every token.
-        emptyBody && showMediaJob ? null : (
+        emptyBody && showMediaJob ? null : localWait && turn.modelId ? (
+          <LocalLoadHint modelId={turn.modelId} />
+        ) : (
           <div className="body">
             {bodyText.trim() ? <Markdown streaming={streaming}>{bodyText}</Markdown> : null}
             {comic ? <ComicStrip comic={comic} /> : null}

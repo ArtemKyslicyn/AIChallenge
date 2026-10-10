@@ -60,6 +60,44 @@ else:
     print("MCP_SHARED_TOKEN already set")
 PY
 
+echo "==> ensure local-LLM Tailscale + build fingerprint (no secrets)"
+BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+export BUILD_SHA
+export BUILD_SOURCE="${BUILD_SOURCE:-mac-deploy}"
+python3 - <<'PY'
+from pathlib import Path
+p = Path(".env")
+text = p.read_text(encoding="utf-8") if p.exists() else ""
+lines = text.splitlines()
+keys = {
+    "LOCAL_LLM_ALLOW_TAILSCALE": "true",
+    "BUILD_SOURCE": "mac-deploy",
+}
+changed = False
+seen = set()
+out = []
+for line in lines:
+    key = line.split("=", 1)[0] if "=" in line and not line.lstrip().startswith("#") else None
+    if key in keys and key not in seen:
+        seen.add(key)
+        out.append(f"{key}={keys[key]}")
+        if line != out[-1]:
+            changed = True
+    else:
+        out.append(line)
+for key, value in keys.items():
+    if key not in seen:
+        if out and out[-1] != "":
+            out.append("")
+        out.append(f"{key}={value}")
+        changed = True
+if changed:
+    p.write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("local-llm / build fingerprint updated")
+else:
+    print("local-llm / build fingerprint already set")
+PY
+
 # Re-run after reset in case compose changed on the branch.
 bash "$ROOT/scripts/assert-edge-safe.sh"
 

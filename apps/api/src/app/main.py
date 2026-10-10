@@ -17,6 +17,7 @@ from app.adapters.api.feedback import router as feedback_router
 from app.adapters.api.health import router as health_router
 from app.adapters.api.lab import router as lab_router
 from app.adapters.api.llm import router as llm_router
+from app.adapters.api.local_llm import router as local_llm_router
 from app.adapters.api.mcp import router as mcp_router
 from app.adapters.api.media import router as media_router
 from app.adapters.api.personalization import router as personalization_router
@@ -56,7 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_credentials=False,
             # DELETE is here for retracting a vote: without it the browser
             # fails the preflight and the thumb can be pressed but never released.
-            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=[
                 "Content-Type",
                 SESSION_TOKEN_HEADER,
@@ -79,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lab_router,
         feedback_router,
         auth_router,
+        local_llm_router,
         personalization_router,
         rag_router,
     ):

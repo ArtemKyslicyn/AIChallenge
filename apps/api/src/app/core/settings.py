@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     # Bounds on the work one request may do while walking the model chain.
     llm_max_attempts: int = 5
     llm_first_token_timeout_seconds: float = 25.0
+    #: First token from a pinned ollama/ model, including a cold load.
+    local_llm_first_token_timeout_seconds: float = 90.0
+    #: Hourly cap counted only when the pin starts with ollama/.
+    local_llm_requests_per_hour: int = 30
     # OpenRouter asks for these; harmless for other OpenAI-compatible hosts.
     llm_http_referer: str = "https://aichallenge.arcilite.ru"
     llm_app_title: str = "AIChallenge"
@@ -199,6 +203,12 @@ class Settings(BaseSettings):
     mcp_shared_token: str = ""
     #: Allow http://127.0.0.1 guest MCP URLs (local dev only).
     guest_mcp_allow_loopback: bool = False
+    #: Ollama origin policy. Loopback covers this Mac and 127.0.0.1:21434.
+    local_llm_allow_loopback: bool = True
+    #: Tailscale CGNAT 100.64.0.0/10. Required for the M1 Ollama port.
+    local_llm_allow_tailscale: bool = False
+    #: Other RFC1918 addresses.
+    local_llm_allow_private: bool = False
     #: Comma-separated emails allowed to use Guest MCP. Empty = any signed-in user.
     #: On production set to the admin account only (e.g. admin@example.com).
     guest_mcp_allowed_emails: str = ""

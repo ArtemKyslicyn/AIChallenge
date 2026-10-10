@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.api.auth import OptionalAuthUser
 from app.adapters.api.guest_mcp import router as guest_mcp_router
+from app.adapters.api.local_llm import load_user_source
 from app.adapters.api.schemas import (
     AttemptResponse,
     CreateSessionRequest,
@@ -40,6 +41,8 @@ from app.application.chat import (
     interrupted_answer,
     send_user_message_and_stream,
 )
+from app.application.local_llm import local_llm_scope
+from app.application.local_llm_rate_limit import charge_local_pin
 from app.application.quality import prose_chars, should_judge
 from app.application.sessions import create_session, list_visitor_sessions
 from app.core.deps import (
@@ -478,6 +481,12 @@ async def send_message(
 ) -> StreamingResponse:
     container = get_container(request)
     _reject_before_streaming(container, session, payload.content)
+    charge_local_pin(
+        container.local_llm_limiter,
+        user_id=None if auth_user is None else auth_user.id,
+        models=[payload.model or ""],
+    )
+    source = await load_user_source(request, auth_user)
 
     draft = ReplyDraft()
 
@@ -487,56 +496,57 @@ async def send_message(
         # too, so the close has to be shielded like the rescue write.
         db = container.sessionmaker()
         try:
-            await _refresh_penalties(container, db)
-            events = send_user_message_and_stream(
-                session_id=session.id,
-                access_token=token,
-                content=payload.content,
-                preferred_model=payload.model,
-                sessions=SqlAlchemySessionRepository(db),
-                messages=SqlAlchemyMessageRepository(db),
-                scenarios=container.scenarios,
-                router=container.router,
-                uow=db,
-                now=utcnow,
-                max_message_chars=container.settings.max_message_chars,
-                max_history_messages=container.settings.max_history_messages,
-                draft=draft,
-                media_tools_enabled=container.settings.media_tools_enabled,
-                media_generator=container.media_generator,
-                media_store=container.media_store,
-                media_limiter=container.media_limiter,
-                traces=(
-                    SqlAlchemyRunTraceRepository(db)
-                    if container.settings.run_trace_enabled
-                    else None
-                ),
-                cost_proxy=container.settings.model_cost_proxy(),
-                scorer=container.scorer,
-                cascade=CascadeSettings(
-                    enabled=container.settings.cascade_enabled,
-                    cheap_models=container.cascade_cheap_models,
-                    timeout_seconds=container.settings.cascade_timeout_seconds,
-                    max_question_chars=container.settings.cascade_max_cheap_chars,
-                ),
-                chat_mode=payload.chat_mode,
-                use_guest_mcp=payload.use_guest_mcp,
-                use_rag=payload.use_rag,
-                rag_client=container.rag_client,
-                rag_top_k=container.settings.rag_top_k,
-                rag_mode=payload.rag_mode,
-                rag_owner_id=(
-                    str(auth_user.id) if auth_user is not None else (session.visitor_hash or "")
-                ),
-                guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
-                guest_mcp_registry=container.guest_mcp_registry,
-                guest_mcp_client=container.guest_mcp_client,
-                guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,
-                analytics=container.analytics,
-                analytics_distinct_id=(session.visitor_hash or "").strip() or "anonymous",
-            )
-            async for frame in to_sse_with_keepalive(events):
-                yield frame
+            async with local_llm_scope(source):
+                await _refresh_penalties(container, db)
+                events = send_user_message_and_stream(
+                    session_id=session.id,
+                    access_token=token,
+                    content=payload.content,
+                    preferred_model=payload.model,
+                    sessions=SqlAlchemySessionRepository(db),
+                    messages=SqlAlchemyMessageRepository(db),
+                    scenarios=container.scenarios,
+                    router=container.router,
+                    uow=db,
+                    now=utcnow,
+                    max_message_chars=container.settings.max_message_chars,
+                    max_history_messages=container.settings.max_history_messages,
+                    draft=draft,
+                    media_tools_enabled=container.settings.media_tools_enabled,
+                    media_generator=container.media_generator,
+                    media_store=container.media_store,
+                    media_limiter=container.media_limiter,
+                    traces=(
+                        SqlAlchemyRunTraceRepository(db)
+                        if container.settings.run_trace_enabled
+                        else None
+                    ),
+                    cost_proxy=container.settings.model_cost_proxy(),
+                    scorer=container.scorer,
+                    cascade=CascadeSettings(
+                        enabled=container.settings.cascade_enabled,
+                        cheap_models=container.cascade_cheap_models,
+                        timeout_seconds=container.settings.cascade_timeout_seconds,
+                        max_question_chars=container.settings.cascade_max_cheap_chars,
+                    ),
+                    chat_mode=payload.chat_mode,
+                    use_guest_mcp=payload.use_guest_mcp,
+                    use_rag=payload.use_rag,
+                    rag_client=container.rag_client,
+                    rag_top_k=container.settings.rag_top_k,
+                    rag_mode=payload.rag_mode,
+                    rag_owner_id=(
+                        str(auth_user.id) if auth_user is not None else (session.visitor_hash or "")
+                    ),
+                    guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
+                    guest_mcp_registry=container.guest_mcp_registry,
+                    guest_mcp_client=container.guest_mcp_client,
+                    guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,
+                    analytics=container.analytics,
+                    analytics_distinct_id=(session.visitor_hash or "").strip() or "anonymous",
+                )
+                async for frame in to_sse_with_keepalive(events):
+                    yield frame
         finally:
             await _rescue_unsaved(container, draft)
             # After the answer is delivered and durable, never before: the
