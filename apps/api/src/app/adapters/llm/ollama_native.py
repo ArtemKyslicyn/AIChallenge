@@ -37,7 +37,11 @@ class OllamaNativeProvider:
         return {"Authorization": f"Bearer {self._api_key}"}
 
     def _client(self, timeout: float) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=self._transport, timeout=timeout)
+        return httpx.AsyncClient(
+            transport=self._transport,
+            timeout=timeout,
+            follow_redirects=False,
+        )
 
     def _resolved(self, model: str) -> tuple[str, str]:
         upstream = upstream_model_id(model) or model
@@ -181,7 +185,7 @@ async def fetch_ollama_tags(
     client: httpx.AsyncClient | None = None,
 ) -> tuple[str, ...]:
     owns = client is None
-    http = client or httpx.AsyncClient(timeout=_TAGS_TIMEOUT)
+    http = client or httpx.AsyncClient(timeout=_TAGS_TIMEOUT, follow_redirects=False)
     headers = {"Authorization": f"Bearer {api_key}"} if (api_key or "").strip() else {}
     try:
         response = await http.get(f"{origin.rstrip('/')}/api/tags", headers=headers)

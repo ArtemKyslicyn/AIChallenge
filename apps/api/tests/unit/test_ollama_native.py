@@ -115,3 +115,28 @@ async def test_fetch_tags_returns_names() -> None:
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         names = await fetch_ollama_tags("http://127.0.0.1:11434", None, client=client)
     assert names == ("qwen36-fast:latest", "llama3.1:8b")
+
+
+async def test_fetch_tags_does_not_follow_redirects() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if request.url.host == "127.0.0.1":
+            return httpx.Response(
+                302,
+                headers={"Location": "http://169.254.169.254/api/tags"},
+            )
+        return httpx.Response(
+            200,
+            json={"models": [{"name": "stolen"}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=False,
+    ) as client:
+        with pytest.raises(LLMProviderError) as exc:
+            await fetch_ollama_tags("http://127.0.0.1:11434", None, client=client)
+    assert calls["n"] == 1
+    assert exc.value.status == 302

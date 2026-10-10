@@ -17,7 +17,7 @@ Auth is the existing `X-Auth-Token`. Anonymous users get no row and no `ollama/`
 | `DELETE` | `/api/v1/me/llm-sources` | `204`. |
 | `GET` | `/api/v1/llm/models` | Cloud catalog, then `ollama/<tag>` for the signed-in user. |
 
-`PUT` canonicalizes the origin, then `GET {origin}/api/tags` with an 8 second timeout, then replaces the one row. Unreachable host: `502` and «Ollama недоступен по этому адресу.» Blocked address: `400` and «Этот адрес подключить нельзя.»
+`PUT` checks `LOCAL_LLM_ALLOWED_EMAILS` (403 if not listed), canonicalizes the origin, checks `LOCAL_LLM_ORIGIN_ALLOWLIST`, resolves non-IP hostnames against the same IP policy, then `GET {origin}/api/tags` with an 8 second timeout and `follow_redirects=false`, then replaces the one row. Unreachable host: `502` and «Ollama недоступен по этому адресу.» Blocked address: `400` and «Этот адрес подключить нельзя.» Chat/catalog reload re-validates the stored origin; stale rows are ignored. Ops checklist: `docs/env-local.md` → «Локальная Ollama + Tailscale».
 
 Chat, probe, workshop, and battle keep calling `container.router`. Bind the source inside the SSE generator (and around non-stream awaits), then reset it in `finally`. A pin `ollama/…` uses native `POST /api/chat` with `think: false` and a 90 second first-token budget. It does not fall through to the cloud chain. `auto` stays the cloud chain.
 
