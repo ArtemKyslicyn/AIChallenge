@@ -154,12 +154,12 @@ async function connectOllama(page) {
   if (await connectBtn.count()) {
     await connectBtn.click();
     await settle(page, 500);
-    const panel = page.locator(".local-llm-panel, .local-llm-form, .profile-main").first();
-    const inputs = panel.locator("input:not([type=password])");
-    await inputs.nth(0).fill("M1 с компа");
-    await inputs.nth(1).fill(OLLAMA_URL);
+    const form = page.locator(".local-llm-form");
+    await form.waitFor({ timeout: 10_000 });
+    await form.getByLabel(/^Название$/i).fill("M1 с компа");
+    await form.getByLabel(/^Адрес Ollama$/i).fill(OLLAMA_URL);
     await settle(page, 700);
-    await page.getByRole("button", { name: /^Сохранить$/i }).click();
+    await form.getByRole("button", { name: /^Сохранить$/i }).click();
   }
   await page.getByText(/Подключено/i).waitFor({ timeout: 20_000 });
   await pauseOn(page.locator(".local-llm-host, .local-llm-status").first(), 3000);
@@ -401,7 +401,31 @@ async function challenge30(page) {
   await settle(page, 2800);
 }
 
+async function warmupOllama() {
+  const tag = MODEL.replace(/^ollama\//, "");
+  console.log("warmup", tag, OLLAMA_URL);
+  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: tag,
+      stream: false,
+      think: false,
+      keep_alive: "30m",
+      messages: [{ role: "user", content: "Скажи одно слово: ок" }],
+      options: { temperature: 0, num_predict: 8 },
+    }),
+    signal: AbortSignal.timeout(300_000),
+  });
+  if (!response.ok) throw new Error(`warmup HTTP ${response.status}`);
+  const data = await response.json();
+  const text = String(data?.message?.content || "").trim();
+  if (!text) throw new Error("warmup empty — M1 model not ready");
+  console.log("warmup ok:", text.slice(0, 40));
+}
+
 async function main() {
+  await warmupOllama();
   const jobs = [
     ["27", "27-local-app", challenge27],
     ["28", "28-local-rag", challenge28],
@@ -416,7 +440,7 @@ async function main() {
     await withVideo(webm, fn);
     fs.writeFileSync(
       path.join(outDir, "RESULTS.md"),
-      `# ${id} — результаты\n\nРолик \`challenge-${id}.mp4\` снят с компа (build local-mac). Модель \`${MODEL}\` на \`${OLLAMA_URL}\`.\n`,
+      `# ${id} — результаты\n\nРолик \`challenge-${id}.mp4\` снят с компа через стенд. Модель \`${MODEL}\` на \`${OLLAMA_URL}\`.\n`,
     );
   }
 }

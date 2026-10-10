@@ -186,8 +186,31 @@ function pageHtml() {
 </html>`;
 }
 
+async function warmup() {
+  console.log("warmup", MODEL);
+  const response = await fetch(`${M1}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      stream: false,
+      think: false,
+      keep_alive: "30m",
+      messages: [{ role: "user", content: "Скажи одно слово: ок" }],
+      options: { temperature: 0, num_predict: 8 },
+    }),
+    signal: AbortSignal.timeout(300_000),
+  });
+  if (!response.ok) throw new Error(`warmup HTTP ${response.status}`);
+  const data = await response.json();
+  const text = String(data?.message?.content || "").trim();
+  if (!text) throw new Error("warmup returned empty content — model not ready");
+  console.log("warmup ok:", text.slice(0, 40));
+}
+
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  await warmup();
   const catalog = await tags();
   const kalinin = await probe("http://100.126.31.97:11434/api/tags");
   const mac = await probe("http://127.0.0.1:11434/api/tags");
