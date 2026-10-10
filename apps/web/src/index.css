@@ -427,10 +427,27 @@ textarea {
 
 .turn.assistant .body {
   max-width: 100%;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--text);
+  padding: 0.15rem 0 0.35rem;
 }
 
 .turn.assistant.failed .body {
   color: var(--text-muted);
+}
+
+.turn-load-hint {
+  color: var(--text) !important;
+  font-size: 0.98rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface));
+}
+
+.turn-load-hint code {
+  font-size: 0.9em;
 }
 
 .role {
@@ -457,7 +474,7 @@ textarea {
      `model_id` used to wrap the pill over two lines and read as a rendering
      bug; the full id is in `title`. */
   display: inline-block;
-  max-width: 100%;
+  max-width: min(22rem, 100%);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -465,11 +482,17 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.4;
-  padding: 2px var(--space-2);
+  padding: 3px var(--space-2);
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  color: var(--text-muted);
+  color: var(--text);
+}
+
+.badge[data-local="1"] {
+  border-color: color-mix(in srgb, #16a34a 42%, var(--border));
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+  color: #166534;
 }
 
 .badge[data-tone="pending"] {
@@ -1493,6 +1516,103 @@ textarea {
   min-width: 8rem;
   max-width: min(18rem, 52vw);
   min-height: 24px;
+}
+
+.composer-model-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(22rem, 62vw);
+  min-height: 32px;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.composer-model-menu-btn:hover,
+.composer-model-menu-btn[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+}
+
+.composer-model-menu-btn[data-local="1"] {
+  border-color: color-mix(in srgb, #16a34a 40%, var(--border));
+  background: color-mix(in srgb, #22c55e 12%, var(--surface));
+}
+
+.composer-model-menu-btn code {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.composer-model-menu-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #15803d;
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+}
+
+.composer-model-menu {
+  position: fixed;
+  z-index: 5000;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.composer-model-menu-group {
+  margin: 0.45rem 0.45rem 0.2rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.composer-model-menu-item {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+
+.composer-model-menu-item:hover,
+.composer-model-menu-item.is-on {
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+}
+
+.composer-model-menu-item-kicker {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.composer-model-menu-item code {
+  font-size: 0.86rem;
+  word-break: break-word;
 }
 
 .composer-options-chips {
@@ -9296,6 +9416,78 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.local-llm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--surface-2, #f8fafc) 70%, transparent);
+}
+
+.local-llm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.local-llm-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.local-llm-pill {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #166534;
+  background: color-mix(in srgb, #22c55e 16%, transparent);
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.local-llm-host {
+  margin: 0;
+}
+
+.local-llm-host code {
+  display: inline-block;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  word-break: break-all;
+}
+
+.local-llm-status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.local-llm-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted, #6b7280);
+}
+
+.local-llm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.local-llm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .profile-gate {

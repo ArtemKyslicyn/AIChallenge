@@ -11,10 +11,10 @@ import {
 } from "../../api/client";
 
 const ADDRESS_HINT =
-  "M1 http://100.90.210.109:11435. Туннель: http://127.0.0.1:21434. Этот Mac: http://127.0.0.1:11434.";
+  "M1 http://100.90.210.109:11435 · туннель http://127.0.0.1:21434 · этот Mac http://127.0.0.1:11434";
 
 function connectedLine(source: LocalLlmSourceDto): string {
-  return `Подключено: ${source.base_host}. Моделей: ${source.models.length}.`;
+  return `Подключено · ${source.models.length} моделей`;
 }
 
 export function LocalLlmPanel() {
@@ -59,9 +59,11 @@ export function LocalLlmPanel() {
 
   if (!signedIn) {
     return (
-      <section className="profile-form" aria-labelledby="local-llm-title">
+      <section className="local-llm-panel" aria-labelledby="local-llm-title">
         <h3 id="local-llm-title">Локальная модель (Ollama)</h3>
-        <p role="status">Сначала войдите.</p>
+        <p role="status" className="local-llm-status">
+          Сначала войдите.
+        </p>
       </section>
     );
   }
@@ -124,23 +126,36 @@ export function LocalLlmPanel() {
   const showFields = source === null && formOpen;
 
   return (
-    <section className="profile-form" aria-labelledby="local-llm-title">
-      <h3 id="local-llm-title">Локальная модель (Ollama)</h3>
-      <p role="status" aria-live="polite">
+    <section className="local-llm-panel" aria-labelledby="local-llm-title">
+      <div className="local-llm-head">
+        <h3 id="local-llm-title">Локальная модель (Ollama)</h3>
+        {source ? <span className="local-llm-pill">с компа</span> : null}
+      </div>
+
+      {source ? (
+        <p className="local-llm-host" title={source.base_host}>
+          <code>{source.base_host}</code>
+        </p>
+      ) : null}
+
+      <p role="status" aria-live="polite" className="local-llm-status">
         {status}
       </p>
+
       {error ? (
         <p role="alert" className="alert">
           {error}
         </p>
       ) : null}
+
       {showConnect ? (
         <button type="button" className="primary-button" onClick={() => setFormOpen(true)}>
           Подключить
         </button>
       ) : null}
+
       {showFields ? (
-        <form onSubmit={onSave}>
+        <form className="local-llm-form" onSubmit={onSave}>
           <label className="composer-field">
             <span>Название</span>
             <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
@@ -154,9 +169,10 @@ export function LocalLlmPanel() {
               inputMode="url"
               autoComplete="off"
               spellCheck={false}
+              placeholder="http://100.90.210.109:11435"
             />
           </label>
-          <p className="guest-mcp-muted">{ADDRESS_HINT}</p>
+          <p className="local-llm-hint">{ADDRESS_HINT}</p>
           <label className="composer-field">
             <span>Ключ (необязательно)</span>
             <input
@@ -166,11 +182,24 @@ export function LocalLlmPanel() {
               autoComplete="new-password"
             />
           </label>
-          <button type="submit" className="primary-button" aria-busy={busy || undefined}>
-            Сохранить
-          </button>
+          <div className="local-llm-actions">
+            <button type="submit" className="primary-button" aria-busy={busy || undefined}>
+              Сохранить
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                setFormOpen(false);
+                setError("");
+              }}
+            >
+              Отмена
+            </button>
+          </div>
         </form>
       ) : null}
+
       {source ? (
         <button
           type="button"

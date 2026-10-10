@@ -12,6 +12,12 @@ import { MediaJobCard } from "./MediaJobCard";
  * Checklist keys `escalated_badge` / `escalated_hint`
  * (`docs/superpowers/specs/2026-09-03-lab-observability-ux-checklist.md`).
  */
+function shortModelBadge(modelId: string): string {
+  if (modelId.startsWith("ollama/")) return modelId.slice("ollama/".length);
+  const tail = modelId.includes("/") ? modelId.split("/").pop() || modelId : modelId;
+  return tail.length > 28 ? `${tail.slice(0, 26)}…` : tail;
+}
+
 function LocalLoadHint({ modelId }: { modelId: string }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -21,9 +27,11 @@ function LocalLoadHint({ modelId }: { modelId: string }) {
     }, 1000);
     return () => window.clearInterval(id);
   }, []);
+  const local = modelId.startsWith("ollama/");
   return (
-    <p className="body" role="status">
-      {modelId} · {seconds} с · Модель грузится, до 90 с.
+    <p className="body turn-load-hint" role="status">
+      <code title={modelId}>{shortModelBadge(modelId)}</code>
+      {local ? " · с компа" : null} · {seconds} с · Модель грузится, до 90 с.
     </p>
   );
 }
@@ -85,12 +93,17 @@ export function TurnView({ turn, streaming, session }: Props) {
       {isAssistant && (
         <div className="meta">
           {turn.failed ? (
-            <span className="badge" data-tone="error">
-              прервано{turn.modelId ? ` · ${turn.modelId}` : ""}
+            <span className="badge" data-tone="error" title={turn.modelId || undefined}>
+              прервано{turn.modelId ? ` · ${shortModelBadge(turn.modelId)}` : ""}
             </span>
           ) : turn.modelId ? (
-            <span className="badge" title="Модель, которая дала этот ответ">
-              {turn.modelId}
+            <span
+              className="badge"
+              data-local={turn.modelId.startsWith("ollama/") ? "1" : undefined}
+              title={turn.modelId}
+            >
+              {turn.modelId.startsWith("ollama/") ? "с компа · " : ""}
+              {shortModelBadge(turn.modelId)}
             </span>
           ) : turn.mediaJob?.phase === "running" ? (
             <span className="badge" data-tone="pending">

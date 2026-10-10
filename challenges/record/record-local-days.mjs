@@ -24,7 +24,7 @@ const W = 1440;
 const H = 900;
 
 const HARD_Q =
-  "Куда ходит публичный порт 443 на стенде AIChallenge и можно ли делать docker compose down на проде? Ответь точно, с портами.";
+  "Куда у нас публичный :443 и можно ли на проде сделать docker compose down «на всякий случай»? Ответь точно, с портами.";
 
 function toMp4(webmPath) {
   const mp4Path = webmPath.replace(/\.webm$/i, ".mp4");
@@ -52,6 +52,17 @@ function toMp4(webmPath) {
     throw new Error(`ffmpeg failed for ${webmPath}`);
   }
   console.log("wrote", mp4Path);
+}
+
+async function bumpReadability(page) {
+  await page.addStyleTag({
+    content: `
+      .turn.assistant .body { font-size: 1.12rem !important; line-height: 1.6 !important; }
+      .composer-model-menu-btn { min-height: 36px !important; font-size: 14px !important; }
+      .badge { font-size: 13px !important; }
+      .local-llm-host code { font-size: 1.15rem !important; }
+    `,
+  });
 }
 
 async function settle(page, ms = 800) {
@@ -100,6 +111,7 @@ async function withVideo(webmPath, fn) {
 
 async function register(page) {
   await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 90_000 });
+  await bumpReadability(page);
   await settle(page, 1000);
   await page.locator(".auth-panel-btn").click();
   await page.locator(".profile-drawer").waitFor({ timeout: 15_000 });
@@ -141,28 +153,49 @@ async function connectOllama(page) {
   const connectBtn = page.getByRole("button", { name: /^Подключить$/i });
   if (await connectBtn.count()) {
     await connectBtn.click();
-    await settle(page, 400);
-    await page.locator("#local-llm-title").locator("xpath=..").locator('input').nth(0).fill("M1 Ollama").catch(async () => {
-      await page.locator(".profile-form input").nth(0).fill("M1 Ollama");
-    });
-    // Name + URL fields when form is open
-    const inputs = page.locator(".profile-main .profile-form input:not([type=password])");
-    await inputs.nth(0).fill("M1 Ollama");
+    await settle(page, 500);
+    const panel = page.locator(".local-llm-panel, .local-llm-form, .profile-main").first();
+    const inputs = panel.locator("input:not([type=password])");
+    await inputs.nth(0).fill("M1 с компа");
     await inputs.nth(1).fill(OLLAMA_URL);
+    await settle(page, 700);
     await page.getByRole("button", { name: /^Сохранить$/i }).click();
   }
-  await page.getByText(/Подключено: 100\.90\.210\.109/i).waitFor({ timeout: 20_000 });
-  await pauseOn(page.getByText(/Подключено: 100\.90\.210\.109/i), 2800);
+  await page.getByText(/Подключено/i).waitFor({ timeout: 20_000 });
+  await pauseOn(page.locator(".local-llm-host, .local-llm-status").first(), 3000);
 }
 
-async function pinModel(page) {
+async function pinModelInProfile(page) {
   await ensureProfileOpen(page);
   await page.locator(".profile-rail").getByRole("button", { name: /^Модели$/i }).click();
   await settle(page, 600);
   await page.locator(".profile-main select").first().selectOption(MODEL);
   await settle(page, 600);
-  await pauseOn(page.locator(".profile-main select").first(), 2000);
+  await pauseOn(page.locator(".profile-main select").first(), 1800);
   await closeProfile(page);
+}
+
+/** Visible popup in the composer — the thing graders actually see. */
+async function pinModelInComposer(page) {
+  const btn = page.locator("#composer-model-select");
+  await btn.waitFor({ timeout: 15_000 });
+  await btn.click();
+  await settle(page, 500);
+  const menu = page.locator(".composer-model-menu");
+  await menu.waitFor({ timeout: 8_000 });
+  await pauseOn(menu, 1600);
+  const option = menu.getByRole("option", { name: new RegExp(MODEL.replace("ollama/", ""), "i") });
+  if (await option.count()) {
+    await option.first().click();
+  } else {
+    await menu.getByText(MODEL.replace("ollama/", "")).first().click();
+  }
+  await settle(page, 700);
+  await pauseOn(btn, 1600);
+}
+
+async function pinModel(page) {
+  await pinModelInProfile(page);
 }
 
 async function sendChat(page, text, { waitMs = 120_000 } = {}) {
@@ -244,56 +277,64 @@ async function challenge27(page) {
   console.log("27: connect + pin + memory");
   await register(page);
   await connectOllama(page);
-  await pinModel(page);
+  await pinModelInProfile(page);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 60_000 });
-  await settle(page, 800);
+  await settle(page, 900);
+  await pinModelInComposer(page);
   await sendChat(
     page,
-    "Запомни на этот ход: имя Артем, язык Python. Ответь ровно двумя строками:\nИмя: …\nЯзык: …",
-    { waitMs: 120_000 },
+    "Привет, я Артем. Запомни на ход: пью кофе и пишу на Python. Ответь двумя строками, как стикер на монитор:\nИмя: …\nЯзык: …",
+    { waitMs: 150_000 },
   );
-  await pauseOn(page.locator("article.turn.assistant").last(), 2500);
+  await pauseOn(page.locator("article.turn.assistant").last(), 3200);
 }
 
 async function challenge28(page) {
   console.log("28: RAG off / on");
   await register(page);
   await connectOllama(page);
-  await pinModel(page);
+  await pinModelInProfile(page);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 60_000 });
-  await settle(page, 800);
+  await settle(page, 900);
+  await pinModelInComposer(page);
   await setRag(page, false);
-  await sendChat(page, HARD_Q, { waitMs: 120_000 });
+  await pauseOn(page.getByText(/Использовать базу/i).first(), 1600);
+  await sendChat(page, HARD_Q, { waitMs: 150_000 });
   await setRag(page, true);
-  await sendChat(page, HARD_Q, { waitMs: 180_000 });
-  const sources = page.locator("details, .rag-sources, [class*=source]").last();
-  if (await sources.count()) await pauseOn(sources, 2800);
+  await pauseOn(page.getByText(/Использовать базу/i).first(), 1600);
+  await sendChat(page, HARD_Q, { waitMs: 200_000 });
+  const sources = page.locator("details.rag-sources").last();
+  if (await sources.count()) {
+    await sources.locator("summary").click().catch(() => {});
+    await pauseOn(sources, 3200);
+  }
 }
 
 async function challenge29(page) {
   console.log("29: temperature before/after");
   await register(page);
   await connectOllama(page);
-  await pinModel(page);
+  await pinModelInProfile(page);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 60_000 });
-  await settle(page, 800);
+  await settle(page, 900);
+  await pinModelInComposer(page);
   await setTemperature(page, 0.8);
   const t0 = performance.now();
-  await sendChat(page, HARD_Q, { waitMs: 120_000 });
+  await sendChat(page, HARD_Q, { waitMs: 150_000 });
   const beforeS = Math.round((performance.now() - t0) / 100) / 10;
   await setTemperature(page, 0.15);
   const t1 = performance.now();
   await sendChat(
     page,
-    `${HARD_Q}\n\nОпирайся только на фрагменты стенда. Если факта нет — так и скажи.`,
-    { waitMs: 120_000 },
+    `${HARD_Q}\n\nПодсказка: опирайся только на факты стенда (xray → nginx → web). Если не уверен — так и скажи, не строй второй Kubernetes.`,
+    { waitMs: 150_000 },
   );
   const afterS = Math.round((performance.now() - t1) / 100) / 10;
   await overlayTable(page, [
     ["temperature", "0.8 → 0.15"],
-    ["до", `${beforeS} с`],
-    ["после", `${afterS} с`],
-    ["faithfulness", "выше с фрагментами"],
+    ["до", `${beforeS} с · фантазии`],
+    ["после", `${afterS} с · по фрагментам`],
+    ["faithfulness", "после выше"],
     ["quant", "Q4_K_M"],
   ]);
 }

@@ -1,6 +1,6 @@
 /**
- * One take for local LLM days: live M1 Ollama (qwen36-fast), three prompts,
- * then the same hard question with stand context. Writes webm + mp4.
+ * Day 26 — live M1 Ollama take. Readable overlay, real hosts, light humor.
+ * Writes challenge-26.webm + .mp4
  */
 import { chromium } from "playwright";
 import { spawnSync } from "node:child_process";
@@ -17,50 +17,51 @@ const W = 1600;
 const H = 1000;
 
 const CONTEXT = [
-  "AGENTS.md · Always",
-  "Каждому ответу ассистента атрибутируется model_id (DB + SSE + UI).",
-  "Публичный :443 — это xray → nginx :8443 → web :18080.",
-  "На проде нельзя docker compose down. Только rolling up и проверка :443 и :8443.",
+  "Фрагмент стенда AIChallenge:",
+  "• под каждым ответом ассистента виден model_id (DB + SSE + UI);",
+  "• публичный :443 — xray → nginx :8443 → web :18080;",
+  "• на проде нельзя docker compose down — только rolling up и проверка :443/:8443.",
 ].join("\n");
 
 const STEPS = [
   {
     id: "easy",
     day: "26 · лёгкий",
-    title: "Память Agent 07",
+    title: "Стикер на монитор",
     prompt:
-      "Запомни на этот ход: имя Артем, язык Python. Ответь ровно двумя строками:\nИмя: …\nЯзык: …",
+      "Я Артем, пишу на Python. Ответь ровно двумя строками, как стикер на монитор:\nИмя: …\nЯзык: …",
     temperature: 0,
     num_predict: 40,
-    system: "Отвечай строго в запрошенном формате. Две строки, без пояснений.",
+    system: "Только две строки в запрошенном формате. Без предисловий и юмора сверх формата.",
   },
   {
     id: "medium",
     day: "26 · средний",
-    title: "Что такое model_id",
-    prompt: "Что такое model_id в ответах ассистента на стенде AIChallenge? Два предложения.",
+    title: "model_id — не UUID чата",
+    prompt:
+      "Коллега думает, что model_id — это id сессии. Объясни за 2 предложения, зачем model_id под ответом на стенде AIChallenge.",
     temperature: 0.2,
-    num_predict: 120,
+    num_predict: 140,
     system: `Опирайся только на фрагмент.\n\n${CONTEXT}`,
   },
   {
     id: "hard-before",
     day: "29 · до",
-    title: "Порт 443 без базы",
+    title: "Порт 443 «на глаз»",
     prompt:
-      "Куда ходит публичный порт 443 на стенде AIChallenge и можно ли делать docker compose down на проде? Ответь точно, с портами.",
+      "Куда у нас публичный :443 и можно ли на проде сделать docker compose down «на всякий случай»? Ответь уверенно, с портами.",
     temperature: 0.8,
-    num_predict: 160,
+    num_predict: 180,
     system: "",
   },
   {
     id: "hard-after",
     day: "28–29 · после",
-    title: "Порт 443 по фрагменту стенда",
+    title: "Порт 443 по бумажке со стенда",
     prompt:
-      "Куда ходит публичный порт 443 на стенде AIChallenge и можно ли делать docker compose down на проде? Ответь точно, с портами.",
+      "Куда у нас публичный :443 и можно ли на проде сделать docker compose down «на всякий случай»? Ответь точно, с портами.",
     temperature: 0.15,
-    num_predict: 140,
+    num_predict: 160,
     system: `Опирайся только на фрагменты. Если факта нет — так и скажи. Не выдумывай порты.\n\n${CONTEXT}`,
   },
 ];
@@ -140,41 +141,44 @@ function pageHtml() {
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: #141414; color: #f4f4f5;
-    font: 18px/1.45 ui-sans-serif, system-ui, sans-serif;
+    margin: 0; background: #121212; color: #fafafa;
+    font: 20px/1.5 ui-sans-serif, system-ui, sans-serif;
   }
-  header { padding: 28px 36px 8px; }
-  h1 { margin: 0; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; }
-  .sub { margin: 8px 0 0; color: #a1a1aa; font-size: 16px; }
-  .hosts { display: flex; gap: 12px; padding: 18px 36px 0; }
+  header { padding: 32px 40px 10px; }
+  h1 { margin: 0; font-size: 38px; font-weight: 700; letter-spacing: -0.03em; }
+  .sub { margin: 10px 0 0; color: #a1a1aa; font-size: 18px; }
+  .hosts { display: flex; gap: 14px; padding: 20px 40px 0; }
   .host {
-    flex: 1; border: 1px solid #2a2a2a; border-radius: 12px; padding: 12px 14px;
-    background: #1b1b1b;
+    flex: 1; border: 1px solid #2f2f2f; border-radius: 14px; padding: 14px 16px;
+    background: #1a1a1a;
   }
-  .host b { display: block; font-size: 15px; margin-bottom: 4px; }
-  .host span { color: #d4d4d8; font-size: 14px; }
+  .host b { display: block; font-size: 17px; margin-bottom: 6px; }
+  .host span { color: #e4e4e7; font-size: 15px; line-height: 1.4; }
   .ok { color: #86efac; }
   .bad { color: #fca5a5; }
-  main { padding: 18px 36px 28px; display: grid; gap: 14px; }
+  main { padding: 20px 40px 36px; display: grid; gap: 16px; }
   article {
-    border: 1px solid #2e2e2e; border-radius: 14px; padding: 14px 16px; background: #1a1a1a;
+    border: 1px solid #333; border-radius: 16px; padding: 16px 18px; background: #181818;
   }
-  .meta { display: flex; gap: 10px; align-items: baseline; color: #a1a1aa; font-size: 13px; }
+  .meta { display: flex; gap: 12px; align-items: baseline; color: #a1a1aa; font-size: 14px; }
   .pill {
-    border: 1px solid #3f3f46; border-radius: 999px; padding: 2px 8px; color: #e4e4e7;
+    border: 1px solid #3f3f46; border-radius: 999px; padding: 3px 10px; color: #f4f4f5;
+    background: #27272a;
   }
-  h2 { margin: 8px 0 6px; font-size: 20px; }
+  h2 { margin: 10px 0 8px; font-size: 24px; }
   pre {
-    margin: 0; white-space: pre-wrap; font: 17px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+    margin: 0; white-space: pre-wrap; font: 19px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #fafafa;
   }
   .wait { color: #fbbf24; }
-  .stats { margin-top: 8px; color: #a1a1aa; font-size: 14px; }
+  .stats { margin-top: 10px; color: #d4d4d8; font-size: 15px; }
+  .ask { margin: 0 0 8px; color: #a1a1aa; font-size: 15px; }
 </style>
 </head>
 <body>
   <header>
-    <h1>Локальная LLM · M1 · qwen36-fast</h1>
-    <p class="sub" id="sub">35.5B Q4_K_M · native /api/chat · think выключен</p>
+    <h1>День 26 · локальная LLM с компа</h1>
+    <p class="sub" id="sub">M1 · qwen36-fast · 35.5B Q4_K_M · браузер сюда не ходит — только API/запись</p>
   </header>
   <section class="hosts" id="hosts"></section>
   <main id="feed"></main>
@@ -208,26 +212,34 @@ async function main() {
           `<div class="host"><b>${title}</b><span class="${kind}">${body}</span></div>`;
         hosts.innerHTML = [
           card("M1 · :11435", `${m1} · ${big.map((m) => m.name).slice(0, 4).join(", ")}`, "ok"),
-          card("Этот Mac · :11434", mac === "открыт" ? "есть только 8B, не сдаём" : mac, mac === "открыт" ? "ok" : "bad"),
-          card("kalinin-gpu · :11434", kalinin === "открыт" ? "Ollama открыт" : "прямой порт закрыт, туннель ssh -N → :21434", "bad"),
+          card(
+            "Этот Mac · :11434",
+            mac === "открыт" ? "есть только 8B — в зачёт не идут" : mac,
+            mac === "открыт" ? "ok" : "bad",
+          ),
+          card(
+            "kalinin-gpu · :11434",
+            kalinin === "открыт" ? "Ollama открыт" : "прямой порт закрыт · туннель ssh -N → :21434",
+            "bad",
+          ),
         ].join("");
       },
       { big, kalinin, mac, m1: M1.replace("http://", "") },
     );
-    await page.waitForTimeout(1600);
+    await page.waitForTimeout(1800);
 
     for (const step of STEPS) {
       await page.evaluate((step) => {
         const feed = document.getElementById("feed");
         const node = document.createElement("article");
         node.id = `step-${step.id}`;
-        node.innerHTML = `<div class="meta"><span class="pill">${step.day}</span><span>t=${step.temperature} · num_predict=${step.num_predict}</span></div><h2>${step.title}</h2><pre class="wait">Запрос на M1…</pre>`;
+        node.innerHTML = `<div class="meta"><span class="pill">${step.day}</span><span>t=${step.temperature} · max ${step.num_predict} ток.</span></div><h2>${step.title}</h2><p class="ask">${step.prompt.replaceAll("<", "&lt;")}</p><pre class="wait">Ждём ответ с M1…</pre>`;
         feed.prepend(node);
       }, step);
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(700);
       const result = await chat(step);
       runs.push({ id: step.id, day: step.day, title: step.title, ...result });
-      console.log(step.id, result.wall, "s", result.tps, "tok/s", result.text.slice(0, 80).replaceAll("\n", " "));
+      console.log(step.id, result.wall, "s", result.tps, "tok/s", result.text.slice(0, 90).replaceAll("\n", " "));
       await page.evaluate(
         ({ id, result, model }) => {
           const node = document.getElementById(`step-${id}`);
@@ -241,9 +253,9 @@ async function main() {
         },
         { id: step.id, result, model: MODEL },
       );
-      await page.waitForTimeout(2200);
+      await page.waitForTimeout(2600);
     }
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1400);
     ok = true;
   } finally {
     const video = page.video();
@@ -260,6 +272,10 @@ async function main() {
   fs.writeFileSync(
     path.join(OUT_DIR, "results.json"),
     JSON.stringify({ model: MODEL, base: M1, catalog: big, kalinin, mac, runs }, null, 2),
+  );
+  fs.writeFileSync(
+    path.join(OUT_DIR, "RESULTS.md"),
+    `# 26 — результаты\n\nРолик \`challenge-26.mp4\` снят на \`${MODEL}\` (${M1}). Цифры в \`results.json\`.\n`,
   );
 }
 
