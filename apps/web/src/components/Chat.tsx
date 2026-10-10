@@ -6,6 +6,7 @@ import {
   listAllRagDocuments,
   listMessages,
   listModels,
+  LOCAL_LLM_CHANGED,
   listSessionRagDocuments,
   probeComplete,
   sendMessageSSE,
@@ -159,13 +160,18 @@ export function Chat({
 
   useEffect(() => {
     let cancelled = false;
-    listModels()
-      .then((models) => {
-        if (!cancelled) setCatalogIds(models.map((item) => item.id));
-      })
-      .catch(() => undefined);
+    const load = () => {
+      listModels()
+        .then((models) => {
+          if (!cancelled) setCatalogIds(models.map((item) => item.id));
+        })
+        .catch(() => undefined);
+    };
+    load();
+    window.addEventListener(LOCAL_LLM_CHANGED, load);
     return () => {
       cancelled = true;
+      window.removeEventListener(LOCAL_LLM_CHANGED, load);
     };
   }, []);
 
@@ -289,7 +295,12 @@ export function Chat({
       setItems((prev) => [
         ...prev,
         { id: `sent-${Date.now()}`, role: "user", content: display, modelId: null },
-        { id: replyId, role: "assistant", content: "", modelId: null },
+        {
+          id: replyId,
+          role: "assistant",
+          content: "",
+          modelId: modelId.startsWith("ollama/") ? modelId : null,
+        },
       ]);
       if (!hadTurns) onFirstMessage?.(display);
 

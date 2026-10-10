@@ -7,6 +7,8 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from app.adapters.api.auth import OptionalAuthUser
+from app.adapters.api.local_llm import load_user_source, source_model_ids
 from app.adapters.api.schemas import (
     ModelCapabilitiesResponse,
     ModelCatalogItemResponse,
@@ -16,6 +18,8 @@ from app.adapters.api.schemas import (
 from app.adapters.api.sse import SSE_HEADERS, SSE_MEDIA_TYPE, format_frame
 from app.application.llm_catalog import generation_from_api, list_model_catalog
 from app.application.llm_probe import complete_probe
+from app.application.local_llm import local_llm_scope
+from app.application.local_llm_rate_limit import charge_local_pin
 from app.core.deps import get_container
 from app.domain.entities import ChatMessage, MessageRole
 from app.domain.errors import MessageValidationError, ProbeDisabledError
@@ -45,10 +49,15 @@ def _generation(payload: ProbeRequest) -> GenerationParams | None:
 
 
 @router.get("/models", response_model=list[ModelCatalogItemResponse])
-async def models(request: Request) -> list[ModelCatalogItemResponse]:
+async def models(request: Request, user: OptionalAuthUser) -> list[ModelCatalogItemResponse]:
     container = get_container(request)
     settings = container.settings
-    model_ids = [*settings.model_chain_list(), *settings.fallback_chain_list()]
+    source = await load_user_source(request, user)
+    model_ids = [
+        *settings.model_chain_list(),
+        *settings.fallback_chain_list(),
+        *source_model_ids(source),
+    ]
     return [
         ModelCatalogItemResponse(
             id=entry.id,
@@ -65,20 +74,33 @@ async def models(request: Request) -> list[ModelCatalogItemResponse]:
 
 
 @router.post("/complete", response_model=None)
-async def complete(payload: ProbeRequest, request: Request) -> ProbeResponse | StreamingResponse:
+async def complete(
+    payload: ProbeRequest, request: Request, user: OptionalAuthUser
+) -> ProbeResponse | StreamingResponse:
     container = get_container(request)
     enabled = container.settings.llm_probe_enabled
     turns = _turns(payload)
+    limit = container.settings.max_message_chars
+    for turn in turns:
+        if turn.role == MessageRole.USER and len(turn.content) > limit:
+            raise MessageValidationError(f"Сообщение длиннее лимита в {limit} символов.")
     generation = _generation(payload)
+    charge_local_pin(
+        container.local_llm_limiter,
+        user_id=None if user is None else user.id,
+        models=[payload.model],
+    )
+    source = await load_user_source(request, user)
 
     if not payload.stream:
-        result = await complete_probe(
-            router=container.router,
-            messages=turns,
-            preferred_model=payload.model,
-            enabled=enabled,
-            generation=generation,
-        )
+        async with local_llm_scope(source):
+            result = await complete_probe(
+                router=container.router,
+                messages=turns,
+                preferred_model=payload.model,
+                enabled=enabled,
+                generation=generation,
+            )
         return ProbeResponse(content=result.content, model_id=result.model_id)
 
     if not enabled:
@@ -87,19 +109,20 @@ async def complete(payload: ProbeRequest, request: Request) -> ProbeResponse | S
     prepared = apply_generation_to_messages(turns, generation)
 
     async def frames() -> AsyncIterator[str]:
-        model_id: str | None = None
-        parts: list[str] = []
-        async for chunk in container.router.stream_chat(
-            prepared, preferred_model=payload.model, generation=generation
-        ):
-            if chunk.model_id != model_id:
-                model_id = chunk.model_id
-                yield format_frame("model", {"model_id": model_id})
-            parts.append(chunk.text)
-            yield format_frame("token", {"text": chunk.text})
-        yield format_frame(
-            "message_end",
-            {"message_id": None, "content": "".join(parts), "model_id": model_id},
-        )
+        async with local_llm_scope(source):
+            model_id: str | None = None
+            parts: list[str] = []
+            async for chunk in container.router.stream_chat(
+                prepared, preferred_model=payload.model, generation=generation
+            ):
+                if chunk.model_id != model_id:
+                    model_id = chunk.model_id
+                    yield format_frame("model", {"model_id": model_id})
+                parts.append(chunk.text)
+                yield format_frame("token", {"text": chunk.text})
+            yield format_frame(
+                "message_end",
+                {"message_id": None, "content": "".join(parts), "model_id": model_id},
+            )
 
     return StreamingResponse(frames(), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)

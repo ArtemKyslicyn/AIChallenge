@@ -16,6 +16,7 @@ from app.adapters.llm.feedback_penalties import FeedbackPenaltyCache
 from app.domain.entities import AUTO_MODEL, ChatMessage, CompletionResult, TokenChunk
 from app.domain.errors import LLMExhaustedError, LLMProviderError, LLMStreamAbortedError
 from app.domain.generation import GenerationParams
+from app.domain.local_llm import LOCAL_LLM_PREFIX
 from app.domain.ports import LLMProvider
 from app.domain.tracing import AttemptRecord
 
@@ -51,6 +52,7 @@ DEFAULT_MAX_ATTEMPTS = 5
 #: models can think for a long time and then run out of budget without writing
 #: anything; that must cost one bounded wait, not the whole request.
 DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS = 25.0
+LOCAL_FIRST_TOKEN_TIMEOUT_SECONDS = 90.0
 
 
 def _is_retryable(exc: LLMProviderError) -> bool:
@@ -82,6 +84,7 @@ class ModelRouter:
         now: Callable[[], float] = time.monotonic,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         first_token_timeout_seconds: float = DEFAULT_FIRST_TOKEN_TIMEOUT_SECONDS,
+        local_first_token_timeout_seconds: float = LOCAL_FIRST_TOKEN_TIMEOUT_SECONDS,
         penalties: FeedbackPenaltyCache | None = None,
     ) -> None:
         self._provider = provider
@@ -90,6 +93,7 @@ class ModelRouter:
         self._now = now
         self._max_attempts = max(1, max_attempts)
         self._first_token_timeout = first_token_timeout_seconds
+        self._local_first_token_timeout = local_first_token_timeout_seconds
         self._penalties = penalties
         self._exhausted: dict[str, float] = {}
 
@@ -140,6 +144,8 @@ class ModelRouter:
         feedback bias has to be a set lookup, never a query.
         """
         pinned = preferred_model if preferred_model and preferred_model != AUTO_MODEL else None
+        if pinned is not None and pinned.startswith(LOCAL_LLM_PREFIX):
+            return [pinned]
         ordered: list[str] = []
         if pinned is not None:
             ordered.append(pinned)
@@ -231,7 +237,12 @@ class ModelRouter:
                 while True:
                     # Only the wait for the first token is bounded. After that
                     # the model is clearly answering and must not be cut off.
-                    budget = self._first_token_timeout if not emitted else None
+                    if not emitted and model.startswith(LOCAL_LLM_PREFIX):
+                        budget = self._local_first_token_timeout
+                    elif not emitted:
+                        budget = self._first_token_timeout
+                    else:
+                        budget = None
                     try:
                         chunk = await asyncio.wait_for(anext(stream), budget)
                     except StopAsyncIteration:
@@ -299,6 +310,14 @@ class TieredModelRouter:
         tools: list[dict[str, object]] | None = None,
         attempts: list[AttemptRecord] | None = None,
     ) -> CompletionResult:
+        if preferred_model.startswith(LOCAL_LLM_PREFIX):
+            return await self._tiers[0].complete_chat(
+                messages,
+                preferred_model,
+                generation=generation,
+                tools=tools,
+                attempts=attempts,
+            )
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             try:
@@ -327,6 +346,12 @@ class TieredModelRouter:
         generation: GenerationParams | None = None,
         attempts: list[AttemptRecord] | None = None,
     ) -> AsyncIterator[TokenChunk]:
+        if preferred_model.startswith(LOCAL_LLM_PREFIX):
+            async for chunk in self._tiers[0].stream_chat(
+                messages, preferred_model, generation=generation, attempts=attempts
+            ):
+                yield chunk
+            return
         last_error: Exception | None = None
         for index, tier in enumerate(self._tiers):
             emitted = False

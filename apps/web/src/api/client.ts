@@ -770,6 +770,40 @@ export function listModels(): Promise<ModelCatalogItemDto[]> {
   return request<ModelCatalogItemDto[]>("/llm/models");
 }
 
+export const LOCAL_LLM_CHANGED = "aichallenge:local-llm-changed";
+
+export function emitLocalLlmChanged(): void {
+  window.dispatchEvent(new Event(LOCAL_LLM_CHANGED));
+}
+
+export type LocalLlmSourceDto = {
+  name: string;
+  base_host: string;
+  status: "connected" | "error" | "off";
+  models: string[];
+  enabled: boolean;
+};
+
+export function getLocalLlmSource(): Promise<LocalLlmSourceDto | null> {
+  return request<LocalLlmSourceDto | null>("/me/llm-sources");
+}
+
+export function putLocalLlmSource(body: {
+  name: string;
+  base_url: string;
+  api_key?: string;
+}): Promise<LocalLlmSourceDto> {
+  return request<LocalLlmSourceDto>(
+    "/me/llm-sources",
+    { method: "PUT", body: JSON.stringify(body) },
+    15_000,
+  );
+}
+
+export function deleteLocalLlmSource(): Promise<void> {
+  return requestNoContent("/me/llm-sources", { method: "DELETE" });
+}
+
 export type HarnessLeaderboardRow = {
   rank: number | null;
   model_id: string;

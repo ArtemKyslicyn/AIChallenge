@@ -10,7 +10,9 @@ COPY . .
 # Vite inlines import.meta.env at build time, so this is an ARG, not a runtime
 # env var. Empty means the app uses the relative /api/v1 path nginx proxies.
 ARG VITE_API_URL=""
+ARG VITE_BUILD_ID=dev
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_BUILD_ID=$VITE_BUILD_ID
 RUN npm run build
 
 

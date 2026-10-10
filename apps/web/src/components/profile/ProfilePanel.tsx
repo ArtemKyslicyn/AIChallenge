@@ -21,6 +21,7 @@ import {
   fetchRagAdminEligible,
   fetchRagStats,
   listModels,
+  LOCAL_LLM_CHANGED,
   patchRagSettings,
   setAuthToken,
   emitRagIngested,
@@ -47,6 +48,7 @@ import {
   saveProfileModelPrefs,
 } from "../../profilePrefs";
 import { GuestMcpPanel } from "../GuestMcpPanel";
+import { LocalLlmPanel } from "./LocalLlmPanel";
 
 export type ProfileSectionId =
   | "account"
@@ -99,7 +101,7 @@ const LEADS: Record<ProfileSectionId, string> = {
   models: "Избранные и модель по умолчанию для новых чатов.",
   answers: "Язык, тон и правила ответа по умолчанию.",
   chat: "Режим нового чата и свой сервер для новых диалогов.",
-  connections: "Свой MCP и внешний RAG через туннель.",
+  connections: "База знаний, локальная модель и свой MCP.",
   stand: "Краткий статус сервиса. Полный пульс — во вкладке MCP.",
   personalization: "Активный стиль ответа. Полная настройка — в Агентах.",
   device: "Локальная история на этом браузере — не то же самое, что аккаунт.",
@@ -308,7 +310,11 @@ export function ProfilePanel({
 
             {gated ? (
               <div className="profile-gate">
-                <p role="status">Войдите, чтобы открыть этот раздел</p>
+                <p role="status">
+                  {section === "connections"
+                    ? "Сначала войдите."
+                    : "Войдите, чтобы открыть этот раздел"}
+                </p>
                 <button
                   type="button"
                   className="primary-button"
@@ -380,6 +386,7 @@ function SectionBody(props: {
       return (
         <div className="profile-connections guest-mcp-panel--compact">
           <RagStandSection sessionId={props.sessionId} />
+          <LocalLlmPanel />
           {props.sessionId ? (
             <GuestMcpPanel sessionId={props.sessionId} />
           ) : (
@@ -847,9 +854,22 @@ function ModelsSection({ userId }: { userId: string }) {
   const [global, setGlobal] = useState(() => loadGlobalChatPrefs());
 
   useEffect(() => {
-    void listModels()
-      .then(setModels)
-      .catch(() => setModels([]));
+    let cancelled = false;
+    const load = () => {
+      void listModels()
+        .then((rows) => {
+          if (!cancelled) setModels(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setModels([]);
+        });
+    };
+    load();
+    window.addEventListener(LOCAL_LLM_CHANGED, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(LOCAL_LLM_CHANGED, load);
+    };
   }, []);
 
   useEffect(() => {
@@ -876,11 +896,13 @@ function ModelsSection({ userId }: { userId: string }) {
           }}
         >
           <option value="">Авто</option>
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label || m.id}
-            </option>
-          ))}
+          {models
+            .filter((m) => m.id !== "auto")
+            .map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id.startsWith("ollama/") ? m.id : m.label || m.id}
+              </option>
+            ))}
         </select>
       </label>
       <ul className="profile-model-list">

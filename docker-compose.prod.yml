@@ -37,6 +37,11 @@ services:
       MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN:-}
       RAG_BASE_URL: ${RAG_BASE_URL:-http://rag:18766}
       RAG_SHARED_TOKEN: ${RAG_SHARED_TOKEN:-${MCP_SHARED_TOKEN:-}}
+      LOCAL_LLM_ALLOW_LOOPBACK: ${LOCAL_LLM_ALLOW_LOOPBACK:-false}
+      LOCAL_LLM_ALLOW_TAILSCALE: ${LOCAL_LLM_ALLOW_TAILSCALE:-true}
+      LOCAL_LLM_REQUESTS_PER_HOUR: ${LOCAL_LLM_REQUESTS_PER_HOUR:-30}
+      BUILD_SHA: ${BUILD_SHA:-dev}
+      BUILD_SOURCE: ${BUILD_SOURCE:-mac-deploy}
     volumes:
       - ./configs/scenarios:/app/configs/scenarios:ro
       - ./configs/lab:/app/configs/lab:ro
@@ -128,6 +133,8 @@ services:
   web:
     build:
       context: ./apps/web
+      args:
+        VITE_BUILD_ID: ${BUILD_SHA:-dev}
     depends_on:
       api:
         condition: service_healthy

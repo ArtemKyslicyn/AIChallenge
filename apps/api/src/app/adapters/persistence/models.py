@@ -231,6 +231,26 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class UserLlmSourceRow(Base):
+    """One Ollama origin per signed-in user. The API key never leaves this row."""
+
+    __tablename__ = "user_llm_sources"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    base_url: Mapped[str] = mapped_column(Text, nullable=False)
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    models_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="connected")
+    safe_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class AuthTokenRow(Base):
     __tablename__ = "auth_tokens"
 

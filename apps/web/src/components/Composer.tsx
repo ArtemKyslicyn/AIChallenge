@@ -7,6 +7,7 @@ import {
   listGuestMcp,
   listLabPresets,
   listModels,
+  LOCAL_LLM_CHANGED,
   uploadRagDocumentForSession,
   type LabPresetDto,
   type ModelCatalogItemDto,
@@ -188,7 +189,22 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
   }, [value]);
 
   useEffect(() => {
-    listModels().then(setModels).catch(() => setModels([]));
+    let cancelled = false;
+    const load = () => {
+      listModels()
+        .then((rows) => {
+          if (!cancelled) setModels(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setModels([]);
+        });
+    };
+    load();
+    window.addEventListener(LOCAL_LLM_CHANGED, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(LOCAL_LLM_CHANGED, load);
+    };
   }, []);
 
   useEffect(() => {
