@@ -34,6 +34,7 @@ import {
   matchPresetId,
   normalizeTempTriple,
 } from "../strategies/tempStudio";
+import { ComposerModelMenu } from "./ComposerModelMenu";
 import { ComposerSettings, type SettingsTab } from "./ComposerSettings";
 import { LiveModelPulse } from "./LiveModelPulse";
 
@@ -435,26 +436,16 @@ export function Composer({ sessionId, modelPin, onModelPin, onSend, onStop, busy
               setSettingsTab("session");
             }}
           />
-          <label className="composer-model-picker" htmlFor="composer-model-select">
-            <span className="composer-options-label">Модель</span>
-            <select
-              id="composer-model-select"
-              className="composer-model-select"
-              value={session.modelIdOverride}
-              onChange={(e) => {
-                patchSession({ modelIdOverride: e.target.value });
-                onModelPin?.(e.target.value);
-                if (e.target.value) setSettingsTab("session");
-              }}
-            >
-              <option value="">Общие: {globalModelLabel}</option>
-              {modelOptions.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ComposerModelMenu
+            value={session.modelIdOverride}
+            globalLabel={globalModelLabel}
+            options={modelOptions.map((m) => ({ id: m.id, label: m.label }))}
+            onChange={(modelId) => {
+              patchSession({ modelIdOverride: modelId });
+              onModelPin?.(modelId);
+              if (modelId) setSettingsTab("session");
+            }}
+          />
 
           <div className="composer-mode-toggle" role="group" aria-label="Режим ответа">
             <button
