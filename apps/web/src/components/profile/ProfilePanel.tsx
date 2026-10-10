@@ -7,6 +7,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   ApiError,
@@ -193,6 +194,15 @@ export function ProfilePanel({
 
   useEffect(() => {
     if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const root = panelRef.current;
     if (!root) return;
     const focusable = () =>
@@ -229,7 +239,9 @@ export function ProfilePanel({
 
   const gated = !loggedIn && AUTH_GATED.has(section);
 
-  return (
+  /* Portal to body: `.topbar` uses sticky + backdrop-filter, which traps
+     `position: fixed` descendants and clipped the drawer under the header. */
+  return createPortal(
     <div className="profile-root">
       <button
         type="button"
@@ -346,7 +358,8 @@ export function ProfilePanel({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

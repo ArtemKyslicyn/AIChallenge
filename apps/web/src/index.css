@@ -285,7 +285,9 @@ textarea {
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
-  z-index: 2;
+  /* Above float-dock (40): when the composer is tall the dock climbs and
+     used to cover «Профиль» / nav clicks. */
+  z-index: 45;
 }
 
 .brand {
@@ -3295,6 +3297,8 @@ textarea {
    where turns carry no feedback strip to hide. */
 :root {
   --dock-collapsed-h: calc(2 * 40px + var(--space-2));
+  /* Sticky topbar clearance for float-dock clamp (matches ~padding + controls). */
+  --topbar-h: 72px;
 }
 
 @media (max-width: 480px) {
@@ -3309,8 +3313,13 @@ textarea {
   /* Composer.tsx measures the sticky composer and publishes `--composer-h`.
      Hard-coded offsets used to put the dock on top of the send button as soon
      as the options bar wrapped, ×4 added a preset row or «Настройки» opened.
-     The fallback covers the frame before the first observation. */
-  bottom: calc(var(--composer-h, 96px) + var(--space-2));
+     The fallback covers the frame before the first observation.
+     Cap so a tall composer cannot shove FABs into the topbar over «Профиль». */
+  --dock-bottom-ideal: calc(var(--composer-h, 96px) + var(--space-2));
+  bottom: min(
+    var(--dock-bottom-ideal),
+    calc(100dvh - var(--topbar-h) - var(--dock-collapsed-h) - var(--space-2))
+  );
   z-index: 40;
   display: flex;
   flex-direction: column;
