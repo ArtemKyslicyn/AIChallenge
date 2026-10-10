@@ -23,7 +23,10 @@ def api() -> Iterator[TestClient]:
 
 
 def test_health(api: TestClient) -> None:
-    assert api.get("/api/v1/health").json() == {"status": "ok"}
+    body = api.get("/api/v1/health").json()
+    assert body["status"] == "ok"
+    assert body["build"]
+    assert body["source"]
 
 
 def test_harness_leaderboard_for_connected_models(tmp_path: Any) -> None:
