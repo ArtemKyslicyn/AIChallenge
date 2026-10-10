@@ -14,9 +14,9 @@ from app.domain.local_llm import (
     LocalLlmRepository,
     LocalLlmSource,
     LocalLlmUrlError,
-    canonicalize_ollama_origin,
     reset_local_llm_source,
     set_local_llm_source,
+    validate_ollama_origin,
 )
 
 UNREACHABLE = "Ollama недоступен по этому адресу."
@@ -28,6 +28,7 @@ class _Policy(Protocol):
     local_llm_allow_loopback: bool
     local_llm_allow_tailscale: bool
     local_llm_allow_private: bool
+    local_llm_origin_allowlist: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,23 @@ def to_public(source: LocalLlmSource) -> LocalLlmPublic:
     )
 
 
+def validate_stored_origin(source: LocalLlmSource, settings: _Policy) -> LocalLlmSource | None:
+    """Re-check a DB row against current policy. Drop the row from scope if stale."""
+    if not source.enabled or source.status != "connected":
+        return None
+    try:
+        validate_ollama_origin(
+            source.base_url,
+            allow_loopback=bool(settings.local_llm_allow_loopback),
+            allow_tailscale=bool(settings.local_llm_allow_tailscale),
+            allow_private=bool(settings.local_llm_allow_private),
+            origin_allowlist_csv=str(settings.local_llm_origin_allowlist or ""),
+        )
+    except LocalLlmUrlError:
+        return None
+    return source
+
+
 async def connect_local_llm(
     user_id: UUID,
     *,
@@ -62,11 +80,12 @@ async def connect_local_llm(
     cleaned = name.strip()
     if not cleaned:
         raise LocalLlmUrlError("Укажите название.")
-    origin = canonicalize_ollama_origin(
+    origin = validate_ollama_origin(
         base_url,
         allow_loopback=bool(settings.local_llm_allow_loopback),
         allow_tailscale=bool(settings.local_llm_allow_tailscale),
         allow_private=bool(settings.local_llm_allow_private),
+        origin_allowlist_csv=str(settings.local_llm_origin_allowlist or ""),
     )
     secret = (api_key or "").strip() or None
     try:

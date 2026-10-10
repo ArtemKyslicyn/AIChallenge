@@ -4,7 +4,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.application.local_llm import connect_local_llm, local_llm_scope
+from app.application.local_llm import (
+    connect_local_llm,
+    local_llm_scope,
+    validate_stored_origin,
+)
 from app.application.local_llm_rate_limit import LocalLlmRateLimiter, charge_local_pin
 from app.core.settings import Settings
 from app.domain.errors import LLMProviderError, LocalLlmRateLimitError
@@ -155,3 +159,67 @@ def test_local_pin_rate_limit_is_per_user() -> None:
     assert "Слишком много запросов" in str(exc.value)
     charge_local_pin(limiter, user_id=USER_ID, models=["deepseek/deepseek-v4-flash"])
     charge_local_pin(limiter, user_id=None, models=["ollama/qwen36-fast:latest"])
+
+
+async def test_origin_allowlist_blocks_connect() -> None:
+    repo = InMemoryLocalLlmRepo()
+    with pytest.raises(LocalLlmUrlError):
+        await connect_local_llm(
+            USER_ID,
+            name="M1",
+            base_url="http://100.90.210.109:11435",
+            api_key=None,
+            settings=_settings(
+                local_llm_allow_tailscale=True,
+                local_llm_origin_allowlist="100.64.0.1:11435",
+            ),
+            repo=repo,
+            tags=FakeTags(("qwen36-fast:latest",)),
+        )
+    assert await repo.get_for_user(USER_ID) is None
+
+
+async def test_origin_allowlist_allows_listed_host() -> None:
+    repo = InMemoryLocalLlmRepo()
+    public = await connect_local_llm(
+        USER_ID,
+        name="M1",
+        base_url="http://100.90.210.109:11435",
+        api_key=None,
+        settings=_settings(
+            local_llm_allow_tailscale=True,
+            local_llm_origin_allowlist="100.90.210.109:11435",
+        ),
+        repo=repo,
+        tags=FakeTags(("qwen36-fast:latest",)),
+    )
+    assert public.base_host == "100.90.210.109"
+
+
+def test_validate_stored_origin_drops_when_allowlist_tightens() -> None:
+    source = LocalLlmSource(
+        user_id=USER_ID,
+        name="M1",
+        base_url="http://100.90.210.109:11435",
+        api_key=None,
+        enabled=True,
+        models=("qwen36-fast:latest",),
+        status="connected",
+        safe_error=None,
+    )
+    ok = validate_stored_origin(
+        source,
+        _settings(
+            local_llm_allow_tailscale=True,
+            local_llm_origin_allowlist="100.90.210.109:11435",
+        ),
+    )
+    assert ok is source
+    dropped = validate_stored_origin(
+        source,
+        _settings(
+            local_llm_allow_tailscale=True,
+            local_llm_origin_allowlist="100.64.0.1:11435",
+        ),
+    )
+    assert dropped is None

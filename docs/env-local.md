@@ -183,3 +183,27 @@ Agent workshop (Day 6): `AGENTS_RUN_ENABLED=true` (по умолчанию), л�
 
 Рубрику правят в `configs/lab/judge_rubric.yaml`, без пересборки: критерии и промпт лежат
 в YAML именно потому, что их будут крутить.
+
+## Локальная Ollama + Tailscale (lock-down)
+
+Браузер **не** ходит в Ollama — только API. На проде закройте оба контура: сайт и tailnet.
+
+### Env на API (имена; значения только в `.env`)
+
+```env
+LOCAL_LLM_ALLOW_LOOPBACK=false
+LOCAL_LLM_ALLOW_TAILSCALE=true
+LOCAL_LLM_ALLOW_PRIVATE=false
+LOCAL_LLM_ALLOWED_EMAILS=you@example.com
+LOCAL_LLM_ORIGIN_ALLOWLIST=100.x.x.x:11435
+LOCAL_LLM_REQUESTS_PER_HOUR=30
+```
+
+Пустые `LOCAL_LLM_ALLOWED_EMAILS` / `LOCAL_LLM_ORIGIN_ALLOWLIST` = без доп. фильтра (удобно локально). На проде оба списка **обязательны**: только ваш email и только хост M1 (или `host:port`).
+
+### На компе с Ollama
+
+1. **Tailscale ACL** — только нода API (`tag:aichallenge-api` или ваш тег) может открывать TCP к `tag:ollama` на порт Ollama (например `11435`). Остальные peer’ы в tailnet — нет.
+2. **Bind** — не слушайте публичный интернет; предпочтительно Tailscale IP или loopback + туннель.
+3. **Ключ** — задайте Bearer (Ollama API key / reverse-proxy) и сохраните его в Профиль → Подключения (поле write-only, в GET не отдаётся).
+4. После смены allowlist переподключите источник в UI: старый URL вне списка перестаёт подмешиваться в каталог и в чат.

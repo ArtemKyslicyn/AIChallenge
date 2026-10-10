@@ -209,6 +209,12 @@ class Settings(BaseSettings):
     local_llm_allow_tailscale: bool = False
     #: Other RFC1918 addresses.
     local_llm_allow_private: bool = False
+    #: Comma-separated emails allowed to connect local Ollama. Empty = any signed-in user.
+    #: On production set to the admin account only.
+    local_llm_allowed_emails: str = ""
+    #: Comma-separated hosts or host:port allowed as Ollama origins. Empty = no extra filter.
+    #: Prod example: 100.x.x.x:11435 (Tailscale CGNAT of the M1).
+    local_llm_origin_allowlist: str = ""
     #: Comma-separated emails allowed to use Guest MCP. Empty = any signed-in user.
     #: On production set to the admin account only (e.g. admin@example.com).
     guest_mcp_allowed_emails: str = ""
