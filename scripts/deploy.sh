@@ -64,7 +64,7 @@ echo "==> ensure local-LLM Tailscale + build fingerprint (no secrets)"
 BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
 export BUILD_SHA
 export BUILD_SOURCE="${BUILD_SOURCE:-mac-deploy}"
-python3 - <<'PY'
+python3 - <<PY
 from pathlib import Path
 p = Path(".env")
 text = p.read_text(encoding="utf-8") if p.exists() else ""
@@ -72,6 +72,7 @@ lines = text.splitlines()
 keys = {
     "LOCAL_LLM_ALLOW_TAILSCALE": "true",
     "BUILD_SOURCE": "mac-deploy",
+    "BUILD_SHA": "${BUILD_SHA}",
 }
 changed = False
 seen = set()
