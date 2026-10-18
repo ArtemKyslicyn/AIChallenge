@@ -31,9 +31,13 @@ class SupportAskResponse(BaseModel):
 
 
 def _tickets() -> JsonTicketStore:
-    # support.py → api → adapters → app → src → api → apps → repo
-    repo = Path(__file__).resolve().parents[6]
-    return JsonTicketStore(repo / "data" / "support")
+    """Prefer repo data/support; fall back to /tmp in slim Docker images."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "data" / "support"
+        if candidate.is_dir() or (parent / "challenges").is_dir():
+            return JsonTicketStore(candidate)
+    return JsonTicketStore(Path("/tmp/aichallenge-support"))
 
 
 @router.post("/ask", response_model=SupportAskResponse)
