@@ -1,10 +1,24 @@
-# Day 34 — Файловый ассистент
+# Day 34 — Файлы на Mac
 
-**Где на сайте:** **Ассистенты → Файлы**
+**На сайте:** **Ассистент → Файлы**
 
-Через `aichallenge-mcp-kit` builtin `project_files` (read/search/write/diff) в `workspace/projects`.
+**Цель:** сформулировать задачу (не «открой файл»), ассистент дергает Guest MCP file tools.
+
+## Что сделать
+
+1. **Ассистент → Файлы** — прочитай шаги
+2. Запусти `aichallenge-mcp-kit` + туннель
+3. Профиль → Свой MCP → URL + token (или **Открыть MCP**)
+4. В чате цель, например: «найди все места с GuestMcp»
 
 ## Сценарии (≥2)
 
-1. **Найти usages:** goal «найди все места с GuestMcp» → `dev__files__search`
-2. **Сгенерировать README/ADR:** goal «создай README для demo/» → `write` + показать diff
+1. **Найти usages** → `dev__files__search`
+2. **Сгенерировать README** → write + diff
+
+## Что сдать
+
+| Артефакт | Файл |
+|---|---|
+| Видео | `challenge-34.mp4` |
+| Чеклист | [`RESULTS.md`](RESULTS.md) |

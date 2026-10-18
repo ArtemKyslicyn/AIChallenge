@@ -1,5 +1,5 @@
 # VIDEO — day 35
 
-1. Topbar → Ассистенты → Задача
-2. «Запустить задачу»
-3. Показать model_id + changelog
+1. Topbar → Ассистент → Changelog
+2. «Подготовить changelog»
+3. model_id + changelog на экране

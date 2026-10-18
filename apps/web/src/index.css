@@ -9732,16 +9732,24 @@ textarea {
 }
 
 .assistants {
-  max-width: 52rem;
+  max-width: 54rem;
   margin: 0 auto;
   padding: 1.25rem 1.25rem 3rem;
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
+}
+
+.assistants-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .assistants-hero h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.55rem;
+  margin: 0 0 0.4rem;
+  font-size: 1.65rem;
   font-weight: 750;
 }
 
@@ -9749,43 +9757,73 @@ textarea {
   margin: 0;
   color: var(--text-muted);
   line-height: 1.45;
-  max-width: 40rem;
+  max-width: 42rem;
 }
 
-.assistants-subnav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+.assistants-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
 }
 
-.assistants-subnav-btn {
+.assistants-action {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
   border: 1px solid var(--border);
-  background: var(--surface, transparent);
+  background: color-mix(in srgb, var(--surface, #111) 70%, transparent);
   color: inherit;
-  border-radius: 0.55rem;
-  padding: 0.4rem 0.75rem;
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
   font: inherit;
   cursor: pointer;
+  min-height: 3.6rem;
 }
 
-.assistants-subnav-btn--on,
-.assistants-subnav-btn[aria-selected="true"] {
+.assistants-action:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.assistants-action--on,
+.assistants-action[aria-selected="true"] {
   border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.assistants-action-label {
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--accent);
-  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.assistants-action-title {
+  font-size: 0.88rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.assistants-action--on .assistants-action-title,
+.assistants-action[aria-selected="true"] .assistants-action-title {
+  color: inherit;
 }
 
 .assistants-panel {
   border: 1px solid var(--border);
-  border-radius: 0.85rem;
-  padding: 1rem 1.1rem 1.25rem;
+  border-radius: 0.9rem;
+  padding: 1.05rem 1.15rem 1.3rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.75rem;
+}
+
+.assistants-panel-head {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .assistants-panel h3 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.2rem;
 }
 
 .assistants-blurb {
@@ -9796,7 +9834,7 @@ textarea {
 
 .assistants-body {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.7rem;
 }
 
 .assistants-body p,
@@ -9805,12 +9843,45 @@ textarea {
   line-height: 1.45;
 }
 
+.assistants-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
 .assistants-body ul,
 .assistants-body ol {
   margin: 0;
   padding-left: 1.2rem;
   display: grid;
   gap: 0.35rem;
+}
+
+.assistants .primary-button {
+  justify-self: start;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: inherit;
+  border-radius: 0.55rem;
+  padding: 0.55rem 1rem;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.assistants .primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.assistants .primary-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.assistants-done {
+  font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
 .assistants-code {
@@ -9822,15 +9893,6 @@ textarea {
   overflow: auto;
   font-size: 0.85rem;
   white-space: pre-wrap;
-}
-
-.assistants-hint {
-  font-size: 0.88rem;
-  color: var(--text-muted);
-}
-
-.assistants-hint code {
-  font-size: 0.9em;
 }
 
 .assistants-field {
@@ -9849,4 +9911,23 @@ textarea {
   color: inherit;
   width: 100%;
   box-sizing: border-box;
+}
+
+.assistants-course {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.assistants-course summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.assistants-course ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.25rem;
 }
