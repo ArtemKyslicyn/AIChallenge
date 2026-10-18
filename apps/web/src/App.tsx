@@ -277,7 +277,7 @@ export default function App() {
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "assist"}
-                title="Ассистент стенда: docs, diff, разблок, файлы, changelog"
+                title="Ассистент стенда: docs, diff, разблок, файлы, changelog · LLM по умолчанию local"
                 onClick={() => setMode("assist")}
               >
                 Ассистент

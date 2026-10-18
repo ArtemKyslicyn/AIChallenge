@@ -9902,7 +9902,8 @@ textarea {
 }
 
 .assistants-field textarea,
-.assistants-field input {
+.assistants-field input,
+.assistants-field select {
   font: inherit;
   padding: 0.5rem 0.65rem;
   border-radius: 0.45rem;
@@ -9911,6 +9912,24 @@ textarea {
   color: inherit;
   width: 100%;
   box-sizing: border-box;
+}
+
+.assistants-model-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.assistants-model-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.assistants-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .assistants-course {
