@@ -1,16 +1,21 @@
-# Day 35 — Реальная задача (на стенде)
+# Day 35 — Подготовить changelog
 
-**Где на сайте:** **Ассистенты → Задача**
+**На сайте:** **Ассистент → Changelog**
 
-## Какую задачу решали
+**Цель:** на стенде прогнать инвариант-ревью → AI changelog; на экране **`model_id`**.
 
-Автоматизировать подготовку **changelog релиза ассистентов** (дни 31–34):  
-1) прогон инвариант-ревью по fixture-диффу → 2) LLM пишет changelog → 3) на экране виден **`model_id`**.
+## Что сделать
 
-AI участвует на шаге генерации текста; ревью — детерминированный rubric (как в CI). Тот же сценарий можно повторить в Agent07 (канбан + file tools).
+1. **Ассистент → Changelog**
+2. Цель: changelog релиза ассистентов по findings ревью
+3. **Подготовить changelog**
+4. Показать model_id + текст changelog
 
-```bash
-curl -sS -X POST "$API/api/v1/assistants/real-task" \
-  -H 'Content-Type: application/json' \
-  -d '{"goal":"changelog ассистентов"}'
-```
+Тот же класс задач можно закрывать в [Agent07](https://github.com/ArtemKyslicyn/Agent07).
+
+## Что сдать
+
+| Артефакт | Файл |
+|---|---|
+| Видео | `challenge-35.mp4` |
+| Чеклист | [`RESULTS.md`](RESULTS.md) |

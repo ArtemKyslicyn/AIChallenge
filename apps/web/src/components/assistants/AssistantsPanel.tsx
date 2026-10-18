@@ -1,4 +1,4 @@
-/** Days 31–35 — product Assistants feature (topbar tab). */
+/** Stand Copilot — useful assistant skills (days 31–35 under the hood). */
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -10,33 +10,52 @@ export type AssistSub =
   | "task";
 
 const STORAGE_KEY = "aichallenge.assist_sub";
+export const COMPOSER_DRAFT_KEY = "aichallenge.composer_draft";
 
-const SUBS: { id: AssistSub; label: string; blurb: string }[] = [
+type Action = {
+  id: AssistSub;
+  label: string;
+  title: string;
+  why: string;
+  placeholder: string;
+};
+
+const ACTIONS: Action[] = [
   {
     id: "help",
-    label: "Справка",
-    blurb: "Ответы только из handbook-корпуса с цитатами и контекстом сборки.",
+    label: "По docs",
+    title: "Спросить по документации",
+    why: "Ответ только из живых docs стенда, с цитатами — без выдумок.",
+    placeholder: "Куда ходит публичный :443 на этом стенде?",
   },
   {
     id: "review",
-    label: "Ревью",
-    blurb: "Проверка диффа по инвариантам репо (секреты, deploy-safety, слои). CI + локальный CLI.",
+    label: "Diff",
+    title: "Проверить diff",
+    why: "Инварианты репо: секреты, deploy-safety, слои. Без обязательного LLM.",
+    placeholder: "Проверь последний коммит на секреты и compose down",
   },
   {
     id: "support",
-    label: "Поддержка",
-    blurb: "FAQ + снимок вашей сессии + тикет. При слабой уверенности — эскалация.",
+    label: "Разблок",
+    title: "Разблокировать меня",
+    why: "FAQ + контекст сессии. Если уверенности мало — эскалация, не фантазия.",
+    placeholder: "Почему не работает авторизация?",
   },
   {
     id: "files",
     label: "Файлы",
-    blurb: "Цель → tools на вашем Mac через Guest MCP / aichallenge-mcp-kit.",
+    title: "Работать с файлами на Mac",
+    why: "Цель → tools на диске через Guest MCP / aichallenge-mcp-kit.",
+    placeholder: "Найди все места с GuestMcp и кратко опиши",
   },
   {
     id: "task",
-    label: "Задача",
-    blurb:
-      "Реальный пайплайн на стенде: инвариант-ревью → AI changelog (model_id). Опционально тот же сценарий в Agent07.",
+    label: "Changelog",
+    title: "Подготовить changelog",
+    why: "Ревью fixture-диффа → AI changelog. В ответе всегда виден model_id.",
+    placeholder:
+      "Подготовить changelog релиза ассистентов (дни 31–34) по findings инвариант-ревью.",
   },
 ];
 
@@ -46,10 +65,10 @@ function readSub(): AssistSub {
     const hash = window.location.hash.replace(/^#/, "");
     if (hash.startsWith("assist/")) {
       const part = hash.slice("assist/".length) as AssistSub;
-      if (SUBS.some((s) => s.id === part)) return part;
+      if (ACTIONS.some((s) => s.id === part)) return part;
     }
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (raw && SUBS.some((s) => s.id === raw)) return raw as AssistSub;
+    if (raw && ACTIONS.some((s) => s.id === raw)) return raw as AssistSub;
   } catch {
     /* ignore */
   }
@@ -61,7 +80,11 @@ function writeSub(sub: AssistSub) {
     sessionStorage.setItem(STORAGE_KEY, sub);
     const next = `#assist/${sub}`;
     if (window.location.hash !== next) {
-      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${next}`);
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${window.location.search}${next}`,
+      );
     }
   } catch {
     /* ignore */
@@ -70,118 +93,175 @@ function writeSub(sub: AssistSub) {
 
 type Props = {
   onOpenMcp?: () => void;
+  onOpenChat?: () => void;
 };
 
-export function AssistantsPanel({ onOpenMcp }: Props) {
+export function AssistantsPanel({ onOpenMcp, onOpenChat }: Props) {
   const [sub, setSub] = useState<AssistSub>(() => readSub());
+  const [goal, setGoal] = useState(() => ACTIONS[0].placeholder);
 
   const select = useCallback((next: AssistSub) => {
     setSub(next);
     writeSub(next);
+    const action = ACTIONS.find((a) => a.id === next);
+    if (action) setGoal(action.placeholder);
   }, []);
 
   useEffect(() => {
     writeSub(sub);
   }, [sub]);
 
-  const current = SUBS.find((s) => s.id === sub) ?? SUBS[0];
+  const current = ACTIONS.find((s) => s.id === sub) ?? ACTIONS[0];
 
   return (
-    <section className="assistants" aria-label="Ассистенты">
+    <section className="assistants" aria-label="Ассистент стенда">
       <header className="assistants-hero">
-        <h2>Ассистенты</h2>
+        <p className="assistants-kicker">Ассистент стенда</p>
+        <h2>Что нужно сделать?</h2>
         <p>
-          Справка, ревью, поддержка, файлы и реальная задача — один раздел стенда.
-          Desktop-продукт: Agent07; мост к диску: aichallenge-mcp-kit.
+          Один помощник по этому проекту: docs, проверка diff, разблокировка,
+          файлы на Mac и changelog релиза. Не лабораторка — рабочие навыки.
         </p>
       </header>
 
-      <nav className="assistants-subnav" role="tablist" aria-label="Режимы ассистентов">
-        {SUBS.map((item) => (
+      <div className="assistants-actions" role="tablist" aria-label="Навыки ассистента">
+        {ACTIONS.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
+            data-assist-skill={item.id}
             className={
               sub === item.id
-                ? "assistants-subnav-btn assistants-subnav-btn--on"
-                : "assistants-subnav-btn"
+                ? "assistants-action assistants-action--on"
+                : "assistants-action"
             }
             aria-selected={sub === item.id}
             onClick={() => select(item.id)}
           >
-            {item.label}
+            <span className="assistants-action-label">{item.label}</span>
+            <span className="assistants-action-title">{item.title}</span>
           </button>
         ))}
-      </nav>
+      </div>
 
-      <div className="assistants-panel" role="tabpanel" aria-label={current.label}>
-        <h3>{current.label}</h3>
-        <p className="assistants-blurb">{current.blurb}</p>
+      <div className="assistants-panel" role="tabpanel" aria-label={current.title}>
+        <div className="assistants-panel-head">
+          <h3>{current.title}</h3>
+          <p className="assistants-blurb">{current.why}</p>
+        </div>
+
+        <label className="assistants-field">
+          Цель
+          <textarea
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            rows={3}
+            data-assist-goal
+          />
+        </label>
 
         {sub === "help" ? (
-          <HelpPane />
+          <HelpPane goal={goal} onOpenChat={onOpenChat} />
         ) : sub === "review" ? (
-          <ReviewPane />
+          <ReviewPane goal={goal} />
         ) : sub === "support" ? (
-          <SupportPane />
+          <SupportPane goal={goal} />
         ) : sub === "files" ? (
-          <FilesPane onOpenMcp={onOpenMcp} />
+          <FilesPane goal={goal} onOpenMcp={onOpenMcp} />
         ) : (
-          <TaskPane />
+          <TaskPane goal={goal} />
         )}
       </div>
+
+      <details className="assistants-course">
+        <summary>Для сдачи курса (дни 31–35)</summary>
+        <ul>
+          <li>
+            <code>challenges/31-dev-help/</code> — По docs
+          </li>
+          <li>
+            <code>challenges/32-pr-review/</code> — Diff
+          </li>
+          <li>
+            <code>challenges/33-support-desk/</code> — Разблок
+          </li>
+          <li>
+            <code>challenges/34-file-assistant/</code> — Файлы
+          </li>
+          <li>
+            <code>challenges/35-real-task/</code> — Changelog
+          </li>
+        </ul>
+      </details>
     </section>
   );
 }
 
-function HelpPane() {
+function HelpPane({
+  goal,
+  onOpenChat,
+}: {
+  goal: string;
+  onOpenChat?: () => void;
+}) {
+  const run = () => {
+    const q = goal.trim() || "куда ходит публичный :443?";
+    const draft = q.startsWith("/help") || q.startsWith("/помощь") ? q : `/help ${q}`;
+    try {
+      sessionStorage.setItem(COMPOSER_DRAFT_KEY, draft);
+    } catch {
+      /* ignore */
+    }
+    onOpenChat?.();
+  };
+
   return (
     <div className="assistants-body">
-      <p>
-        Задайте цель в чате с префиксом <code>/help</code> или откройте вопрос здесь после
-        подключения handbook RAG. Ответ только по живым docs + цитаты; нет хита — «нет в базе».
-      </p>
-      <ul>
+      <ol className="assistants-steps">
+        <li>Сформулируйте вопрос по стенду (деплой, :443, RAG, MCP…).</li>
         <li>
-          Корпус: <code>docs/*.md</code>, README, AGENTS — без планов{" "}
-          <code>docs/superpowers/</code>
+          Нажмите «Спросить в чате» — уйдёт запрос с <code>/help</code>.
         </li>
-        <li>
-          Пример: <code>/help куда ходит :443?</code>
-        </li>
-      </ul>
-      <p className="assistants-hint">
-        Challenge: <code>challenges/31-dev-help/</code>
+        <li>В ответе смотрите цитаты / «Источники базы» и бейдж model_id.</li>
+      </ol>
+      <button type="button" className="primary-button" data-assist-action="help" onClick={run}>
+        Спросить в чате
+      </button>
+      <p className="assistants-done">
+        Готово, когда ответ опирается на handbook и есть источники (или честное «нет в базе»).
       </p>
     </div>
   );
 }
 
-function ReviewPane() {
+function ReviewPane({ goal }: { goal: string }) {
   return (
     <div className="assistants-body">
-      <p>
-        Advisory-ревью по инвариантам репо. Локально и в GitHub Actions — без обязательного
-        LLM-ключа. Блокирует только находки секретов.
-      </p>
+      <ol className="assistants-steps">
+        <li>Цель: {goal.trim() || "проверить diff на секреты и deploy-safety"}.</li>
+        <li>Локально или в CI прогоните инвариант-ревью:</li>
+      </ol>
       <pre className="assistants-code">{`python3 challenges/32-pr-review/run.py
-# или
 ./scripts/review.sh HEAD~1`}</pre>
-      <p className="assistants-hint">
-        Workflow: <code>.github/workflows/review.yml</code> · Challenge:{" "}
-        <code>challenges/32-pr-review/</code>
+      <p className="assistants-done">
+        Готово, когда отчёт показывает findings (секреты → fail) или чистый проход. Workflow:{" "}
+        <code>.github/workflows/review.yml</code>
       </p>
     </div>
   );
 }
 
-function SupportPane() {
-  const [question, setQuestion] = useState("Почему не работает авторизация?");
+function SupportPane({ goal }: { goal: string }) {
+  const [question, setQuestion] = useState(goal);
   const [ticketId, setTicketId] = useState("demo-auth-1");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuestion(goal);
+  }, [goal]);
 
   const ask = async () => {
     setBusy(true);
@@ -192,7 +272,7 @@ function SupportPane() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
+          question: question.trim() || goal,
           ticket_id: ticketId || null,
           session_snapshot: { shell: "assist", panel: "support" },
         }),
@@ -217,68 +297,78 @@ function SupportPane() {
 
   return (
     <div className="assistants-body">
-      <p>
-        FAQ + контекст вашей сессии + опциональный ticket_id. Слабый hit → эскалация, не
-        выдуманный workaround.
-      </p>
-      <label className="assistants-field">
-        Вопрос
-        <textarea
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          rows={3}
-        />
-      </label>
+      <ol className="assistants-steps">
+        <li>Опишите, где застряли (можно ticket_id из FAQ).</li>
+        <li>Ассистент ответит по FAQ + снимку сессии.</li>
+        <li>При слабом hit увидите escalate — так и должно быть.</li>
+      </ol>
       <label className="assistants-field">
         ticket_id
         <input value={ticketId} onChange={(e) => setTicketId(e.target.value)} />
       </label>
-      <button type="button" className="ghost-button" disabled={busy} onClick={() => void ask()}>
-        {busy ? "Спрашиваю…" : "Спросить поддержку"}
+      <button
+        type="button"
+        className="primary-button"
+        data-assist-action="support"
+        disabled={busy}
+        onClick={() => void ask()}
+      >
+        {busy ? "Спрашиваю…" : "Разблокировать"}
       </button>
       {error ? (
         <p className="alert" role="alert">
           {error}
         </p>
       ) : null}
-      {result ? <pre className="assistants-code">{result}</pre> : null}
-      <p className="assistants-hint">
-        Challenge: <code>challenges/33-support-desk/</code>
+      {result ? (
+        <pre className="assistants-code" data-assist-result="support">
+          {result}
+        </pre>
+      ) : null}
+      <p className="assistants-done">
+        Готово, когда есть ответ с model_id (и escalate, если базы не хватило).
       </p>
     </div>
   );
 }
 
-function FilesPane({ onOpenMcp }: { onOpenMcp?: () => void }) {
+function FilesPane({
+  goal,
+  onOpenMcp,
+}: {
+  goal: string;
+  onOpenMcp?: () => void;
+}) {
   return (
     <div className="assistants-body">
-      <p>
-        Ассистент сам читает/ищет/пишет файлы в workspace kit через Guest MCP. Цель на уровне
-        задачи, не «открой файл X».
-      </p>
-      <ol>
+      <ol className="assistants-steps">
+        <li>
+          Цель на уровне задачи: <em>{goal.trim() || "найди usages / обнови README"}</em>.
+        </li>
         <li>
           Запустите <code>aichallenge-mcp-kit</code> и туннель.
         </li>
         <li>Профиль → Свой MCP → URL + token.</li>
-        <li>В чате сформулируйте цель (найти usages / обновить README).</li>
+        <li>В чате отправьте цель — ассистент вызовет file tools на Mac.</li>
       </ol>
       {onOpenMcp ? (
-        <button type="button" className="ghost-button" onClick={onOpenMcp}>
+        <button
+          type="button"
+          className="primary-button"
+          data-assist-action="files"
+          onClick={onOpenMcp}
+        >
           Открыть MCP
         </button>
       ) : null}
-      <p className="assistants-hint">
-        Challenge: <code>challenges/34-file-assistant/</code>
+      <p className="assistants-done">
+        Готово, когда в логе видны tool-вызовы (search/read/write) и diff по цели.
       </p>
     </div>
   );
 }
 
-function TaskPane() {
-  const [goal, setGoal] = useState(
-    "Подготовить changelog релиза ассистентов (дни 31–34) по findings инвариант-ревью.",
-  );
+function TaskPane({ goal }: { goal: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<{
@@ -296,7 +386,7 @@ function TaskPane() {
       const res = await fetch("/api/v1/assistants/real-task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal }),
+        body: JSON.stringify({ goal: goal.trim() || null }),
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
@@ -317,27 +407,18 @@ function TaskPane() {
 
   return (
     <div className="assistants-body">
-      <p>
-        Реальная задача <strong>на этом стенде</strong>: прогон инвариант-ревью → генерация
-        changelog через LLM. В ответе виден <code>model_id</code>. Тот же класс задач можно
-        закрывать в{" "}
-        <a href="https://github.com/ArtemKyslicyn/Agent07" rel="noreferrer" target="_blank">
-          Agent07
-        </a>
-        .
-      </p>
-      <label className="assistants-field">
-        Цель
-        <textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} />
-      </label>
+      <ol className="assistants-steps">
+        <li>Запустите задачу на стенде — сначала инвариант-ревью, потом LLM.</li>
+        <li>В результате обязателен <code>model_id</code> и текст changelog.</li>
+      </ol>
       <button
         type="button"
-        className="ghost-button"
+        className="primary-button"
         data-assist-action="real-task"
         disabled={busy}
         onClick={() => void run()}
       >
-        {busy ? "Выполняю…" : "Запустить задачу"}
+        {busy ? "Готовлю changelog…" : "Подготовить changelog"}
       </button>
       {error ? (
         <p className="alert" role="alert">
@@ -360,9 +441,8 @@ function TaskPane() {
           <pre className="assistants-code">{payload.changelog}</pre>
         </div>
       ) : null}
-      <p className="assistants-hint">
-        Challenge: <code>challenges/35-real-task/</code> · API{" "}
-        <code>POST /api/v1/assistants/real-task</code>
+      <p className="assistants-done">
+        Готово, когда на экране model_id + changelog по findings ревью.
       </p>
     </div>
   );

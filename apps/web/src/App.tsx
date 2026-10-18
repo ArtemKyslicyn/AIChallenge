@@ -149,7 +149,7 @@ export default function App() {
               : shellMode === "rag"
                 ? "База"
                 : shellMode === "assist"
-                  ? "Ассистенты"
+                  ? "Ассистент"
                   : "Чат";
 
   return (
@@ -277,10 +277,10 @@ export default function App() {
                 type="button"
                 className="shell-mode-btn"
                 aria-pressed={shellMode === "assist"}
-                title="Справка, ревью, поддержка, файлы, реальная задача"
+                title="Ассистент стенда: docs, diff, разблок, файлы, changelog"
                 onClick={() => setMode("assist")}
               >
-                Ассистенты
+                Ассистент
               </button>
             </nav>
 
@@ -315,7 +315,10 @@ export default function App() {
           ) : inRag ? (
             <RagMemoryChat />
           ) : inAssist ? (
-            <AssistantsPanel onOpenMcp={() => setMode("mcp")} />
+            <AssistantsPanel
+              onOpenMcp={() => setMode("mcp")}
+              onOpenChat={() => setMode("chat")}
+            />
           ) : (
             <>
               {(booting || (!session && !error)) && (

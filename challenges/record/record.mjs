@@ -2340,20 +2340,9 @@ async function openAssistants(page, sub) {
   await bumpReadability(page, 1.15);
   await page.locator(".assistants").waitFor({ timeout: 30_000 });
   await settle(page, 800);
-  const tab = page.getByRole("tab", {
-    name:
-      sub === "help"
-        ? "Справка"
-        : sub === "review"
-          ? "Ревью"
-          : sub === "support"
-            ? "Поддержка"
-            : sub === "files"
-              ? "Файлы"
-              : "Задача",
-  });
-  if ((await tab.count()) > 0) {
-    await tab.first().click().catch(() => {});
+  const skill = page.locator(`[data-assist-skill="${sub}"]`);
+  if ((await skill.count()) > 0) {
+    await skill.first().click().catch(() => {});
     await settle(page, 500);
   }
 }
@@ -2361,14 +2350,15 @@ async function openAssistants(page, sub) {
 async function challenge31(page) {
   await openAssistants(page, "help");
   await showRecordCard(page, {
-    day: "День 31 · справка",
-    title: "Ассистенты → Справка",
-    beat: "Handbook RAG + /help в чате. Только живые docs.",
+    day: "День 31 · ассистент",
+    title: "Спросить по docs",
+    beat: "Цель → /help в чате → ответ только из handbook + цитаты.",
     hold: 5500,
   });
   await hideRecordCard(page);
-  await pauseOn(page.locator(".assistants-panel"), 5000);
-  await page.goto(`${BASE}/?shell=chat`, { waitUntil: "networkidle", timeout: 90_000 });
+  await pauseOn(page.locator(".assistants-panel"), 4500);
+  await page.locator('[data-assist-action="help"]').click();
+  await page.locator("#composer-message, .composer textarea").first().waitFor({ timeout: 60_000 });
   await settle(page, 1000);
   await sendChat(page, "/help куда ходит публичный :443?");
   await page.locator(".turn.assistant").last().waitFor({ timeout: 180_000 });
@@ -2383,9 +2373,9 @@ async function challenge31(page) {
 async function challenge32(page) {
   await openAssistants(page, "review");
   await showRecordCard(page, {
-    day: "День 32 · ревью",
-    title: "Инварианты + CI",
-    beat: "scripts/review + workflow review.yml. Secrets → fail.",
+    day: "День 32 · ассистент",
+    title: "Проверить diff",
+    beat: "Инварианты репо локально и в CI — секреты → fail.",
     hold: 6000,
   });
   await hideRecordCard(page);
@@ -2396,23 +2386,23 @@ async function challenge32(page) {
 async function challenge33(page) {
   await openAssistants(page, "support");
   await showRecordCard(page, {
-    day: "День 33 · поддержка",
-    title: "FAQ + тикет на стенде",
-    beat: "Спросить поддержку с demo-auth-1.",
+    day: "День 33 · ассистент",
+    title: "Разблокировать меня",
+    beat: "FAQ + тикет demo-auth-1 → ответ или escalate.",
     hold: 5000,
   });
   await hideRecordCard(page);
-  await page.getByRole("button", { name: /Спросить поддержку/i }).click();
-  await page.locator(".assistants-code").last().waitFor({ timeout: 90_000 });
-  await pauseOn(page.locator(".assistants-code").last(), 9000);
+  await page.locator('[data-assist-action="support"]').click();
+  await page.locator('[data-assist-result="support"]').waitFor({ timeout: 90_000 });
+  await pauseOn(page.locator('[data-assist-result="support"]'), 9000);
 }
 
 async function challenge34(page) {
   await openAssistants(page, "files");
   await showRecordCard(page, {
-    day: "День 34 · файлы",
-    title: "Guest MCP + kit project_files",
-    beat: "Цель → tools на Mac. Подключение через Свой MCP.",
+    day: "День 34 · ассистент",
+    title: "Файлы на Mac",
+    beat: "Цель → Guest MCP tools. Не «открой файл», а задача.",
     hold: 6000,
   });
   await hideRecordCard(page);
@@ -2422,9 +2412,9 @@ async function challenge34(page) {
 async function challenge35(page) {
   await openAssistants(page, "task");
   await showRecordCard(page, {
-    day: "День 35 · реальная задача",
-    title: "Ревью → AI changelog на стенде",
-    beat: "Запустить задачу → model_id + changelog.",
+    day: "День 35 · ассистент",
+    title: "Подготовить changelog",
+    beat: "Ревью → AI changelog на стенде, model_id на экране.",
     hold: 5500,
   });
   await hideRecordCard(page);

@@ -1,5 +1,5 @@
 # VIDEO — day 32
 
-1. Ассистенты → Ревью
-2. `python3 challenges/32-pr-review/run.py`
-3. Показать секции Bugs / Architecture / Recommendations
+1. Topbar → Ассистент → Diff
+2. Показать цель + команды CLI/CI
+3. (опц.) кадр `run.py` / review.yml

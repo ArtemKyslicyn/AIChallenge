@@ -120,7 +120,18 @@ export function Chat({
     text: string;
     nonce: number;
     chatMode?: "single" | "compare" | "temp_studio" | "lab";
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const draft = sessionStorage.getItem("aichallenge.composer_draft");
+      if (draft?.trim()) {
+        sessionStorage.removeItem("aichallenge.composer_draft");
+        return { text: draft, nonce: Date.now(), chatMode: "single" };
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
   const [status, setStatus] = useState("");
   const [emptyMoreOpen, setEmptyMoreOpen] = useState(false);
   const [activeFloat, setActiveFloat] = useState<FloatId | null>(null);
