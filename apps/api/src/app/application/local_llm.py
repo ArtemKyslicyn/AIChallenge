@@ -9,11 +9,14 @@ from typing import Protocol
 from urllib.parse import urlparse
 from uuid import UUID
 
+from app.domain.entities import AUTO_MODEL
 from app.domain.errors import LLMProviderError
 from app.domain.local_llm import (
+    LOCAL_LLM_PREFIX,
     LocalLlmRepository,
     LocalLlmSource,
     LocalLlmUrlError,
+    canonical_model_id,
     reset_local_llm_source,
     set_local_llm_source,
     validate_ollama_origin,
@@ -123,3 +126,23 @@ async def local_llm_scope(source: LocalLlmSource | None) -> AsyncIterator[None]:
         yield
     finally:
         reset_local_llm_source(token)
+
+
+def prefer_local_model(
+    requested: str | None,
+    *,
+    local_model_ids: list[str],
+) -> str:
+    """Honor an explicit pin; when auto/empty, default to the first connected ollama/ id."""
+    pin = (requested or "").strip() or AUTO_MODEL
+    if pin != AUTO_MODEL:
+        return pin
+    for mid in local_model_ids:
+        if mid.startswith(LOCAL_LLM_PREFIX):
+            return mid
+    for tag_or_id in local_model_ids:
+        try:
+            return canonical_model_id(tag_or_id)
+        except LocalLlmUrlError:
+            continue
+    return AUTO_MODEL

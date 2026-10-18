@@ -2,16 +2,16 @@
 
 **На сайте:** **Ассистент → Changelog**
 
-**Цель:** на стенде прогнать инвариант-ревью → AI changelog; на экране **`model_id`**.
+**Цель:** инвариант-ревью → AI changelog; на экране `model_id`.
+
+**Модель:** по умолчанию локальная (`ollama/…` если подключена); в селекторе можно облако / Авто. API: `POST /api/v1/assistants/real-task` с `model` + `local_llm_scope`. Для сдачи — бейдж `ollama/…`.
 
 ## Что сделать
 
-1. **Ассистент → Changelog**
-2. Цель: changelog релиза ассистентов по findings ревью
+1. Подключи Local LLM
+2. **Ассистент → Changelog** — проверь селектор модели
 3. **Подготовить changelog**
-4. Показать model_id + текст changelog
-
-Тот же класс задач можно закрывать в [Agent07](https://github.com/ArtemKyslicyn/Agent07).
+4. Показать `model_id` + текст
 
 ## Что сдать
 

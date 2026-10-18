@@ -2345,6 +2345,21 @@ async function openAssistants(page, sub) {
     await skill.first().click().catch(() => {});
     await settle(page, 500);
   }
+  // Prefer local pin when the assist model select lists ollama/…
+  const modelSelect = page.locator("[data-assist-model]");
+  if ((await modelSelect.count()) > 0) {
+    const prefer = process.env.OLLAMA_MODEL || "ollama/qwen36-fast:latest";
+    const options = await modelSelect.locator("option").evaluateAll((nodes) =>
+      nodes.map((n) => n.value),
+    );
+    const local =
+      options.find((v) => v === prefer) ||
+      options.find((v) => v.startsWith("ollama/"));
+    if (local) {
+      await modelSelect.selectOption(local).catch(() => {});
+      await settle(page, 400);
+    }
+  }
 }
 
 async function challenge31(page) {
