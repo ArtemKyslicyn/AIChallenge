@@ -1,1 +1,1 @@
-PASS — Stand Copilot UI recorded 2026-10-18
+PASS — Changelog with model select (default local) 2026-10-18
