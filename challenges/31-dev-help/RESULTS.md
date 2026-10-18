@@ -1,1 +1,1 @@
-PASS — Stand Copilot UI recorded 2026-10-18
+PASS — Assistants local-default model picker 2026-10-18
