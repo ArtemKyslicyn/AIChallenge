@@ -79,12 +79,12 @@ def upstream_model_id(model_id: str) -> str | None:
 
 
 def assert_local_llm_email_allowed(email: str, allowed_emails_csv: str) -> None:
-    """If allowlist is non-empty, email must be on it (case-insensitive)."""
+    """Dangerous features: empty allowlist denies everyone. Otherwise case-insensitive match."""
     allowed = {
         part.strip().lower() for part in (allowed_emails_csv or "").split(",") if part.strip()
     }
     if not allowed:
-        return
+        raise LocalLlmForbiddenError()
     normalized = (email or "").strip().lower()
     if normalized not in allowed:
         raise LocalLlmForbiddenError()

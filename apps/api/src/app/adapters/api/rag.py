@@ -22,10 +22,7 @@ class RagSettingsPatch(BaseModel):
 
 
 def _admin_emails(container: Any) -> str:
-    admin = str(container.settings.rag_admin_emails or "").strip()
-    if admin:
-        return admin
-    return str(container.settings.guest_mcp_allowed_emails or "").strip()
+    return str(container.settings.dangerous_admin_emails() or "").strip()
 
 
 def _rag_owner_id(auth_user: UserAccount | None, session: Any) -> str:

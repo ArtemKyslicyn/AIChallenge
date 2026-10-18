@@ -35,6 +35,7 @@ class RagClient(Protocol):
         top_k: int = 6,
         mode: str | None = None,
         owner_id: str | None = None,
+        corpus_tier: str | None = None,
     ) -> RagSearchResult: ...
 
     async def add_document_text(
@@ -91,6 +92,7 @@ class NullRagClient:
         top_k: int = 6,
         mode: str | None = None,
         owner_id: str | None = None,
+        corpus_tier: str | None = None,
     ) -> RagSearchResult:
         return RagSearchResult(
             query=query,

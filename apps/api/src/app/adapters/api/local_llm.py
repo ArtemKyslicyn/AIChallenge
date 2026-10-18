@@ -58,7 +58,7 @@ def _assert_local_llm_access(request: Request, user_email: str) -> None:
     try:
         assert_local_llm_email_allowed(
             user_email,
-            container.settings.local_llm_allowed_emails,
+            container.settings.dangerous_admin_emails(),
         )
     except LocalLlmForbiddenError as exc:
         raise HTTPException(
@@ -90,7 +90,7 @@ async def load_user_source(request: Request, user: UserAccount | None) -> LocalL
     try:
         assert_local_llm_email_allowed(
             user.email,
-            container.settings.local_llm_allowed_emails,
+            container.settings.dangerous_admin_emails(),
         )
     except LocalLlmForbiddenError:
         return None

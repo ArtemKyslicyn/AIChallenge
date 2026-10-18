@@ -74,7 +74,13 @@ class _TimeoutGuestClient:
 
 @pytest.fixture
 def api() -> Iterator[TestClient]:
-    app = create_app(Settings(_env_file=None, use_fake_llm=True))  # type: ignore[call-arg]
+    app = create_app(
+        Settings(
+            _env_file=None,
+            use_fake_llm=True,
+            guest_mcp_allowed_emails="u7@example.com,u8@example.com",
+        )
+    )  # type: ignore[call-arg]
     app.dependency_overrides[require_session] = lambda: Session(
         id=SESSION_ID,
         access_token=TOKEN,

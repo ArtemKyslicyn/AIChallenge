@@ -43,7 +43,7 @@ def _assert_guest_mcp_access(request: Request, user_email: str) -> None:
     try:
         assert_guest_mcp_email_allowed(
             user_email,
-            container.settings.guest_mcp_allowed_emails,
+            container.settings.dangerous_admin_emails(),
         )
     except GuestMcpForbiddenError as exc:
         raise HTTPException(

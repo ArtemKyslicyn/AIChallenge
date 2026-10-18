@@ -32,6 +32,7 @@ from app.application.comic import (
 )
 from app.application.guest_mcp_analytics import emit_guest_event
 from app.application.guest_tool_runner import GuestToolRunner
+from app.application.help_slash import HELP_SYSTEM_SUFFIX, parse_help_slash
 from app.application.media_tools import (
     MEDIA_TOOLS,
     SessionMediaRateLimiter,
@@ -362,6 +363,7 @@ async def send_user_message_and_stream(
     rag_top_k: int = 6,
     rag_mode: str | None = None,
     rag_owner_id: str | None = None,
+    rag_corpus_tier: str | None = None,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     effective_chat_mode = chat_mode or "single"
@@ -373,7 +375,13 @@ async def send_user_message_and_stream(
     if session.status is not SessionStatus.ACTIVE:
         raise SessionClosedError("Эта сессия больше не принимает сообщения.")
 
-    text = content.strip()
+    help_slash = parse_help_slash(content)
+    text = help_slash.text
+    help_mode = help_slash.is_help
+    if help_mode:
+        use_rag = True
+        rag_mode = rag_mode or "full"
+        rag_corpus_tier = rag_corpus_tier or "handbook"
     if not text:
         raise MessageValidationError("Сообщение не может быть пустым.")
     if len(content) > max_message_chars:
@@ -411,6 +419,11 @@ async def send_user_message_and_stream(
     draft.prompt = text
 
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
+    if help_mode:
+        turns = [
+            ChatMessage(role=MessageRole.SYSTEM, content=HELP_SYSTEM_SUFFIX),
+            *turns,
+        ]
 
     if use_rag and rag_client is not None:
         try:
@@ -419,6 +432,7 @@ async def send_user_message_and_stream(
                 top_k=rag_top_k,
                 mode=rag_mode,
                 owner_id=rag_owner_id,
+                corpus_tier=rag_corpus_tier,
             )
             rag_system = format_rag_system_context(rag_result)
             turns = [

@@ -38,10 +38,13 @@ class HttpRagClient:
         top_k: int = 6,
         mode: str | None = None,
         owner_id: str | None = None,
+        corpus_tier: str | None = None,
     ) -> RagSearchResult:
         body: dict[str, object] = {"query": query, "top_k": top_k}
         if mode:
             body["mode"] = mode
+        if corpus_tier:
+            body["corpus_tier"] = corpus_tier
         # Always send owner_id (even "") so session chunks of others never leak.
         if owner_id is not None:
             body["owner_id"] = owner_id

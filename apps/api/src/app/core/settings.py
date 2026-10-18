@@ -209,20 +209,20 @@ class Settings(BaseSettings):
     local_llm_allow_tailscale: bool = False
     #: Other RFC1918 addresses.
     local_llm_allow_private: bool = False
-    #: Comma-separated emails allowed to connect local Ollama. Empty = any signed-in user.
-    #: On production set to the admin account only.
+    #: Extra emails for local Ollama (union with GUEST_MCP / RAG admin). Empty alone is fine
+    #: if GUEST_MCP_ALLOWED_EMAILS is set. Empty union = nobody.
     local_llm_allowed_emails: str = ""
     #: Comma-separated hosts or host:port allowed as Ollama origins. Empty = no extra filter.
     #: Prod example: 100.x.x.x:11435 (Tailscale CGNAT of the M1).
     local_llm_origin_allowlist: str = ""
-    #: Comma-separated emails allowed to use Guest MCP. Empty = any signed-in user.
-    #: On production set to the admin account only (e.g. admin@example.com).
+    #: Primary admin allowlist for dangerous features (Guest MCP, local Ollama, RAG admin).
+    #: Empty (and no LOCAL_LLM / RAG_ADMIN extras) = nobody. Prod: your email only.
     guest_mcp_allowed_emails: str = ""
 
     # RAG sidecar (compose service `rag`, loopback :18766).
     rag_base_url: str = "http://rag:18766"
     rag_shared_token: str = ""
-    #: Admin allowlist for local embeddings / reindex. Empty → reuse guest allowlist.
+    #: Extra admin emails for RAG reindex / heal / settings. Union with guest + local lists.
     rag_admin_emails: str = ""
     rag_top_k: int = 6
 
@@ -232,6 +232,23 @@ class Settings(BaseSettings):
     media_dir: str = ""
     media_image_limit_per_hour: int = 20
     media_video_limit_per_hour: int = 5
+
+    def dangerous_admin_emails(self) -> str:
+        """Union of admin allowlists for Guest MCP, local Ollama, and RAG admin tools.
+
+        Empty result means nobody may use those features (safe default).
+        """
+        seen: list[str] = []
+        for csv in (
+            self.guest_mcp_allowed_emails,
+            self.local_llm_allowed_emails,
+            self.rag_admin_emails,
+        ):
+            for part in (csv or "").split(","):
+                email = part.strip().lower()
+                if email and email not in seen:
+                    seen.append(email)
+        return ",".join(seen)
 
     def model_chain_list(self) -> list[str]:
         return _csv(self.llm_model_chain)

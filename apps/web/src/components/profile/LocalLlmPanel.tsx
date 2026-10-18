@@ -22,6 +22,7 @@ export function LocalLlmPanel() {
   const signedIn = Boolean(user && !user.anonymous && user.id);
   const [source, setSource] = useState<LocalLlmSourceDto | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [adminOnlyBlocked, setAdminOnlyBlocked] = useState(false);
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -35,12 +36,14 @@ export function LocalLlmPanel() {
       setSource(null);
       setFormOpen(false);
       setStatus("");
+      setAdminOnlyBlocked(false);
       return;
     }
     let cancelled = false;
     void getLocalLlmSource()
       .then((row) => {
         if (cancelled) return;
+        setAdminOnlyBlocked(false);
         setSource(row);
         setStatus(row ? connectedLine(row) : "Не подключена.");
       })
@@ -48,6 +51,11 @@ export function LocalLlmPanel() {
         if (cancelled) return;
         setSource(null);
         setStatus("");
+        if (err instanceof ApiError && err.status === 403) {
+          setAdminOnlyBlocked(true);
+          setError("");
+          return;
+        }
         if (err instanceof ApiError && err.status === 401) {
           setError("Сначала войдите.");
         }
@@ -63,6 +71,17 @@ export function LocalLlmPanel() {
         <h3 id="local-llm-title">Локальная модель (Ollama)</h3>
         <p role="status" className="local-llm-status">
           Сначала войдите.
+        </p>
+      </section>
+    );
+  }
+
+  if (adminOnlyBlocked) {
+    return (
+      <section className="local-llm-panel" aria-labelledby="local-llm-title">
+        <h3 id="local-llm-title">Локальная модель (Ollama)</h3>
+        <p className="local-llm-status" role="status">
+          Локальная модель на этом стенде доступна только администратору.
         </p>
       </section>
     );
@@ -89,6 +108,11 @@ export function LocalLlmPanel() {
         emitLocalLlmChanged();
       })
       .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 403) {
+          setAdminOnlyBlocked(true);
+          setError("");
+          return;
+        }
         const message = err instanceof ApiError ? err.message : "Ollama недоступен по этому адресу.";
         setError(message);
       })

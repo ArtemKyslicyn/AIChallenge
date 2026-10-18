@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from aichallenge_rag.chunking import Chunk, chunk_document
+from aichallenge_rag.corpus_tier import ALL, normalize_corpus_tier, source_matches_tier
 from aichallenge_rag.embeddings import Embedder, FakeEmbedder, build_embedder
 from aichallenge_rag.rerank import apply_pipeline, rewrite_query
 from aichallenge_rag.settings import Settings
@@ -399,6 +400,7 @@ class RagPipeline:
         top_k_post: int | None = None,
         min_score: float | None = None,
         owner_id: str | None = None,
+        corpus_tier: str | None = None,
     ) -> list[SearchHit]:
         q = query.strip()
         if not q:
@@ -406,8 +408,11 @@ class RagPipeline:
         mode_eff = (mode or self.settings.rag_mode or "full").strip().lower()
         if mode_eff not in {"raw", "filtered", "full"}:
             mode_eff = "full"
+        tier = normalize_corpus_tier(corpus_tier)
         rewritten = rewrite_query(q) if mode_eff == "full" else q
         pre = top_k_pre or self.settings.rag_top_k_pre
+        if tier != ALL:
+            pre = max(pre, (top_k_pre or self.settings.rag_top_k_pre) * 3)
         post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
         threshold = self.settings.rag_min_score if min_score is None else min_score
         try:
@@ -416,6 +421,8 @@ class RagPipeline:
             logger.exception("query embed failed")
             return []
         raw_hits = self.store.search(vectors[0], top_k=pre, owner_id=owner_id)
+        if tier != ALL:
+            raw_hits = [h for h in raw_hits if source_matches_tier(h.chunk.source, tier)]
         final_hits, _meta = apply_pipeline(
             rewritten,
             raw_hits,
@@ -479,15 +486,22 @@ class RagPipeline:
         top_k_post: int | None = None,
         min_score: float | None = None,
         owner_id: str | None = None,
+        corpus_tier: str | None = None,
     ) -> dict[str, object]:
         q = query.strip()
+        tier = normalize_corpus_tier(corpus_tier)
         if not q:
             return {
                 "query": query,
                 "query_rewritten": query,
                 "hits": [],
                 "embed_model": self.embedder.model_id,
-                "retrieval": {"mode": mode or self.settings.rag_mode, "hits_pre": 0, "hits_post": 0},
+                "retrieval": {
+                    "mode": mode or self.settings.rag_mode,
+                    "corpus_tier": tier,
+                    "hits_pre": 0,
+                    "hits_post": 0,
+                },
             }
 
         mode_eff = (mode or self.settings.rag_mode or "full").strip().lower()
@@ -496,6 +510,8 @@ class RagPipeline:
 
         rewritten = rewrite_query(q) if mode_eff == "full" else q
         pre = top_k_pre or self.settings.rag_top_k_pre
+        if tier != ALL:
+            pre = max(pre, (top_k_pre or self.settings.rag_top_k_pre) * 3)
         post = top_k_post or top_k or self.settings.rag_top_k_post or self.settings.rag_top_k
         threshold = self.settings.rag_min_score if min_score is None else min_score
 
@@ -510,12 +526,15 @@ class RagPipeline:
                 "embed_model": self.embedder.model_id,
                 "retrieval": {
                     "mode": mode_eff,
+                    "corpus_tier": tier,
                     "hits_pre": 0,
                     "hits_post": 0,
                     "error": "embed_timeout",
                 },
             }
         raw_hits = self.store.search(vectors[0], top_k=pre, owner_id=owner_id)
+        if tier != ALL:
+            raw_hits = [h for h in raw_hits if source_matches_tier(h.chunk.source, tier)]
         final_hits, retrieval_meta = apply_pipeline(
             rewritten,
             raw_hits,
@@ -523,6 +542,7 @@ class RagPipeline:
             min_score=threshold,
             top_k_post=post,
         )
+        retrieval_meta = {**retrieval_meta, "corpus_tier": tier}
         return {
             "query": q,
             "query_rewritten": rewritten,

@@ -15,6 +15,7 @@ import { McpCatalog } from "./components/McpCatalog";
 import { AgentStudio } from "./components/AgentStudio";
 import { AgentWorkshop } from "./components/AgentWorkshop";
 import { AuthPanel } from "./components/AuthPanel";
+import { AssistantsPanel } from "./components/assistants/AssistantsPanel";
 import { RagMemoryChat } from "./components/RagMemoryChat";
 import { BenchmarksBoard } from "./components/BenchmarksBoard";
 import { Chat } from "./components/Chat";
@@ -40,7 +41,8 @@ export default function App() {
       mode === "benchmarks" ||
       mode === "battle" ||
       mode === "mcp" ||
-      mode === "rag"
+      mode === "rag" ||
+      mode === "assist"
     ) {
       setSidebarOpen(false);
     }
@@ -131,6 +133,7 @@ export default function App() {
   const inBattle = shellMode === "battle";
   const inMcp = shellMode === "mcp";
   const inRag = shellMode === "rag";
+  const inAssist = shellMode === "assist";
   const showChatChrome = shellMode === "chat";
   const shellLabel =
     shellMode === "agents"
@@ -145,12 +148,14 @@ export default function App() {
               ? "MCP"
               : shellMode === "rag"
                 ? "База"
-                : "Чат";
+                : shellMode === "assist"
+                  ? "Ассистенты"
+                  : "Чат";
 
   return (
     <DebugProvider>
       <div
-        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}${inMcp ? " app--mcp" : ""}${inRag ? " app--rag" : ""}`}
+        className={`app${inAgents ? " app--agents" : ""}${inGraph ? " app--graph" : ""}${inBenchmarks ? " app--benchmarks" : ""}${inBattle ? " app--battle" : ""}${inMcp ? " app--mcp" : ""}${inRag ? " app--rag" : ""}${inAssist ? " app--assist" : ""}`}
       >
         {showChatChrome ? (
           <SessionSidebar
@@ -181,7 +186,14 @@ export default function App() {
               <span
                 className="dot"
                 data-state={
-                  inAgents || inGraph || inBenchmarks || inBattle || inMcp || inRag || session
+                  inAgents ||
+                  inGraph ||
+                  inBenchmarks ||
+                  inBattle ||
+                  inMcp ||
+                  inRag ||
+                  inAssist ||
+                  session
                     ? "online"
                     : "offline"
                 }
@@ -261,6 +273,15 @@ export default function App() {
               >
                 База
               </button>
+              <button
+                type="button"
+                className="shell-mode-btn"
+                aria-pressed={shellMode === "assist"}
+                title="Справка, ревью, поддержка, файлы, реальная задача"
+                onClick={() => setMode("assist")}
+              >
+                Ассистенты
+              </button>
             </nav>
 
             <AuthPanel
@@ -293,6 +314,8 @@ export default function App() {
             <McpCatalog />
           ) : inRag ? (
             <RagMemoryChat />
+          ) : inAssist ? (
+            <AssistantsPanel onOpenMcp={() => setMode("mcp")} />
           ) : (
             <>
               {(booting || (!session && !error)) && (
