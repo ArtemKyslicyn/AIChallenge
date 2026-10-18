@@ -1,5 +1,1 @@
-# RESULTS — day 34
-
-- [ ] kit pytest project_files green
-- [ ] Два сценария воспроизведены (search + write/diff)
-- [ ] Ассистенты → Файлы на сайте
+PASS — Stand Copilot UI recorded 2026-10-18
