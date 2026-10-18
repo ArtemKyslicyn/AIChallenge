@@ -37,6 +37,12 @@ docker-compose.override.yml
 # Generated media (Pollinations/Pixazo artifacts)
 data/media/
 
+# Challenge recordings — keep locally, never commit binaries
+challenges/**/*.mp4
+challenges/**/*.webm
+challenges/**/*.mov
+challenges/record/.videos/
+
 # Local scratch / data exports
 __OUT__
 exports/
