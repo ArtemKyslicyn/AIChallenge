@@ -23,6 +23,8 @@ from app.adapters.api.media import router as media_router
 from app.adapters.api.personalization import router as personalization_router
 from app.adapters.api.rag import router as rag_router
 from app.adapters.api.sessions import router as sessions_router
+from app.adapters.api.assistants import router as assistants_router
+from app.adapters.api.support import router as support_router
 from app.core.deps import SESSION_TOKEN_HEADER, VISITOR_ID_HEADER, build_container
 from app.core.logging import configure_logging
 from app.core.settings import Settings, get_settings
@@ -83,6 +85,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         local_llm_router,
         personalization_router,
         rag_router,
+        support_router,
+        assistants_router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

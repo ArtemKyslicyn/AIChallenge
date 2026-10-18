@@ -93,8 +93,9 @@ def test_public_hostname_requires_https() -> None:
     )
 
 
-def test_email_allowlist_empty_permits_anyone() -> None:
-    assert_local_llm_email_allowed("anyone@example.com", "")
+def test_email_allowlist_empty_denies_everyone() -> None:
+    with pytest.raises(LocalLlmForbiddenError):
+        assert_local_llm_email_allowed("anyone@example.com", "")
 
 
 def test_email_allowlist_blocks_other_emails() -> None:

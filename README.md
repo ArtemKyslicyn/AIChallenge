@@ -1,8 +1,10 @@
 # AIChallenge
 
-Публичный стенд: **чат, в котором видно модель** (`model_id`), плюс лаборатория агентов, схем, замеров harness-bench и вкладка **Битва** (песочница конкурирующих агентов).
+Публичный стенд: **чат, в котором видно модель** (`model_id`), плюс лаборатория агентов, схем, замеров harness-bench, вкладка **Битва**, вкладка **База** и вкладка **Ассистенты** (дни 31–35: справка, ревью+CI, поддержка, файлы, задача).
 
 Собрать **масштабируемую AI/чат-платформу** (backend + frontend в одной репе, Docker), с чистой архитектурой Python, безопасными секретами и стримингом ответов модели.
+
+**Экосистема:** desktop-продукт [Agent07](https://github.com/ArtemKyslicyn/Agent07) · мост к диску [aichallenge-mcp-kit](https://github.com/ArtemKyslicyn/aichallenge-mcp-kit) · карта сборки [`.supergoal/.../PRODUCT_MAP.md`](.supergoal/devforge-local-first-ai-engineering-hub-dwVx0k/PRODUCT_MAP.md).
 
 Репозиторий: [github.com/ArtemKyslicyn/AIChallenge](https://github.com/ArtemKyslicyn/AIChallenge)
 

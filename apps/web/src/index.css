@@ -9724,3 +9724,129 @@ textarea {
   border: 1px solid var(--border, #e5e7eb);
   background: var(--surface, #fff);
 }
+---
+
+/* —— Assistants (days 31–35) —— */
+.app--assist .app-main {
+  overflow: auto;
+}
+
+.assistants {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.assistants-hero h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.55rem;
+  font-weight: 750;
+}
+
+.assistants-hero p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+  max-width: 40rem;
+}
+
+.assistants-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.assistants-subnav-btn {
+  border: 1px solid var(--border);
+  background: var(--surface, transparent);
+  color: inherit;
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.assistants-subnav-btn--on,
+.assistants-subnav-btn[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.assistants-panel {
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 1rem 1.1rem 1.25rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.assistants-panel h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.assistants-blurb {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.assistants-body {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.assistants-body p,
+.assistants-body li {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.assistants-body ul,
+.assistants-body ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.assistants-code {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface, #111) 80%, transparent);
+  overflow: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.assistants-hint {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.assistants-hint code {
+  font-size: 0.9em;
+}
+
+.assistants-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.assistants-field textarea,
+.assistants-field input {
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}

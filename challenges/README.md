@@ -1,4 +1,4 @@
-# Challenges (Days 4–30)
+# Challenges (Days 4–35)
 
 Автопрогон и видео-сдачи AIChallenge.  
 **Правило:** номер папки = номер дня сдачи (кроме оговорок внутри README).
@@ -29,6 +29,11 @@
 | [`28-local-rag/`](28-local-rag/) | **28** Тот же пин, база выкл / вкл | **Чат · База** | README · video |
 | [`29-local-optimize/`](29-local-optimize/) | **29** Температура и фрагменты | **Чат** | README · run · video |
 | [`30-local-service/`](30-local-service/) | **30** Свой HTTP, лимит, длина | **Профиль · Чат** | README · video |
+| [`31-dev-help/`](31-dev-help/) | **31** Справка handbook + `/help` | **Ассистенты → Справка** | README · RESULTS · video |
+| [`32-pr-review/`](32-pr-review/) | **32** Ревью инвариантов + CI | **Ассистенты → Ревью** · Actions | RESULTS · run · video |
+| [`33-support-desk/`](33-support-desk/) | **33** FAQ + тикет + сессия | **Ассистенты → Поддержка** | RESULTS · video |
+| [`34-file-assistant/`](34-file-assistant/) | **34** Файлы через mcp-kit | **Ассистенты → Файлы** | RESULTS · video |
+| [`35-real-task/`](35-real-task/) | **35** Реальная задача в Agent07 | **Ассистенты → Задача** | RESULTS · video |
 | [`live-models/`](live-models/) | (опц.) Живой выбор модели | **Чат** | video |
 
 ## Неделя 21–25 (RAG по домашке курса)
@@ -36,6 +41,10 @@
 Текст домашек одной таблицей: [`WEEK-RAG.md`](WEEK-RAG.md).  
 План пересъёмки 21–25: [`WEEK-RAG-SHOOT.md`](WEEK-RAG-SHOOT.md).  
 В папке дня: **README** = что сделать · **RESULTS** = PASS · **VIDEO** = кадры.
+
+## Неделя 26–30 (local LLM)
+
+Сценарии видео v2 (прод): [`WEEK-LOCAL-SHOOT.md`](WEEK-LOCAL-SHOOT.md).
 
 ```bash
 cd challenges/record && RECORD_ONLY=21,22,23,24,25 npm run record

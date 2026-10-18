@@ -21,6 +21,7 @@ from qdrant_client.models import (
 )
 
 from aichallenge_rag.chunking import Chunk
+from aichallenge_rag.corpus_tier import corpus_tier_for_source
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ def _payload_from_chunk(
         "scope": scope,
         "owner_id": owner_id,
         "embed_model": embed_model,
+        "corpus_tier": corpus_tier_for_source(chunk.source),
     }
 
 

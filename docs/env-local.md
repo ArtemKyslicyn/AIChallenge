@@ -191,15 +191,15 @@ Agent workshop (Day 6): `AGENTS_RUN_ENABLED=true` (по умолчанию), л�
 ### Env на API (имена; значения только в `.env`)
 
 ```env
+GUEST_MCP_ALLOWED_EMAILS=you@example.com
 LOCAL_LLM_ALLOW_LOOPBACK=false
 LOCAL_LLM_ALLOW_TAILSCALE=true
 LOCAL_LLM_ALLOW_PRIVATE=false
-LOCAL_LLM_ALLOWED_EMAILS=you@example.com
 LOCAL_LLM_ORIGIN_ALLOWLIST=100.x.x.x:11435
 LOCAL_LLM_REQUESTS_PER_HOUR=30
 ```
 
-Пустые `LOCAL_LLM_ALLOWED_EMAILS` / `LOCAL_LLM_ORIGIN_ALLOWLIST` = без доп. фильтра (удобно локально). На проде оба списка **обязательны**: только ваш email и только хост M1 (или `host:port`).
+`GUEST_MCP_ALLOWED_EMAILS` (плюс опционально `LOCAL_LLM_ALLOWED_EMAILS` / `RAG_ADMIN_EMAILS`) — единый admin-список. **Пустой union = никому** нельзя Guest MCP, локальную Ollama и RAG-admin. На проде обязательны email админа и `LOCAL_LLM_ORIGIN_ALLOWLIST` с хостом M1.
 
 ### На компе с Ollama
 

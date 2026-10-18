@@ -47,6 +47,11 @@ class SearchRequest(BaseModel):
     top_k_post: int | None = Field(default=None, ge=1, le=32)
     min_score: float | None = Field(default=None, ge=0.0, le=1.0)
     owner_id: str | None = None
+    corpus_tier: str | None = Field(
+        default=None,
+        pattern="^(handbook|history|all)$",
+        description="handbook=live docs; history=docs/superpowers plans; all=no filter",
+    )
 
 
 class SettingsPatch(BaseModel):
@@ -244,6 +249,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             top_k_post=body.top_k_post or body.top_k,
             min_score=body.min_score,
             owner_id=body.owner_id,
+            corpus_tier=body.corpus_tier,
         )
 
     @app.post("/v1/ask")
@@ -257,6 +263,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             top_k_post=body.top_k_post or body.top_k,
             min_score=body.min_score,
             owner_id=body.owner_id,
+            corpus_tier=body.corpus_tier,
         )
         hits = payload["hits"]
         assert isinstance(hits, list)

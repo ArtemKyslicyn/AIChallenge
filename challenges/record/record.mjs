@@ -1887,10 +1887,10 @@ async function challenge20v2(page) {
   await hideRecordCard(page);
 }
 
-async function challenge21(page) {
+async function challengeLive(page) {
   const pulse = await openChatPulse(page);
   await showRecordCard(page, {
-    day: "День 21",
+    day: "Live models",
     title: "Живой выбор в обычном чате",
     beat: "Карточка пульса → Писать {модель} → ответ с тем же model_id.",
     hold: 7000,
@@ -1907,7 +1907,7 @@ async function challenge21(page) {
   await page.locator(".turn.assistant .badge").last().waitFor({ timeout: 180_000 });
   await pauseOn(page.locator(".turn.assistant").last(), 9000);
   await showRecordCard(page, {
-    day: "День 21",
+    day: "Live models",
     title: "MCP не трогаем",
     beat: "Вкладка MCP и дни 16–20 остаются. Этот день — только живой выбор в чате.",
     hold: 5000,
@@ -2004,47 +2004,62 @@ async function sendChat(page, text, attempts = 3) {
   throw last;
 }
 
-async function challenge22(page) {
+async function challenge21(page) {
   await openChatFresh(page);
+  // Hide live-models pulse so day 21 is clearly indexing, not model pick.
+  await page.addStyleTag({
+    content: `.live-who, .composer-live-pulse { display: none !important; }`,
+  });
   await showRecordCard(page, {
-    day: "День 22 · индекс",
+    day: "День 21 · индексация документов",
     title: "База знаний стенда",
-    beat: "Профиль → чанки / стратегия. Сравнение: fixed 620 · structural 761.",
+    beat: "Профиль → чанки, стратегия, сравнение fixed vs structural.",
     hold: 7000,
   });
   await page.getByRole("button", { name: /Открыть профиль|Профиль/i }).first().click();
   await page.locator(".profile-drawer").waitFor({ timeout: 15_000 });
-  await pauseOn(page.locator(".profile-rag-stand, .profile-drawer"), 9000);
+  const stand = page.locator(".profile-rag-stand");
+  await stand.waitFor({ timeout: 15_000 });
+  await pauseOn(stand, 10000);
+  await showRecordCard(page, {
+    day: "День 21 · индексация документов",
+    title: "Две стратегии + meta",
+    beat: "fixed 800/120 → 620 · structural → 761 · meta: source / title / section / chunk_id.",
+    hold: 9000,
+  });
+  await pauseOn(stand, 7000);
   await page.getByRole("button", { name: /Закрыть/i }).first().click().catch(() => {});
   await settle(page, 600);
   await openComposerSettings(page);
   await showRecordCard(page, {
-    day: "День 22",
-    title: "Две стратегии + meta",
-    beat: "fixed 800/120 → 620 · structural → 761 · meta: source / title / section / chunk_id.",
-    hold: 10000,
+    day: "День 21 · индексация документов",
+    title: "Путь загрузки в базу",
+    beat: "«Добавить в базу» / Документы — рядом с галочкой «Использовать базу».",
+    hold: 7000,
   });
-  await pauseOn(page.locator(".composer-settings"), 7000);
+  await pauseOn(page.locator(".composer-settings"), 6000);
   const upload = page.getByRole("button", { name: /Добавить в базу/i });
   if ((await upload.count()) > 0) await pauseOn(upload.first(), 4000);
   await hideRecordCard(page);
 }
 
-async function challenge23(page) {
-  // Course «День 22 · первый RAG» = папка 23-rag-query (стенд day 23).
+async function challenge22(page) {
   await openChatFresh(page);
+  await page.addStyleTag({
+    content: `.live-who, .composer-live-pulse { display: none !important; }`,
+  });
   await showRecordCard(page, {
-    day: "День 23 · первый RAG",
-    title: "Ask без базы vs с базой",
-    beat: "Один вопрос :443 → сравнение · источники · цитаты · 10 QUESTIONS.md",
+    day: "День 22 · первый RAG-запрос",
+    title: "Один вопрос: без базы и с базой",
+    beat: "Сравнение · источники · цитаты · upload · 10 QUESTIONS.md",
     hold: 7000,
   });
   await hideRecordCard(page);
 
   await showRecordCard(page, {
-    day: "БЕЗ RAG",
-    title: "База выключена",
-    beat: "Ответ без блока «Источники базы». Часто общий/неточный путь портов.",
+    day: "День 22 · без базы",
+    title: "Галочка «Использовать базу» выкл",
+    beat: "Ответ без блока «Источники базы».",
     hold: 5500,
   });
   await openComposerSettings(page);
@@ -2058,16 +2073,15 @@ async function challenge23(page) {
   await sendChat(page, "Куда ходит публичный :443 на этом стенде? Коротко.");
   const offTurn = page.locator(".turn.assistant").last();
   await pauseOn(offTurn, 9000);
-  // Control: no sources block on this turn.
   const offSources = offTurn.locator(".rag-sources");
   if ((await offSources.count()) > 0) {
-    throw new Error("challenge23: expected no rag-sources with RAG off");
+    throw new Error("challenge22: expected no rag-sources with RAG off");
   }
 
   await showRecordCard(page, {
-    day: "С RAG",
-    title: "База включена · full",
-    beat: "Тот же вопрос → цитаты + source/section/chunk_id + model_id.",
+    day: "День 22 · с базой",
+    title: "Галочка вкл · режим full",
+    beat: "Тот же вопрос → источники + цитаты + model_id.",
     hold: 5500,
   });
   await enableRag(page, "full");
@@ -2087,24 +2101,25 @@ async function challenge23(page) {
   const onText = ((await onTurn.innerText().catch(() => "")) || "").toLowerCase();
   if (!/xray|reality|8443|18080|nginx/.test(onText)) {
     throw new Error(
-      `challenge23: RAG answer not grounded on port path: ${onText.slice(0, 200)}`,
+      `challenge22: RAG answer not grounded on port path: ${onText.slice(0, 200)}`,
     );
   }
 
   await showRecordCard(page, {
-    day: "День 23",
-    title: "Upload в базу",
+    day: "День 22 · первый RAG-запрос",
+    title: "Загрузка файла в базу",
     beat: "Файл → карточка rag_ingest + ответ «принял документ…».",
     hold: 5000,
   });
   await hideRecordCard(page);
   const uploadInput = page.locator('input[type="file"][accept*=".md"]').first();
   await uploadInput.setInputFiles({
-    name: "day23-sample.md",
+    name: "day22-rag-sample.md",
     mimeType: "text/markdown",
     buffer: Buffer.from(
-      "# Day 23 sample\n\nЭтот файл загружен в базу для проверки upload UX.\n" +
-        "Тема: оранжевый виджет и публичный :443 на стенде.\n",
+      "# День 22 · образец для upload\n\n" +
+        "Этот markdown загружен в базу знаний стенда, чтобы проверить UX загрузки.\n" +
+        "Тема: цепочка публичного :443 (Reality → nginx → web) и атрибуция model_id.\n",
       "utf8",
     ),
   });
@@ -2116,9 +2131,9 @@ async function challenge23(page) {
   await pauseOn(page.locator(".turn.assistant").last(), 8000);
 
   await showRecordCard(page, {
-    day: "День 23",
-    title: "Документы в базе",
-    beat: "Список своих загрузок — карточка rag_list_documents.",
+    day: "День 22 · первый RAG-запрос",
+    title: "Список своих документов",
+    beat: "Кнопка «Документы» → карточка rag_list_documents.",
     hold: 4000,
   });
   await hideRecordCard(page);
@@ -2136,26 +2151,36 @@ async function challenge23(page) {
   );
 
   await showRecordCard(page, {
-    day: "QUESTIONS.md",
+    day: "День 22 · первый RAG-запрос",
     title: "10 контрольных вопросов",
-    beat: "Ожидание + источники на каждый вопрос — challenges/23-rag-query/QUESTIONS.md",
-    hold: 8000,
+    beat: "Список в challenges/22-rag-query/QUESTIONS.md",
+    hold: 7000,
   });
   await hideRecordCard(page);
 }
 
-async function challenge24(page) {
+async function challenge23(page) {
   await openChatFresh(page);
-  const q = "пожалуйста расскажи что такое Guest MCP";
+  await page.addStyleTag({
+    content: `.live-who, .composer-live-pulse { display: none !important; }`,
+  });
+  await showRecordCard(page, {
+    day: "День 23 · реранкинг и фильтрация",
+    title: "Три режима базы на одном вопросе",
+    beat: "raw → filtered → full. Смотри «было N → стало K» и rewrite.",
+    hold: 6500,
+  });
+  await hideRecordCard(page);
+  const q = "Что такое Guest MCP? Коротко, по базе.";
   for (const [mode, label] of [
-    ["raw", "raw — без фильтра"],
+    ["raw", "raw — top кандидаты без фильтра"],
     ["filtered", "filtered — порог similarity"],
-    ["full", "full — rewrite + rerank"],
+    ["full", "full — rewrite + filter + rerank"],
   ]) {
     await showRecordCard(page, {
-      day: "День 24 · rerank",
+      day: "День 23 · реранкинг и фильтрация",
       title: label,
-      beat: "Один вопрос, три режима базы. Смотри pre→post и rewrite.",
+      beat: "Один и тот же вопрос. Сравни pre→post в «Источники базы».",
       hold: 4500,
     });
     await enableRag(page, mode);
@@ -2171,11 +2196,81 @@ async function challenge24(page) {
     }
   }
   await openComposerSettings(page);
+  await showRecordCard(page, {
+    day: "День 23 · реранкинг и фильтрация",
+    title: "Загрузка рядом с режимами",
+    beat: "«Добавить в базу» / Документы — как в дне 22.",
+    hold: 5000,
+  });
   const uploadPath = page.getByRole("button", {
     name: /Добавить документ в базу|В базу|Добавить в базу/i,
   });
   if ((await uploadPath.count()) > 0) await pauseOn(uploadPath.first(), 5000);
   else await pauseOn(page.locator(".composer-settings"), 4000);
+  await hideRecordCard(page);
+}
+
+async function challenge24(page) {
+  await openChatFresh(page);
+  await page.addStyleTag({
+    content: `.live-who, .composer-live-pulse { display: none !important; }`,
+  });
+  await showRecordCard(page, {
+    day: "День 24 · цитаты и источники",
+    title: "Ответ с цитатами + анти-галлюцинации",
+    beat: "Источники · quote-фрагменты · вне корпуса — «не знаю по базе».",
+    hold: 7000,
+  });
+  await enableRag(page, "full");
+  await page.getByRole("button", { name: /Скрыть/i }).first().click().catch(() => {});
+  await hideRecordCard(page);
+
+  await showRecordCard(page, {
+    day: "День 24 · цитаты и источники",
+    title: "Вопрос по корпусу",
+    beat: "Раскрыть «Источники базы» → цитаты source/section/chunk_id.",
+    hold: 4500,
+  });
+  await hideRecordCard(page);
+  await sendChat(
+    page,
+    "По фрагментам базы: куда идёт публичный :443? Назови цепочку Reality/nginx/порты. Коротко.",
+    4,
+  );
+  const onTurn = page.locator(".turn.assistant").last();
+  const sources = onTurn.locator(".rag-sources");
+  await sources.waitFor({ timeout: 30_000 });
+  await sources.locator("summary").click().catch(() => {});
+  await sources.locator(".rag-sources-quote").first().waitFor({ timeout: 15_000 });
+  await pauseOn(sources, 9000);
+  await pauseOn(onTurn, 6000);
+
+  await showRecordCard(page, {
+    day: "День 24 · цитаты и источники",
+    title: "Анти-галлюцинация",
+    beat: "Вопрос вне корпуса → «не знаю по базе» + просьба уточнить.",
+    hold: 5000,
+  });
+  await hideRecordCard(page);
+  await sendChat(
+    page,
+    "Какой цвет логотипа вымышленного сервиса NebulaKitchen в docs стенда? Только по базе, без догадок.",
+    3,
+  );
+  const weak = page.locator(".turn.assistant").last();
+  await pauseOn(weak, 9000);
+  const weakText = ((await weak.innerText().catch(() => "")) || "").toLowerCase();
+  if (!/не знаю|нет в базе|не найден|уточн|недостаточно|не упомина|информаци\w* .*нет|нет .*информац/.test(weakText)) {
+    console.warn("challenge24: expected «не знаю» style answer:", weakText.slice(0, 160));
+  }
+
+  await showRecordCard(page, {
+    day: "День 24 · цитаты и источники",
+    title: "10 вопросов дня 24",
+    beat: "1–9 с цитатами · #10 «не знаю» — challenges/24-rag-citations/QUESTIONS.md",
+    hold: 7000,
+  });
+  await hideRecordCard(page);
 }
 
 async function challenge25(page) {
@@ -2193,9 +2288,9 @@ async function challenge25(page) {
   });
   await page.locator(".rag-memory-board").waitFor({ timeout: 20_000 });
   await showRecordCard(page, {
-    day: "День 25",
-    title: "База + память задачи",
-    beat: "История, always-on RAG со источниками, цель и ограничения.",
+    day: "День 25 · мини-чат RAG + память",
+    title: "Вкладка «База»: цель · facts · ограничения",
+    beat: "Always-on RAG, источники под каждым ответом, цель не теряется.",
     hold: 7000,
   });
   await pauseOn(page.locator(".rag-memory-side"), 6000);
@@ -2205,9 +2300,16 @@ async function challenge25(page) {
     "Куда ходит публичный :443 на этом стенде?",
     "Что такое model_id в ответах ассистента?",
     "Напомни цель нашего диалога одной фразой.",
-    "Что такое Guest MCP и чем он не является?",
+    "Какие ограничения ты уже зафиксировал про порты?",
   ];
   for (const q of questions) {
+    await showRecordCard(page, {
+      day: "День 25 · мини-чат RAG + память",
+      title: "Вопрос по сценарию",
+      beat: q,
+      hold: 3500,
+    });
+    await hideRecordCard(page);
     const box = page.locator("#rag-memory-input");
     await box.fill(q);
     await settle(page, 400);
@@ -2220,7 +2322,115 @@ async function challenge25(page) {
     }
     await pauseOn(page.locator(".rag-memory-turn--assistant").last(), 4500);
   }
+  await showRecordCard(page, {
+    day: "День 25 · мини-чат RAG + память",
+    title: "Память задачи справа/слева",
+    beat: "Полные 12+12 ходов — run.py + SCENARIOS.md, не ролик.",
+    hold: 6000,
+  });
   await pauseOn(page.locator(".rag-memory-side"), 5000);
+  await hideRecordCard(page);
+}
+
+async function openAssistants(page, sub) {
+  await page.goto(`${BASE}/?shell=assist#assist/${sub}`, {
+    waitUntil: "networkidle",
+    timeout: 90_000,
+  });
+  await bumpReadability(page, 1.15);
+  await page.locator(".assistants").waitFor({ timeout: 30_000 });
+  await settle(page, 800);
+  const tab = page.getByRole("tab", {
+    name:
+      sub === "help"
+        ? "Справка"
+        : sub === "review"
+          ? "Ревью"
+          : sub === "support"
+            ? "Поддержка"
+            : sub === "files"
+              ? "Файлы"
+              : "Задача",
+  });
+  if ((await tab.count()) > 0) {
+    await tab.first().click().catch(() => {});
+    await settle(page, 500);
+  }
+}
+
+async function challenge31(page) {
+  await openAssistants(page, "help");
+  await showRecordCard(page, {
+    day: "День 31 · справка",
+    title: "Ассистенты → Справка",
+    beat: "Handbook RAG + /help в чате. Только живые docs.",
+    hold: 5500,
+  });
+  await hideRecordCard(page);
+  await pauseOn(page.locator(".assistants-panel"), 5000);
+  await page.goto(`${BASE}/?shell=chat`, { waitUntil: "networkidle", timeout: 90_000 });
+  await settle(page, 1000);
+  await sendChat(page, "/help куда ходит публичный :443?");
+  await page.locator(".turn.assistant").last().waitFor({ timeout: 180_000 });
+  await pauseOn(page.locator(".turn.assistant").last(), 8000);
+  const sources = page.locator(".rag-sources").last();
+  if ((await sources.count()) > 0) {
+    await sources.locator("summary").click().catch(() => {});
+    await pauseOn(sources, 6000);
+  }
+}
+
+async function challenge32(page) {
+  await openAssistants(page, "review");
+  await showRecordCard(page, {
+    day: "День 32 · ревью",
+    title: "Инварианты + CI",
+    beat: "scripts/review + workflow review.yml. Secrets → fail.",
+    hold: 6000,
+  });
+  await hideRecordCard(page);
+  await pauseOn(page.locator(".assistants-panel"), 7000);
+  await pauseOn(page.locator(".assistants-code").first(), 6000);
+}
+
+async function challenge33(page) {
+  await openAssistants(page, "support");
+  await showRecordCard(page, {
+    day: "День 33 · поддержка",
+    title: "FAQ + тикет на стенде",
+    beat: "Спросить поддержку с demo-auth-1.",
+    hold: 5000,
+  });
+  await hideRecordCard(page);
+  await page.getByRole("button", { name: /Спросить поддержку/i }).click();
+  await page.locator(".assistants-code").last().waitFor({ timeout: 90_000 });
+  await pauseOn(page.locator(".assistants-code").last(), 9000);
+}
+
+async function challenge34(page) {
+  await openAssistants(page, "files");
+  await showRecordCard(page, {
+    day: "День 34 · файлы",
+    title: "Guest MCP + kit project_files",
+    beat: "Цель → tools на Mac. Подключение через Свой MCP.",
+    hold: 6000,
+  });
+  await hideRecordCard(page);
+  await pauseOn(page.locator(".assistants-panel"), 8000);
+}
+
+async function challenge35(page) {
+  await openAssistants(page, "task");
+  await showRecordCard(page, {
+    day: "День 35 · реальная задача",
+    title: "Ревью → AI changelog на стенде",
+    beat: "Запустить задачу → model_id + changelog.",
+    hold: 5500,
+  });
+  await hideRecordCard(page);
+  await page.locator('[data-assist-action="real-task"]').click();
+  await page.locator('[data-assist-result="real-task"]').waitFor({ timeout: 180_000 });
+  await pauseOn(page.locator('[data-assist-result="real-task"]'), 12000);
 }
 
 const out04 = path.join(__dirname, "../04-temperature/challenge-04.webm");
@@ -2240,11 +2450,17 @@ const out17 = path.join(__dirname, "../17-mcp-tool/challenge-17.webm");
 const out18 = path.join(__dirname, "../18-mcp-scheduler/challenge-18.webm");
 const out19 = path.join(__dirname, "../19-mcp-compose/challenge-19.webm");
 const out20 = path.join(__dirname, "../20-mcp-orchestration/challenge-20.webm");
-const out21 = path.join(__dirname, "../21-live-models/challenge-21.webm");
-const out22 = path.join(__dirname, "../22-rag-index/challenge-22.webm");
-const out23 = path.join(__dirname, "../23-rag-query/challenge-23.webm");
-const out24 = path.join(__dirname, "../24-rag-rerank/challenge-24.webm");
+const outLive = path.join(__dirname, "../live-models/live-models.webm");
+const out21 = path.join(__dirname, "../21-rag-index/challenge-21.webm");
+const out22 = path.join(__dirname, "../22-rag-query/challenge-22.webm");
+const out23 = path.join(__dirname, "../23-rag-rerank/challenge-23.webm");
+const out24 = path.join(__dirname, "../24-rag-citations/challenge-24.webm");
 const out25 = path.join(__dirname, "../25-rag-memory/challenge-25.webm");
+const out31 = path.join(__dirname, "../31-dev-help/challenge-31.webm");
+const out32 = path.join(__dirname, "../32-pr-review/challenge-32.webm");
+const out33 = path.join(__dirname, "../33-support-desk/challenge-33.webm");
+const out34 = path.join(__dirname, "../34-file-assistant/challenge-34.webm");
+const out35 = path.join(__dirname, "../35-real-task/challenge-35.webm");
 const out16v2 = path.join(__dirname, "../16-mcp-connect/версия 2.webm");
 const out17v2 = path.join(__dirname, "../17-mcp-tool/версия 2.webm");
 const out18v2 = path.join(__dirname, "../18-mcp-scheduler/версия 2.webm");
@@ -2341,25 +2557,49 @@ if (ONLY.includes("20")) {
   console.log("Recording challenge 20 against", BASE);
   await recordChallenge("20", out20, (page) => challenge20(page));
 }
+if (ONLY.includes("live")) {
+  console.log("Recording live-models against", BASE);
+  await recordChallenge("live", outLive, (page) => challengeLive(page));
+}
 if (ONLY.includes("21")) {
-  console.log("Recording challenge 21 against", BASE);
+  console.log("Recording challenge 21 (index) against", BASE);
   await recordChallenge("21", out21, (page) => challenge21(page));
 }
 if (ONLY.includes("22")) {
-  console.log("Recording challenge 22 against", BASE);
+  console.log("Recording challenge 22 (first RAG) against", BASE);
   await recordChallenge("22", out22, (page) => challenge22(page));
 }
 if (ONLY.includes("23")) {
-  console.log("Recording challenge 23 against", BASE);
+  console.log("Recording challenge 23 (rerank) against", BASE);
   await recordChallenge("23", out23, (page) => challenge23(page));
 }
 if (ONLY.includes("24")) {
-  console.log("Recording challenge 24 against", BASE);
+  console.log("Recording challenge 24 (citations) against", BASE);
   await recordChallenge("24", out24, (page) => challenge24(page));
 }
 if (ONLY.includes("25")) {
-  console.log("Recording challenge 25 against", BASE);
+  console.log("Recording challenge 25 (memory) against", BASE);
   await recordChallenge("25", out25, (page) => challenge25(page));
+}
+if (ONLY.includes("31")) {
+  console.log("Recording challenge 31 (help) against", BASE);
+  await recordChallenge("31", out31, (page) => challenge31(page));
+}
+if (ONLY.includes("32")) {
+  console.log("Recording challenge 32 (review) against", BASE);
+  await recordChallenge("32", out32, (page) => challenge32(page));
+}
+if (ONLY.includes("33")) {
+  console.log("Recording challenge 33 (support) against", BASE);
+  await recordChallenge("33", out33, (page) => challenge33(page));
+}
+if (ONLY.includes("34")) {
+  console.log("Recording challenge 34 (files) against", BASE);
+  await recordChallenge("34", out34, (page) => challenge34(page));
+}
+if (ONLY.includes("35")) {
+  console.log("Recording challenge 35 (real-task) against", BASE);
+  await recordChallenge("35", out35, (page) => challenge35(page));
 }
 if (ONLY.includes("16v2") || ONLY.includes("v2")) {
   console.log("Recording day 16 version 2 against", BASE);

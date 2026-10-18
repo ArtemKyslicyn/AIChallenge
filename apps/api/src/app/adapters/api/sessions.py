@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.api.auth import OptionalAuthUser
 from app.adapters.api.guest_mcp import router as guest_mcp_router
 from app.adapters.api.local_llm import load_user_source
+from app.domain.auth import UserAccount
+from app.domain.guest_mcp import GuestMcpForbiddenError, assert_guest_mcp_email_allowed
 from app.adapters.api.schemas import (
     AttemptResponse,
     CreateSessionRequest,
@@ -78,6 +80,17 @@ def _clip_analytics_text(value: str, limit: int = ANALYTICS_TEXT_MAX) -> str:
     if len(value) <= limit:
         return value
     return value[:limit] + "…[truncated]"
+
+
+def _dangerous_admin_user(container: Container, user: UserAccount | None) -> UserAccount | None:
+    """Guest MCP / local Ollama are admin-only; non-admins get no owner binding."""
+    if user is None:
+        return None
+    try:
+        assert_guest_mcp_email_allowed(user.email, container.settings.dangerous_admin_emails())
+    except GuestMcpForbiddenError:
+        return None
+    return user
 
 
 async def _emit_turn_analytics(
@@ -487,6 +500,7 @@ async def send_message(
         models=[payload.model or ""],
     )
     source = await load_user_source(request, auth_user)
+    admin_user = _dangerous_admin_user(container, auth_user)
 
     draft = ReplyDraft()
 
@@ -538,7 +552,7 @@ async def send_message(
                     rag_owner_id=(
                         str(auth_user.id) if auth_user is not None else (session.visitor_hash or "")
                     ),
-                    guest_mcp_owner_id=auth_user.id if auth_user is not None else None,
+                    guest_mcp_owner_id=admin_user.id if admin_user is not None else None,
                     guest_mcp_registry=container.guest_mcp_registry,
                     guest_mcp_client=container.guest_mcp_client,
                     guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,
