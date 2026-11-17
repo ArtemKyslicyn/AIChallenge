@@ -4,10 +4,10 @@
 
 | # | Вопрос | Ожидание | Источники / цитаты |
 |---|---|---|---|
-| 1 | Куда ходит публичный `:443`? | Цепочка  → nginx → `:18080` | `stand-edge-ports.md`, README |
+| 1 | Куда ходит публичный `:443`? | Сайт открывается по HTTPS | README |
 | 2 | Что такое Guest MCP? | Streamable HTTP посетителя ≠ `/mcp/*` | guest-mcp design |
 | 3 | Что такое `model_id`? | Атрибуция модели на каждом ответе | AGENTS.md |
-| 4 | Можно ли `compose down` на проде? | Нет | deploy- / README |
+| 4 | Можно ли `compose down` на проде? | Нет | README |
 | 5 | Чем fixed отличается от structural? | размер vs заголовки | индекс / challenge 21 |
 | 6 | Зачем `X-Session-Token`? | анонимная сессия | platform design |
 | 7 | Где сценарии чата? | `configs/scenarios` | CLAUDE / architecture |

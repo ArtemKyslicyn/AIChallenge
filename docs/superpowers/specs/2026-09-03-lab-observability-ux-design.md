@@ -143,4 +143,4 @@ Before merge UI, score each (0–4 Nielsen severity; **block if any ≥3 open**)
 - Scatterplot / D3 (optional later)
 - Per-visitor public profiles
 - Inline editing of cost proxy
-- Explaining /proxy to end users
+- Explaining remote access to end users

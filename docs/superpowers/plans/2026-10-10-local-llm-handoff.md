@@ -4,7 +4,7 @@ The human implements and records. This file locks the API and the screen. The lo
 
 Day 26 is already shot: `challenges/26-local-llm/challenge-26.mp4`. Do not reshoot it on the 8B tags. Graded model: `ollama/qwen36-fast:latest` on `http://100.90.210.109:11435`.
 
-Production deploy is allowed when the human asks. No  edits.
+Production deploy is allowed when the human asks. Do not edit the host edge.
 
 ## Routes
 

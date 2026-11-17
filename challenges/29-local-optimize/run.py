@@ -11,14 +11,14 @@ def score(text: str) -> int:
     forbid = any(word in low for word in ("нельзя", "запрещ"))
     if ports and forbid:
         return 2
-    if ("8443" in text or "" in low) and forbid:
+    if "8443" in text and forbid:
         return 1
     return 0
 
 
 def main() -> int:
     before = "обычный https. docker compose down --rmi all"
-    after = "443 идёт в , затем nginx :8443, web :18080. compose down нельзя"
+    after = "443 идёт в nginx :8443, web :18080. compose down нельзя"
     rows = (
         ("before", 0.8, 220, score(before), "Q4_K_M"),
         ("after", 0.15, 180, score(after), "Q4_K_M"),

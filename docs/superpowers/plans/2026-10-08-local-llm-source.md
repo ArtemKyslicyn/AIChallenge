@@ -15,7 +15,7 @@
 - Domain-agnostic names only. No patient/doctor wording.
 - Every assistant reply still exposes resolved `model_id` (DB, SSE, UI). Local ids are `ollama/<tag>`.
 - Never read or commit `.env`. New names only: `LOCAL_LLM_ALLOW_LOOPBACK`, `LOCAL_LLM_ALLOW_TAILSCALE`, `LOCAL_LLM_ALLOW_PRIVATE`.
-- Do not change , , public `:443` / `:8443`, or run `docker compose down`.
+- Do not change public `:443` / `:8443`, or run `docker compose down`.
 - Do not point `LLM_BASE_URL` at a laptop. Cloud chain behavior stays when the pin is not `ollama/`.
 - `USE_FAKE_LLM=true` suite stays green.
 - API key column is write-only. Analytics and list DTOs carry host and model count, never the key and never the full URL.
@@ -518,12 +518,12 @@ def score(kind: str, text: str) -> int:
     forbid = any(w in low for w in ("нельзя", "запрещ"))
     if ports and forbid:
         return 2
-    if ("8443" in text or "" in low) and forbid:
+    if "8443" in text and forbid:
         return 1
     return 0
 ```
 
-`--score-only` asserts `score("easy", "Имя: Артем\nЯзык: Python") == 2`, `score("hard", "обычный https. docker compose down --rmi all") == 0`, and `score("hard", "443 идёт в , затем nginx :8443. compose down нельзя") == 1`. Exit 0. No network.
+`--score-only` asserts `score("easy", "Имя: Артем\nЯзык: Python") == 2`, `score("hard", "обычный https. docker compose down --rmi all") == 0`, and `score("hard", "443 идёт в nginx, затем :8443. compose down нельзя") == 1`. Exit 0. No network.
 
 - [ ] **Step 2: Run the offline score**
 

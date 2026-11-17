@@ -50,3 +50,4 @@ exports/
 # Isolated worktrees and SDD scratch
 .worktrees/
 .superpowers/sdd/
+.supergoal/

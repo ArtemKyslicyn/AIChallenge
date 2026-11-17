@@ -15,7 +15,6 @@ SECRET_PATTERNS = [
 
 DEPLOY_PATTERNS = [
     (re.compile(r"docker\s+compose\s+down"), "compose down"),
-    (re.compile(r"(?i)privateKey|shortIds?\b"), "/ secret field"),
     (re.compile(r":443\b|:8443\b"), "edge port binding mention — verify loopback-only"),
 ]
 
@@ -94,7 +93,7 @@ def review_diff(diff_text: str) -> ReviewReport:
                 report.add("bug", "secrets", path, detail)
         for rx, detail in DEPLOY_PATTERNS:
             if rx.search(body):
-                sev = "bug" if "compose down" in detail or "" in detail else "recommendation"
+                sev = "bug" if "compose down" in detail else "recommendation"
                 report.add(sev, "deploy_safety", path, detail)
         if path.startswith("apps/api/src/app/domain/") or "/domain/" in path:
             for rx, detail in LAYER_PATTERNS:

@@ -46,7 +46,7 @@ This Mac's Ollama (`127.0.0.1:11434`) only has `qwen3:8b` and `llama3.1:8b`. Tho
 
 ## 3. Out of scope
 
-- Production deploy, , , `compose down`
+- Production deploy, `compose down`
 - Pointing `LLM_BASE_URL` at a laptop
 - Multiple sources per user, `num_ctx` in the API, Q8/F16 downloads
 - Local re-embed of the stand index

@@ -61,7 +61,7 @@ class _StubRag:
     ) -> RagSearchResult:
         hit = RagChunkHit(
             chunk_id="c1",
-            text="Публичный :443 →   → nginx :8443 → web :18080.",
+            text="Публичный сайт отвечает по HTTPS.",
             source="deploy.md",
             title="Deploy",
             section="Edge",
@@ -130,7 +130,7 @@ async def test_run_agent_with_dialog_returns_rag_sources() -> None:
     assert len(outcome.rag_sources) == 1
     assert outcome.rag_sources[0]["chunk_id"] == "c1"
     assert outcome.rag_embed_model == "stub-embed"
-    assert "" in router.last_system.lower() or ":443" in router.last_system
+    assert "https" in router.last_system.lower() or "443" in router.last_system
     assert len(saved.messages) == 2
 
 

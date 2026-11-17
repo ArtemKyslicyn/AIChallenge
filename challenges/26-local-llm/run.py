@@ -28,7 +28,7 @@ def score(kind: str, text: str) -> int:
     forbid = any(word in low for word in ("нельзя", "запрещ"))
     if ports and forbid:
         return 2
-    if ("8443" in text or "" in low) and forbid:
+    if "8443" in text and forbid:
         return 1
     return 0
 
@@ -37,7 +37,7 @@ def main() -> int:
     if "--score-only" in sys.argv:
         assert score("easy", "Имя: Артем\nЯзык: Python") == 2
         assert score("hard", "обычный https. docker compose down --rmi all") == 0
-        assert score("hard", "443 идёт в , затем nginx :8443. compose down нельзя") == 1
+        assert score("hard", "443 идёт в nginx, затем :8443. compose down нельзя") == 1
         print("score-only ok")
         return 0
     print("Full run is the recorder: node challenges/record/record-local-llm.mjs")

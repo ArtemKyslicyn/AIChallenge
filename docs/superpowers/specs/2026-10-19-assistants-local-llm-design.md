@@ -27,4 +27,4 @@ LLM skills in topbar **Ассистент** (days 31 / 34 / 35) default to the u
 
 ## Out of scope
 
-Agent07, / edits, rewriting support as LLM, full reshoot of days 26–30.
+Agent07, host-edge edits, rewriting support as LLM, full reshoot of days 26–30.

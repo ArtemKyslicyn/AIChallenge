@@ -326,7 +326,7 @@ async function challenge29(page) {
   const t1 = performance.now();
   await sendChat(
     page,
-    `${HARD_Q}\n\nПодсказка: опирайся только на факты стенда ( → nginx → web). Если не уверен — так и скажи, не строй второй Kubernetes.`,
+    `${HARD_Q}\n\nПодсказка: опирайся только на факты стенда (сайт по HTTPS, compose down нельзя). Если не уверен — так и скажи, не строй второй Kubernetes.`,
     { waitMs: 150_000 },
   );
   const afterS = Math.round((performance.now() - t1) / 100) / 10;

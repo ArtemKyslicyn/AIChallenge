@@ -21,7 +21,7 @@
 - Domain-agnostic naming (no medical/product role names)
 - Every assistant reply exposes `model_id`
 - Secrets never in repo; FakeLLM in CI
-- /deploy rules unchanged
+- Deploy rules unchanged
 - Preserve shell tabs **Чат** / **Агенты**; Studio — additive
 - Avoid purple-glow / generic AI chrome; follow existing AIChallenge visual language + Langflow-like restraint
 

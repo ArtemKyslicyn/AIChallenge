@@ -19,7 +19,7 @@ const H = 1000;
 const CONTEXT = [
   "Фрагмент стенда AIChallenge:",
   "• под каждым ответом ассистента виден model_id (DB + SSE + UI);",
-  "• публичный :443 —  → nginx :8443 → web :18080;",
+  "• публичный сайт открывается по HTTPS; на проде web слушает loopback;",
   "• на проде нельзя docker compose down — только rolling up и проверка :443/:8443.",
 ].join("\n");
 

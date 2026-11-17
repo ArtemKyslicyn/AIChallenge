@@ -38,7 +38,7 @@ Public AIChallenge chat stays anonymous. Console is **not** inside the chat SPA 
 | Capture shape | PostHog-like `capture` (`event`, `distinct_id`, `properties`, `timestamp`, `product_id`) |
 | Auth | Dedicated admin session; not chat `X-Visitor-Id` |
 | Turn text | Stored in **ops** event `props` (`prompt`, `answer`), truncated; not exposed publicly |
-| Network |  / IP allowlist + app login |
+| Network | IP allowlist + app login |
 | Plans / internal docs | Keep **out of public git**; live in the private repo or local-only notes |
 
 ## 4. Domain

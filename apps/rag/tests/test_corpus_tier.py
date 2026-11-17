@@ -17,7 +17,7 @@ def test_superpowers_is_history() -> None:
 
 def test_live_docs_are_handbook() -> None:
     assert corpus_tier_for_source("docs/project-structure.md") == HANDBOOK
-    assert corpus_tier_for_source("docs/stand-edge-ports.md") == HANDBOOK
+    assert corpus_tier_for_source("docs/env-local.md") == HANDBOOK
     assert corpus_tier_for_source("AGENTS.md") == HANDBOOK
     assert corpus_tier_for_source("README.md") == HANDBOOK
 

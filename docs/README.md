@@ -35,7 +35,7 @@
 
 ## Live
 
-Рабочий URL для браузера: **https://aichallenge.arcilite.ru:8443/** (см. README → Production). Не публикуем IP/SSH в доках.
+Рабочий URL для браузера: **https://aichallenge.arcilite.ru/** (см. README → Production). Не публикуем IP/SSH в доках.
 
 ## Как обновлять доки
 

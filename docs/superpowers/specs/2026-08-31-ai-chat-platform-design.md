@@ -262,7 +262,7 @@ Agent loop: prefer OpenAI-compatible `tool_calls` via `complete_chat(..., tools=
 
 - Compose publishes web on loopback (`127.0.0.1:18080`); host nginx terminates TLS and proxies.
 - Preferred public URL may use a dedicated HTTPS port (e.g. `:8443`) when `:443` shares the host with
-  other SNI/ services and some client networks stall on TLS to `:443`. Document the working URL in
+  other services on the same host and some client networks stall on TLS to `:443`. Document the working URL in
   the README; do not put host IPs or SSH details in public docs.
 - `scripts/deploy.sh` does **not** run `docker compose down` before `up` (avoids a 502 window while
   web is stopped).

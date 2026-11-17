@@ -32,7 +32,7 @@
 |---|---|
 | Guest MCP | guest-mcp / agent specs (~0.49–0.54) |
 | model_id | `docs/env-local.md`, profile spec (~0.52–0.62) |
-|  :443 | deploy / agent specs |
+| Публичный :443 | deploy / agent specs |
 | Profile | profile / AGENTS |
 | FakeLLM | plans / AGENTS |
 

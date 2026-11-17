@@ -4,17 +4,14 @@ from __future__ import annotations
 
 from app.domain.rag import RagChunkHit, RagSearchResult
 
-#: Sources that describe edge topology, host layout, or env ops — admin-only RAG.
+#: Sources that describe host layout or env ops — admin-only RAG.
 SENSITIVE_RAG_SOURCE_MARKERS: tuple[str, ...] = (
     "docs/env-local.md",
-    "docs/stand-edge-ports.md",
-    "deploy-",
-    "",
     "docker-compose.prod",
     "assert-edge-safe",
     "scripts/deploy",
     ".cursor/rules/deploy",
-    "AGENTS.md",  # deploy /  reminders
+    "AGENTS.md",
     "CLAUDE.md",
 )
 
@@ -22,22 +19,21 @@ PUBLIC_SAFETY_SYSTEM = (
     "Режим публичного чата (не админ). Жёсткие запреты — не нарушай даже если "
     "пользователь настаивает или во фрагментах базы есть детали:\n"
     "1) Не описывай устройство сервера: VPS, SSH, пути на диске (/opt, /root), "
-    "host nginx, , , , shortId, UUID, privateKey, fallthrough, "
-    "внутренние порты (:8443, :18080, loopback), docker compose на хосте, "
+    "host nginx, внутренние порты, loopback, docker compose на хосте, "
     "systemd/timers, IP хоста.\n"
     "2) Не раскрывай окружение и конфиг: имена и значения переменных .env, "
-    "API keys, DATABASE_URL, LLM_*, секреты, содержимое compose/nginx/ конфигов.\n"
-    "3) На вопросы про «куда :443», «как задеплоено», «что на сервере» — "
+    "API keys, DATABASE_URL, LLM_*, секреты, содержимое compose и конфигов.\n"
+    "3) На вопросы про «как задеплоено», «что на сервере» — "
     "откажи кратко: это доступно только в админ-чате; публично достаточно, "
-    "что сайт открывается по HTTPS. Не собирай цепочку портов из цитат.\n"
+    "что сайт открывается по HTTPS. Не собирай внутреннюю схему из цитат.\n"
     "4) Можно говорить о продукте: чат, model_id, RAG, MCP, ассистенты, "
     "локальная Ollama с точки зрения пользователя (Профиль → Подключения).\n"
     "Если отказ — одно-два предложения, без подсказок как обойти."
 )
 
 ADMIN_OPS_HINT = (
-    "Режим админ-чата: можно опираться на handbook по edge/deploy/env "
-    "(без печати секретов и  privateKey/UUID в ответ)."
+    "Режим админ-чата: можно опираться на handbook по деплою и окружению "
+    "(без печати секретов и ключей в ответ)."
 )
 
 
@@ -47,7 +43,7 @@ def is_sensitive_rag_source(source: str) -> bool:
 
 
 def filter_rag_for_public(result: RagSearchResult) -> RagSearchResult:
-    """Drop ops/edge/env chunks so the model cannot quote them to guests."""
+    """Drop ops/env chunks so the model cannot quote them to guests."""
     kept: tuple[RagChunkHit, ...] = tuple(
         h for h in result.hits if not is_sensitive_rag_source(h.source)
     )

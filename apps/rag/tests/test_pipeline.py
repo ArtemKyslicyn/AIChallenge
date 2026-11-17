@@ -86,7 +86,7 @@ async def test_list_documents_and_search_owner_filter(tmp_path: Path) -> None:
     store = VectorStore(tmp_path)
     pipe = RagPipeline(settings, store, FakeEmbedder(16))
     await pipe.add_document(
-        text="# Stand\n\nPublic stand corpus about  ports.",
+        text="# Stand\n\nPublic stand corpus about service ports.",
         source="stand.md",
         title="stand",
         strategy="structural",
@@ -139,7 +139,7 @@ async def test_ensure_vectors_force_reembeds_fake_matrix(tmp_path: Path) -> None
     store = VectorStore(tmp_path)
     pipe = RagPipeline(settings, store, FakeEmbedder(16))
     await pipe.add_document(
-        text="# Ports\n\nPublic :443 terminates at  then nginx :8443.",
+        text="# Ports\n\nPublic HTTPS terminates at the site.",
         source="ports.md",
         title="ports",
         strategy="structural",

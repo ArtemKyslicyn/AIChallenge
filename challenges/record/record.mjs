@@ -2089,7 +2089,7 @@ async function challenge22(page) {
   await hideRecordCard(page);
   const ragQ =
     "По фрагментам базы: куда идёт публичный :443 на стенде? " +
-    "Назови цепочку (/ → nginx → порт). Коротко, без выдумок.";
+    "Назови, что сайт открывается по HTTPS. Коротко, без выдумок.";
   await sendChat(page, ragQ, 4);
   const onTurn = page.locator(".turn.assistant").last();
   const sources = onTurn.locator(".rag-sources");
@@ -2099,7 +2099,7 @@ async function challenge22(page) {
   await pauseOn(sources, 10000);
   await pauseOn(onTurn.locator(".badge").last(), 5000);
   const onText = ((await onTurn.innerText().catch(() => "")) || "").toLowerCase();
-  if (!/||8443|18080|nginx/.test(onText)) {
+  if (!/8443|18080|nginx|https/.test(onText)) {
     throw new Error(
       `challenge22: RAG answer not grounded on port path: ${onText.slice(0, 200)}`,
     );
@@ -2119,7 +2119,7 @@ async function challenge22(page) {
     buffer: Buffer.from(
       "# День 22 · образец для upload\n\n" +
         "Этот markdown загружен в базу знаний стенда, чтобы проверить UX загрузки.\n" +
-        "Тема: цепочка публичного :443 ( → nginx → web) и атрибуция model_id.\n",
+        "Тема: публичный сайт по HTTPS и атрибуция model_id.\n",
       "utf8",
     ),
   });
@@ -2234,7 +2234,7 @@ async function challenge24(page) {
   await hideRecordCard(page);
   await sendChat(
     page,
-    "По фрагментам базы: куда идёт публичный :443? Назови цепочку /nginx/порты. Коротко.",
+    "По фрагментам базы: куда идёт публичный :443? Коротко: сайт по HTTPS.",
     4,
   );
   const onTurn = page.locator(".turn.assistant").last();

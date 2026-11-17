@@ -1,5 +1,5 @@
 # Production stack — web on loopback only.
-# NEVER publish host :443 or :8443 here (  + host nginx).
+# App containers must not publish host :443 or :8443.
 # Guard: scripts/assert-edge-safe.sh
 # Usage: docker compose -f docker-compose.prod.yml up --build -d
 
