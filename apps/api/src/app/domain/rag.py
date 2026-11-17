@@ -163,7 +163,9 @@ def quote_snip(text: str, *, limit: int = 280) -> str:
     return cleaned[: max(0, limit - 1)] + "…"
 
 
-def format_rag_system_context(result: RagSearchResult) -> str:
+def format_rag_system_context(
+    result: RagSearchResult, *, allow_ops_detail: bool = False
+) -> str:
     if not result.hits:
         return (
             "Режим базы знаний включён, но релевантных фрагментов не найдено "
@@ -174,10 +176,19 @@ def format_rag_system_context(result: RagSearchResult) -> str:
     lines = [
         "Ниже фрагменты из базы знаний стенда. Опирайся только на них. "
         "В ответе используй смысл цитат; укажи источники (title/source/section). "
-        "«Не знаю по базе» — ТОЛЬКО если ни один фрагмент ниже не содержит ответа. "
-        "Если во фрагментах есть :443 /  /  / nginx / :8443 / :18080 — "
-        "собери цепочку портов из этих цитат, не отказывайся."
+        "«Не знаю по базе» — ТОЛЬКО если ни один фрагмент ниже не содержит ответа.",
     ]
+    if allow_ops_detail:
+        lines.append(
+            "Если во фрагментах есть :443 /  /  / nginx / :8443 / :18080 — "
+            "собери цепочку портов из этих цитат, не отказывайся. "
+            "Секреты и  privateKey/UUID всё равно не печатай."
+        )
+    else:
+        lines.append(
+            "Публичный режим: не пересказывай внутреннюю топологию сервера, "
+            "env/конфиг и edge-детали даже если они случайно попали во фрагменты."
+        )
     for i, hit in enumerate(result.hits, start=1):
         lines.append(
             f"[{i}] {hit.title} · {hit.section} ({hit.source}) id={hit.chunk_id}\n{hit.text}"

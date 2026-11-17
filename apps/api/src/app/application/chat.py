@@ -33,6 +33,10 @@ from app.application.comic import (
 from app.application.guest_mcp_analytics import emit_guest_event
 from app.application.guest_tool_runner import GuestToolRunner
 from app.application.help_slash import HELP_SYSTEM_SUFFIX, parse_help_slash
+from app.application.public_safety import (
+    filter_rag_for_public,
+    public_safety_system,
+)
 from app.application.media_tools import (
     MEDIA_TOOLS,
     SessionMediaRateLimiter,
@@ -364,11 +368,13 @@ async def send_user_message_and_stream(
     rag_mode: str | None = None,
     rag_owner_id: str | None = None,
     rag_corpus_tier: str | None = None,
+    is_admin: bool = False,
 ) -> AsyncIterator[ChatEvent]:
     draft = draft if draft is not None else ReplyDraft()
     effective_chat_mode = chat_mode or "single"
     draft.chat_mode = effective_chat_mode
     distinct_id = (analytics_distinct_id or "").strip() or "anonymous"
+    allow_ops_detail = bool(is_admin)
     session = await authorize_session(
         sessions=sessions, session_id=session_id, access_token=access_token
     )
@@ -419,6 +425,10 @@ async def send_user_message_and_stream(
     draft.prompt = text
 
     turns = build_llm_turns(scenario, [*history, user_message], max_history_messages)
+    turns = [
+        ChatMessage(role=MessageRole.SYSTEM, content=public_safety_system(is_admin=allow_ops_detail)),
+        *turns,
+    ]
     if help_mode:
         turns = [
             ChatMessage(role=MessageRole.SYSTEM, content=HELP_SYSTEM_SUFFIX),
@@ -434,7 +444,11 @@ async def send_user_message_and_stream(
                 owner_id=rag_owner_id,
                 corpus_tier=rag_corpus_tier,
             )
-            rag_system = format_rag_system_context(rag_result)
+            if not allow_ops_detail:
+                rag_result = filter_rag_for_public(rag_result)
+            rag_system = format_rag_system_context(
+                rag_result, allow_ops_detail=allow_ops_detail
+            )
             turns = [
                 ChatMessage(role=MessageRole.SYSTEM, content=rag_system),
                 *turns,

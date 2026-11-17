@@ -248,7 +248,9 @@ async def test_history_sent_to_the_model_is_capped() -> None:
     await collect(ctx.stream(content="newest", max_history_messages=4))
 
     assert provider.seen[0].role is MessageRole.SYSTEM
-    assert len(provider.seen) == 5  # system prompt + 4 turns
+    # public-safety system + scenario system + 4 capped history turns
+    assert len(provider.seen) == 6
+    assert "публичного" in provider.seen[0].content.lower() or "запрет" in provider.seen[0].content.lower()
     assert provider.seen[-1].content == "newest"
     assert "old-0" not in [m.content for m in provider.seen]
 

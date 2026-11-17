@@ -558,6 +558,7 @@ async def send_message(
                     guest_mcp_allow_loopback=container.settings.guest_mcp_allow_loopback,
                     analytics=container.analytics,
                     analytics_distinct_id=(session.visitor_hash or "").strip() or "anonymous",
+                    is_admin=admin_user is not None,
                 )
                 async for frame in to_sse_with_keepalive(events):
                     yield frame
