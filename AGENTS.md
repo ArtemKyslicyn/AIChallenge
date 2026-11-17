@@ -7,7 +7,7 @@
 3. Keep code **domain-agnostic** (no patient/doctor/medical naming in code or default configs).
 4. Every assistant answer must attribute **`model_id`** (DB + SSE + UI).
 5. **No deploy to the server** (SSH/SCP/Actions Deploy) without an **explicit** user request in that turn. Default: local work and local commits only; push to GitHub only when asked.
-6. ** /  safety:** public `:443` is  → nginx `:8443` → web `:18080`. App deploys must not touch , must not `compose down`, and must verify both `:443` and `:8443` after changes (see `.cursor/rules/deploy--safe.mdc`).
+6. **Deploy safety:** do not `compose down`, do not bind `:443` / `:8443` from app containers, and do not change the host edge unless the user explicitly asks.
 
 ## Project skills (`.cursor/skills/`)
 
@@ -42,4 +42,4 @@ Health check: `scripts/check-design-agents.sh`.
 - Web: Vite + React + TypeScript (composer model pin, compare via probe, visitor history sidebar)
 - LLM: OpenAI-compatible + failover chain; default provider **RouterAI** (`LLM_BASE_URL` / `ROUTERAI_KEY`)
 - Auth: anonymous sessions in v1 (`X-Session-Token` + `X-Visitor-Id`)
-- Live: see README Production (`:8443` when `:443` TLS stalls)
+- Live: see README Production

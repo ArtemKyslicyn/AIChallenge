@@ -35,10 +35,7 @@ Do not invent alternate one-off compose stacks unless asked; extend the root `do
 
 ## Prod
 
-- `docker-compose.prod.yml`: web published on loopback only; host nginx terminates TLS on `:8443`.
-- Public `:443` is **  ** with fallthrough to `127.0.0.1:8443` — not Docker.
-- Deploy: `scripts/deploy.sh` — runs `assert-edge-safe.sh`, rolling `compose up --build -d` (**no** `down`; **no** casual  edits).
-- Host fuses: `/usr/local/sbin/assert-edge-safe.sh`, `-guard.timer` (auto-restart  if fallthrough dies while nginx lives).
-- After deploy verify local  fallthrough (`STRICT_HOST=1 ./scripts/assert-edge-safe.sh`) and public `https://aichallenge.arcilite.ru/`.
-- See always-on rule `.cursor/rules/deploy--safe.mdc`.
+- `docker-compose.prod.yml`: web published on loopback `127.0.0.1:18080` only.
+- Deploy: `scripts/deploy.sh` — runs `assert-edge-safe.sh`, rolling `compose up --build -d` (**no** `down`).
+- After deploy verify `https://aichallenge.arcilite.ru/`.
 - Public URL notes live in README / `docs/env-local.md` — do not put host IPs in skills.

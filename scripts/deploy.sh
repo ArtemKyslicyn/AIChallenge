@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Deploy AIChallenge on the VPS. Run from the repo root on the server.
 #
-# SAFE DEPLOY PROTOCOL ( / ):
-# - Do NOT stop host nginx, , or free :443/:8443.
-# - Do NOT run `docker compose down` (drops :18080 → public 502 /  fallthrough pain).
-# - Only rebuild/recreate app services;  owns public :443 → 127.0.0.1:8443 → nginx → :18080.
+# SAFE DEPLOY PROTOCOL:
+# - Do NOT stop host nginx or free :443/:8443.
+# - Do NOT run `docker compose down` (drops :18080 and the public site 502s).
+# - Only rebuild/recreate app services. App containers stay off :443 and :8443.
 # - Preflight: scripts/assert-edge-safe.sh (compose + optional STRICT_HOST=1).
-# - After up: verify  fallthrough; if broken while :8443 OK, -guard may restart .
+# - After up: verify local https on :443.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -60,6 +60,45 @@ else:
     print("MCP_SHARED_TOKEN already set")
 PY
 
+echo "==> ensure local-LLM Tailscale + build fingerprint (no secrets)"
+BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+export BUILD_SHA
+export BUILD_SOURCE="${BUILD_SOURCE:-mac-deploy}"
+python3 - <<PY
+from pathlib import Path
+p = Path(".env")
+text = p.read_text(encoding="utf-8") if p.exists() else ""
+lines = text.splitlines()
+keys = {
+    "LOCAL_LLM_ALLOW_TAILSCALE": "true",
+    "BUILD_SOURCE": "mac-deploy",
+    "BUILD_SHA": "${BUILD_SHA}",
+}
+changed = False
+seen = set()
+out = []
+for line in lines:
+    key = line.split("=", 1)[0] if "=" in line and not line.lstrip().startswith("#") else None
+    if key in keys and key not in seen:
+        seen.add(key)
+        out.append(f"{key}={keys[key]}")
+        if line != out[-1]:
+            changed = True
+    else:
+        out.append(line)
+for key, value in keys.items():
+    if key not in seen:
+        if out and out[-1] != "":
+            out.append("")
+        out.append(f"{key}={value}")
+        changed = True
+if changed:
+    p.write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("local-llm / build fingerprint updated")
+else:
+    print("local-llm / build fingerprint already set")
+PY
+
 # Re-run after reset in case compose changed on the branch.
 bash "$ROOT/scripts/assert-edge-safe.sh"
 
@@ -92,27 +131,12 @@ for i in $(seq 1 30); do
     echo "==> post-deploy edge guard"
     REQUIRE_LOOPBACK_HEALTH=1 STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || {
       echo "ERROR: edge broken after deploy" >&2
-      # If only  is wedged, try one guarded restart (same policy as -guard).
-      code8443="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 8 -k "https://127.0.0.1:8443/" -H "Host: ${HOST}" || true)"
-      code443="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 8 --resolve "${HOST}:443:127.0.0.1" "https://${HOST}/" || true)"
-      if [[ "$code8443" == "200" && "$code443" != "200" ]]; then
-        echo "==>  fallthrough down; one  restart via guard"
-        if [[ -x /usr/local/sbin/-guard.sh ]]; then
-          /usr/local/sbin/-guard.sh || true
-        else
-          bash "$ROOT/scripts/-guard.sh" || true
-        fi
-        REQUIRE_LOOPBACK_HEALTH=1 STRICT_HOST=1 PUBLIC_HOST="$HOST" bash "$ROOT/scripts/assert-edge-safe.sh" || exit 2
-      else
-        exit 2
-      fi
+      exit 2
     }
 
     echo "==> public probe (best-effort; path-dependent)"
     code443="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "https://${HOST}/" || true)"
-    code8443="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "https://${HOST}:8443/" || true)"
-    echo "public_443=${code443} public_8443=${code8443}"
-    # Local  is the source of truth for ; public :8443 may be filtered on some ISPs.
+    echo "public_443=${code443}"
     exit 0
   fi
   sleep 2

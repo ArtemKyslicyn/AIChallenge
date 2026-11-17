@@ -17,7 +17,7 @@
 - Secrets never in repo; FakeLLM in CI
 - No actionable WMD content in default prompts (safety rails in spec §3)
 - Do not remove Chat / Agents / Graph / Benchmarks
-- /deploy rules unchanged; no  edits
+- Deploy rules unchanged; no host-edge edits
 - Prefer ports + FakeLLM; no real LLM keys in CI
 
 ## File map

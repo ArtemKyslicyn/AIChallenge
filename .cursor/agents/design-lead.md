@@ -25,4 +25,4 @@ Process:
    - `npm run build` in apps/web passes
 5. If asked to implement, apply the plan; otherwise stop at the plan.
 
-Never edit .env or print secrets. Respect deploy/ rules.
+Never edit .env or print secrets. Respect deploy rules.
